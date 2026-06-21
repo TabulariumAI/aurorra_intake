@@ -1,0 +1,86 @@
+import { describe, expect, it, vi } from "vitest";
+import { createChoicesService, normalizeBackendChoices } from "../service/ChoicesService";
+import type { ChoicesRuntime } from "../type/choices.types";
+import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
+
+function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
+  const values: StoreValues = {
+    isSessionInProcess: false,
+    uploadingStepStatus: false,
+    documentSelected: false,
+    provisionStepStatus: false,
+    indexingStepStatus: false,
+    userToken: { token: "token-1" },
+    session: null,
+    sasToken: null,
+    baseUrl: null,
+    document: null,
+    numOfPages: 1,
+    indexChoices: null,
+    workflow: null,
+    ...seed,
+  };
+
+  return {
+    clearStorage: vi.fn(),
+    get: vi.fn((key: StateKey) => values[key]),
+    getStoredInformation: vi.fn(),
+    reset: vi.fn(),
+    set: vi.fn(<Key extends StateKey>(key: Key, value: StoreValues[Key]) => {
+      values[key] = value;
+    }),
+  } as unknown as StoreAdapter;
+}
+
+describe("ChoicesService", () => {
+  it("normalizes backend choice payloads", () => {
+    const items = [{ service: "Recognition", level: 5 }];
+
+    expect(normalizeBackendChoices(null)).toBeNull();
+    expect(normalizeBackendChoices(items)).toBe(items);
+    expect(normalizeBackendChoices({ items })).toEqual(items);
+    expect(normalizeBackendChoices({})).toEqual([]);
+  });
+
+  it("loads choices with runtime auth token", async () => {
+    const runtime: ChoicesRuntime = {
+      store: createStore(),
+      eventBus: { emit: vi.fn(), listen: vi.fn() },
+      events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
+      dialogHost: document.createElement("section"),
+      createDialogFrame: vi.fn(() => ({ open: vi.fn(() => null), close: vi.fn() })),
+      choicesWorkerClient: {
+        load: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
+      },
+    };
+    const service = createChoicesService(runtime);
+
+    await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
+    expect(runtime.choicesWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
+  });
+
+  it("saves choices, workflow, and emits update only when values change", () => {
+    const runtime: ChoicesRuntime = {
+      store: createStore(),
+      eventBus: { emit: vi.fn(), listen: vi.fn() },
+      events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
+      dialogHost: document.createElement("section"),
+      createDialogFrame: vi.fn(() => ({ open: vi.fn(() => null), close: vi.fn() })),
+      choicesWorkerClient: {
+        load: vi.fn(),
+      },
+    };
+    const service = createChoicesService(runtime);
+    const choices = [{ service: "Recognition", level: 4 }];
+
+    expect(service.save(choices, true, false)).toEqual({
+      choices,
+      alwaysReview: true,
+      studioModeEnabled: false,
+      changed: true,
+    });
+    expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", choices);
+    expect(runtime.store.set).toHaveBeenCalledWith("workflow", true);
+    expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.updateChoices);
+  });
+});
