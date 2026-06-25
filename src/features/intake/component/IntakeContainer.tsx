@@ -1,5 +1,4 @@
 import {
-  getIntakeErrorStyle,
   getIntakeHeaderStyle,
   getIntakeSlotStyle,
   intakeContainerStyles,
@@ -10,7 +9,6 @@ export function IntakeContainer({
   panel,
   title,
   helper,
-  error,
   select,
   provision,
   overlay,
@@ -20,7 +18,6 @@ export function IntakeContainer({
   const isHeaderVisible = Boolean(title) || Boolean(helper);
   const isSelectPanelVisible = panel === "select";
   const isProvisionPanelVisible = panel === "provision";
-  const isErrorVisible = Boolean(error);
 
   return (
     <div id="intake-container" data-testid="intake-container" style={intakeContainerStyles.shell}>
@@ -52,13 +49,6 @@ export function IntakeContainer({
       >
         {provision}
       </section>
-      <div
-        id="error-panel"
-        data-testid="error-panel"
-        style={getIntakeErrorStyle(isErrorVisible)}
-      >
-        {error}
-      </div>
       {overlay}
     </div>
   );

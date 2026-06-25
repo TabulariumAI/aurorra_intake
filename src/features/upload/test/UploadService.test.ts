@@ -38,8 +38,6 @@ function createShell(): IntakeShellActions {
     showSelect: vi.fn(),
     showProvision: vi.fn(),
     clearHeader: vi.fn(),
-    clearError: vi.fn(),
-    setError: vi.fn(),
     progress: {
       showOverlay: vi.fn(),
       hideOverlay: vi.fn(),

@@ -126,7 +126,6 @@ export function AurorraIntake({
         const message = typeof payload?.message === "string" ? payload.message : "Intake failed.";
         onFailure?.(message);
         onAlert?.(message);
-        actions.setError(message);
         return;
       }
       if (event.name === events.newSession.name) {
@@ -308,7 +307,6 @@ export function AurorraIntake({
         panel={state.container.panel}
         title={state.container.title}
         helper={state.container.helper}
-        error={state.container.error}
         selectPanelRef={setSelectHost}
         provisionPanelRef={(host) => {
           provisionHostRef.current = host;

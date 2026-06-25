@@ -70,13 +70,6 @@ export const intakeContainerStyles = {
     boxSizing: "border-box",
     backgroundColor: "transparent",
   },
-  error: {
-    margin: "0.25rem 0 0 0",
-    color: "#b91c1c",
-    fontSize: "0.92rem",
-    lineHeight: "1.45",
-    textAlign: "center",
-  },
 } satisfies Record<string, CSSProperties>;
 
 export function getIntakeHeaderStyle(isVisible: boolean): CSSProperties {
@@ -90,12 +83,5 @@ export function getIntakeSlotStyle(isVisible: boolean): CSSProperties {
   return {
     ...intakeContainerStyles.slot,
     display: isVisible ? "flex" : "none",
-  };
-}
-
-export function getIntakeErrorStyle(isVisible: boolean): CSSProperties {
-  return {
-    ...intakeContainerStyles.error,
-    display: isVisible ? "block" : "none",
   };
 }

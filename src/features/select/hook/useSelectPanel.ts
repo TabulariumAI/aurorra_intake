@@ -103,7 +103,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       allowEdit: true,
       onAddError(error: ErrorLike) {
         if (loadId !== loadIdRef.current) return;
-        actions.setError(typeof error.message === "string" ? error.message : "Some pages could not be added.");
+        showFailureMessage(typeof error.message === "string" ? error.message : "Some pages could not be added.");
       },
       onApiReady(api) {
         viewerApiRef.current = api;
@@ -285,7 +285,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setStarting(true);
 
     try {
-      actions.clearError();
       service.emitProgressStop();
       service.emitProgressStart();
       service.setPageCount(getPageCount(viewerState));

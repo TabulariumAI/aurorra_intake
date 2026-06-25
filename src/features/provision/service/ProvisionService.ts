@@ -74,7 +74,6 @@ export class ProvisionService {
   async #renderReview(description: unknown, accepted: unknown, document: ProvisionDocument | string): Promise<void> {
     const runtime = this.#runtime;
     const actions = runtime.intake.actions;
-    actions.clearError();
     actions.showProvision("", "");
     this.#dismissReview();
 

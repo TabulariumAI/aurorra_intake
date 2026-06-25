@@ -10,7 +10,6 @@ describe("IntakeContainer", () => {
         panel="provision"
         title="Review"
         helper="Check the document"
-        error="Needs attention"
         select={<div>Select form</div>}
         provision={<div>Provision review</div>}
         overlay={<ProgressOverlay />}
@@ -19,9 +18,9 @@ describe("IntakeContainer", () => {
 
     expect(screen.getByTestId("title-panel")).toHaveTextContent("Review");
     expect(screen.getByTestId("helper-panel")).toHaveTextContent("Check the document");
-    expect(screen.getByTestId("error-panel")).toHaveTextContent("Needs attention");
     expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
     expect(screen.getByTestId("provision-panel")).not.toHaveStyle({ display: "none" });
     expect(screen.getByTestId("progress-overlay")).toBeInTheDocument();
+    expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
   });
 });

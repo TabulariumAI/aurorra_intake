@@ -8,7 +8,6 @@ describe("useIntakeShell", () => {
 
     act(() => {
       result.current.actions.showProvision("Provision", "Review pages");
-      result.current.actions.setError("Problem");
       result.current.actions.progress.showOverlay();
       result.current.actions.progress.startProcessing();
       result.current.actions.progress.notify("Working");
@@ -18,7 +17,6 @@ describe("useIntakeShell", () => {
       panel: "provision",
       title: "Provision",
       helper: "Review pages",
-      error: "Problem",
     });
     expect(result.current.state.overlay.isVisible).toBe(true);
     expect(result.current.state.progress).toEqual({
@@ -28,13 +26,11 @@ describe("useIntakeShell", () => {
 
     act(() => {
       result.current.actions.clearHeader();
-      result.current.actions.clearError();
       result.current.actions.progress.hideOverlay();
       result.current.actions.progress.endProcessing();
     });
 
     expect(result.current.state.container.title).toBe("");
-    expect(result.current.state.container.error).toBe("");
     expect(result.current.state.overlay.isVisible).toBe(false);
     expect(result.current.state.progress.isProcessing).toBe(false);
   });

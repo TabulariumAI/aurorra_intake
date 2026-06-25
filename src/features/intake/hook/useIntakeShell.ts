@@ -6,7 +6,6 @@ const initialContainerState: IntakeContainerState = {
   panel: "select",
   title: "",
   helper: "",
-  error: "",
 };
 
 const initialState: IntakeShellState = {
@@ -30,7 +29,6 @@ export function useIntakeShell(): IntakeShell {
         panel: "select",
         title,
         helper,
-        error: "",
       },
     }));
   }, []);
@@ -42,7 +40,6 @@ export function useIntakeShell(): IntakeShell {
         panel: "provision",
         title,
         helper,
-        error: "",
       },
     }));
   }, []);
@@ -54,26 +51,6 @@ export function useIntakeShell(): IntakeShell {
         ...current.container,
         title: "",
         helper: "",
-      },
-    }));
-  }, []);
-
-  const clearError = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      container: {
-        ...current.container,
-        error: "",
-      },
-    }));
-  }, []);
-
-  const setError = useCallback((message: string) => {
-    setState((current) => ({
-      ...current,
-      container: {
-        ...current.container,
-        error: message,
       },
     }));
   }, []);
@@ -132,8 +109,6 @@ export function useIntakeShell(): IntakeShell {
     showSelect,
     showProvision,
     clearHeader,
-    clearError,
-    setError,
     progress: {
       showOverlay,
       hideOverlay,
@@ -142,12 +117,10 @@ export function useIntakeShell(): IntakeShell {
       notify,
     },
   }), [
-    clearError,
     clearHeader,
     endProcessing,
     hideOverlay,
     notify,
-    setError,
     showOverlay,
     showProvision,
     showSelect,
