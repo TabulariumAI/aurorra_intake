@@ -36,13 +36,5 @@ export const choiceFormStyles = {
     gap: "0.1rem",
     marginTop: "1.5rem",
   },
-  button: {
-    padding: ".5rem 1rem",
-    cursor: "pointer",
-    height: "2.5rem",
-    width: "6rem",
-    minWidth: "6rem",
-  },
 } satisfies Record<string, CSSProperties>;
-
 

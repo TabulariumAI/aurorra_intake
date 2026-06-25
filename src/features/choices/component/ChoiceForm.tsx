@@ -1,3 +1,4 @@
+import { ConfButton } from "aurorra-ui";
 import { getChoiceItemDependants, getChoiceItemSum, humanizeName, useChoiceForm } from "../hook/useChoiceForm";
 import { choiceFormStyles } from "../style/form.styles";
 import { ChoiceData } from "../service/choicesData";
@@ -139,18 +140,27 @@ export function ChoiceForm({
       </form>
       <div style={choiceFormStyles.footer}>
         {!form.dirty ? (
-          <button type="button" style={choiceFormStyles.button} onClick={onClose}>
-            Close
-          </button>
+          <ConfButton
+            label="Close"
+            variant="secondary"
+            requireConfirmation={false}
+            onConfirm={onClose}
+          />
         ) : null}
         {form.dirty ? (
           <>
-            <button type="button" style={choiceFormStyles.button} onClick={handleSave}>
-              Save
-            </button>
-            <button type="button" className="secondary" style={choiceFormStyles.button} onClick={handleCancel}>
-              Cancel
-            </button>
+            <ConfButton
+              label="Save"
+              variant="primary"
+              requireConfirmation={false}
+              onConfirm={handleSave}
+            />
+            <ConfButton
+              label="Cancel"
+              variant="secondary"
+              requireConfirmation={false}
+              onConfirm={handleCancel}
+            />
           </>
         ) : null}
       </div>
