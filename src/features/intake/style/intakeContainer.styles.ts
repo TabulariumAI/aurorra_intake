@@ -3,7 +3,6 @@ import type { CSSProperties } from "react";
 const shellLayoutGapRem = 0.75;
 const shellMainPanelMinRem = 42;
 const shellMainPanelMaxRem = 56;
-const shellFrameHeight = `calc(100vh - ${shellLayoutGapRem * 2}rem)`;
 
 export const intakeContainerStyles = {
   shell: {
@@ -14,8 +13,8 @@ export const intakeContainerStyles = {
     width: "auto",
     maxWidth: "none",
     minWidth: `${shellMainPanelMinRem}rem`,
-    height: shellFrameHeight,
-    minHeight: shellFrameHeight,
+    height: "100%",
+    minHeight: "0",
     overflow: "hidden",
     verticalAlign: "top",
     textAlign: "center",

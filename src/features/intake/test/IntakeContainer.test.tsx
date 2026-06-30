@@ -18,6 +18,7 @@ describe("IntakeContainer", () => {
 
     expect(screen.getByTestId("title-panel")).toHaveTextContent("Review");
     expect(screen.getByTestId("helper-panel")).toHaveTextContent("Check the document");
+    expect(screen.getByTestId("intake-container")).toHaveStyle({ height: "100%", minHeight: "0" });
     expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
     expect(screen.getByTestId("provision-panel")).not.toHaveStyle({ display: "none" });
     expect(screen.getByTestId("progress-overlay")).toBeInTheDocument();

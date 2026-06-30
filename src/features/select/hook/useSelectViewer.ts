@@ -1,7 +1,10 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { AuroraLens, IndexedDbViewerSessionStore } from "@tabulariumai/aurora-lens";
+import { AuroraLens, IndexedDbViewerSessionStore, configurePdfWorker } from "@tabulariumai/aurora-lens";
 import type { ViewerState, ViewerStatus } from "@tabulariumai/aurora-lens";
 import type { ViewerApi, SelectViewerProps } from "../type/selectViewer.types";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+configurePdfWorker(pdfWorkerUrl);
 
 function requireViewer(viewerRef: { current: ViewerApi | null }) {
   const viewer = viewerRef.current;
