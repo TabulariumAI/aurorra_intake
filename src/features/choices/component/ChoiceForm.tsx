@@ -42,7 +42,6 @@ export function ChoiceForm({
 
   return (
     <div style={choiceFormStyles.container}>
-      <p style={choiceFormStyles.title}>Settings</p>
       <form style={choiceFormStyles.form} onSubmit={(event) => event.preventDefault()}>
         {structure.choices.map((choice) => {
           const groupDisabled = disabledGroupSet.has(choice.name);

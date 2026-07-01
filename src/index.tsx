@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DIALOG_BODY, DIALOG_SIZE, Dialog } from "aurorra-ui";
+import type { DialogHeightStyle } from "aurorra-ui";
 import { ChoiceForm } from "./features/choices/component/ChoiceForm";
 import { createChoicesService } from "./features/choices/service/ChoicesService";
 import { CHOICESTRUCTURE, ChoiceData, Choices } from "./features/choices/service/choicesData";
@@ -68,6 +70,31 @@ const events = {
   updateChoices: { name: "updateChoices" },
   toggleLayout: { name: "toggleLayout" },
 } satisfies Record<string, EventConfig> & { reRoute: IntakeRouteEvent };
+
+const dialogHeightStyle = {
+  height: "calc(84vh * 0.85)",
+  maxHeight: "calc(84vh * 0.85)",
+} satisfies DialogHeightStyle;
+
+const choicesDialogHeader = (
+  <div style={{
+    alignItems: "center",
+    display: "flex",
+    justifyContent: "center",
+    minHeight: "2.9rem",
+    width: "100%",
+  }}>
+    <div style={{
+      color: "#0f172a",
+      fontSize: "1.35rem",
+      fontWeight: 800,
+      letterSpacing: "-0.015em",
+      lineHeight: 1.1,
+    }}>
+      Settings
+    </div>
+  </div>
+);
 
 export function AurorraIntake({
   authToken,
@@ -317,22 +344,32 @@ export function AurorraIntake({
       />
       {progressNoticeBox}
       {choicesOpen ? (
-        <div data-testid="choices-dialog" style={{ position: "fixed", inset: 0, zIndex: 20, overflow: "auto", background: "rgba(0, 0, 0, 0.22)", padding: "2rem" }}>
-          <div style={{ margin: "0 auto", maxWidth: "58rem", background: "#fff", borderRadius: "0.5rem", padding: "1rem" }}>
-            <ChoiceForm
-              structure={CHOICESTRUCTURE}
-              initialChoices={initialChoices}
-              initialAlwaysReview={initialAlwaysReview}
-              initialStudioModeEnabled={initialStudioModeEnabled}
-              onSave={(payload) => {
-                choicesService.save(payload.choices, payload.alwaysReview, payload.studioModeEnabled);
-                setChoicesOpen(false);
-              }}
-              onCancel={() => setChoicesOpen(false)}
-              onClose={() => setChoicesOpen(false)}
-            />
-          </div>
-        </div>
+        <Dialog
+          open
+          aria-label="Settings"
+          bodyMode={DIALOG_BODY.TOP}
+          draggable
+          header={choicesDialogHeader}
+          heightMode={DIALOG_SIZE.MEDIUM}
+          heightStyle={dialogHeightStyle}
+          onClose={() => setChoicesOpen(false)}
+          onOpenChange={setChoicesOpen}
+          showHeader
+          showOverlay
+        >
+          <ChoiceForm
+            structure={CHOICESTRUCTURE}
+            initialChoices={initialChoices}
+            initialAlwaysReview={initialAlwaysReview}
+            initialStudioModeEnabled={initialStudioModeEnabled}
+            onSave={(payload) => {
+              choicesService.save(payload.choices, payload.alwaysReview, payload.studioModeEnabled);
+              setChoicesOpen(false);
+            }}
+            onCancel={() => setChoicesOpen(false)}
+            onClose={() => setChoicesOpen(false)}
+          />
+        </Dialog>
       ) : null}
     </>
   );

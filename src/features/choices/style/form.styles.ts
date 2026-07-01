@@ -10,14 +10,6 @@ export const choiceFormStyles = {
     margin: "0 auto",
     boxSizing: "border-box",
   },
-  title: {
-    fontSize: "1.2rem",
-    fontWeight: "bold",
-    marginTop: "1rem",
-    marginBottom: "1rem",
-    textAlign: "center",
-    userSelect: "none",
-  },
   form: {
     textAlign: "left",
     width: "100%",

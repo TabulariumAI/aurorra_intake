@@ -100,4 +100,30 @@ describe("AurorraIntake", () => {
     expect(onAlert).toHaveBeenCalledWith("Intake failed.");
     expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
   });
+
+  it("renders settings in medium aurorra-ui dialog with height override", () => {
+    render(
+      <AurorraIntake
+        authToken="token"
+        apiGatewayUrl="https://doc.example.com"
+      />,
+    );
+
+    expect(capturedEventBus).not.toBeNull();
+    act(() => {
+      capturedEventBus!.emit({ name: "showChoices" });
+    });
+
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    expect(dialog).toHaveAttribute("data-height-mode", "medium");
+    expect(dialog.querySelector("[data-dialog-header='true']")).toBeInTheDocument();
+    expect(dialog.querySelector("[data-dialog-body]")).toHaveAttribute("data-body-mode", "top");
+    expect(dialog).toHaveStyle({
+      "--dialog-height": "calc(84vh * 0.85)",
+      "--dialog-max-height": "calc(84vh * 0.85)",
+      "--dialog-top": "50vh",
+      "--dialog-transform": "translate(-50%, -50%)",
+    });
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
 });

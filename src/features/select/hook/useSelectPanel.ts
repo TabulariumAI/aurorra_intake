@@ -175,13 +175,13 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setViewerStatus("loadingPage");
     setStarting(false);
     actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
-    setMode("review");
     showProgress(false);
 
     try {
       const loadId = loadIdRef.current + 1;
       loadIdRef.current = loadId;
       const lens = createViewer(loadId);
+      setMode("review");
       const restored = await lens.restoreSession();
       if (!restored) {
         mountSelectForm();
@@ -318,8 +318,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
 
   useEffect(() => () => {
     disposeLens();
-    disposeProgress();
-  }, [disposeLens, disposeProgress]);
+  }, [disposeLens]);
 
   return useMemo(() => ({
     mode: initialized ? mode : "pending",
