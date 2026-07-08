@@ -20,12 +20,11 @@ export const intakeContainerStyles = {
     textAlign: "center",
     boxSizing: "border-box",
     position: "relative",
-    borderRadius: "0.45rem",
     padding: "1.55rem",
-    boxShadow: "0 1.4rem 3rem rgba(15, 23, 42, 0.13), 0 0.25rem 0.8rem rgba(0, 92, 122, 0.08)",
-    border: "1px solid rgba(226, 232, 240, 0.95)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,253,254,0.94)), var(--background-main)",
+    borderRadius: "0",
+    boxShadow: "none",
+    borderStyle: "none",
+    backgroundColor: "transparent",
   },
   header: {
     flex: "0 0 auto",
