@@ -55,8 +55,6 @@ export type SelectService = {
   isDocumentSelected(): boolean;
   setDocumentSelected(selected: boolean): void;
   setPageCount(pageCount: number): void;
-  emitProgressStop(): void;
-  emitProgressStart(): void;
   emitRoute(document: File): Promise<void>;
   showSettings(): void;
   getProgressIntervalMs(): number;

@@ -40,13 +40,6 @@ function createShell(): IntakeShellActions {
     showSelect: vi.fn(),
     showProvision: vi.fn(),
     clearHeader: vi.fn(),
-    progress: {
-      showOverlay: vi.fn(),
-      hideOverlay: vi.fn(),
-      startProcessing: vi.fn(),
-      endProcessing: vi.fn(),
-      notify: vi.fn(),
-    },
   };
 }
 
@@ -54,6 +47,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
   const store = createStore(seed);
   const emit = vi.fn();
   const shell = createShell();
+  const onJobEvent = vi.fn();
   const runtime: SessionRuntime = {
     alert: { format: vi.fn((message) => `formatted:${message.code}`) },
     messages: {
@@ -68,7 +62,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       showAlert: { name: "showAlert" },
     },
     store,
-    intakeShell: shell,
+    onJobEvent,
     sessionWorkerClient: {
       newSession: vi.fn(async () => ({
         session: "session-1",
@@ -86,7 +80,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     loadChoices: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
   };
 
-  return { emit, runtime, shell, store };
+  return { emit, onJobEvent, runtime, shell, store };
 }
 
 describe("SessionService", () => {
@@ -100,7 +94,7 @@ describe("SessionService", () => {
   });
 
   it("creates a session, stores runtime values, and reroutes to upload", async () => {
-    const { emit, runtime, shell, store } = createRuntime();
+    const { emit, onJobEvent, runtime, store } = createRuntime();
     const service = createSessionService(runtime, { setState: vi.fn() });
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
 
@@ -111,7 +105,9 @@ describe("SessionService", () => {
     expect(store.set).toHaveBeenCalledWith("sasToken", "sas-1");
     expect(store.set).toHaveBeenCalledWith("baseUrl", "https://storage.test");
     expect(store.set).toHaveBeenCalledWith("document", "session-1.pdf");
-    expect(shell.progress.showOverlay).toHaveBeenCalledTimes(1);
+    expect(onJobEvent).toHaveBeenNthCalledWith(1, expect.objectContaining({ job: "session.new", phase: "started", session: null }));
+    expect(onJobEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({ job: "session.new", phase: "completed", session: "session-1" }));
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
     expect(emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "upload", file },
@@ -119,7 +115,7 @@ describe("SessionService", () => {
   });
 
   it("stores existing session data and normalized choices", async () => {
-    const { runtime, store } = createRuntime();
+    const { onJobEvent, runtime, store } = createRuntime();
     const service = createSessionService(runtime, { setState: vi.fn() });
 
     await service.setSession("session-2");
@@ -128,10 +124,15 @@ describe("SessionService", () => {
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
     expect(store.set).toHaveBeenCalledWith("indexChoices", [{ service: "Recognition", level: 5 }]);
     expect(store.set).toHaveBeenCalledWith("document", "session-2.pdf");
+    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
+      "session.load:started",
+      "session.load:completed",
+    ]);
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
   });
 
-  it("clears persisted session values and progress state", () => {
-    const { runtime, shell, store } = createRuntime();
+  it("clears persisted session values", () => {
+    const { runtime, store } = createRuntime();
     const service = createSessionService(runtime, { setState: vi.fn() });
 
     service.clear();
@@ -140,7 +141,5 @@ describe("SessionService", () => {
     expect(store.reset).toHaveBeenCalledWith("sasToken");
     expect(store.reset).toHaveBeenCalledWith("session");
     expect(store.reset).toHaveBeenCalledWith("numOfPages");
-    expect(shell.progress.endProcessing).toHaveBeenCalledTimes(1);
-    expect(shell.progress.hideOverlay).toHaveBeenCalledTimes(1);
   });
 });

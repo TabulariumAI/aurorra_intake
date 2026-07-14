@@ -43,6 +43,7 @@ describe("ChoicesService", () => {
   });
 
   it("loads choices with runtime auth token", async () => {
+    const onJobEvent = vi.fn();
     const runtime: ChoicesRuntime = {
       store: createStore(),
       eventBus: { emit: vi.fn(), listen: vi.fn() },
@@ -52,11 +53,17 @@ describe("ChoicesService", () => {
       choicesWorkerClient: {
         load: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
       },
+      onJobEvent,
     };
     const service = createChoicesService(runtime);
 
     await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
     expect(runtime.choicesWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
+    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
+      "choices.load:started",
+      "choices.load:completed",
+    ]);
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
   });
 
   it("saves choices, workflow, and emits update only when values change", () => {

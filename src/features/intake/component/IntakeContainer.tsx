@@ -11,7 +11,6 @@ export function IntakeContainer({
   helper,
   select,
   provision,
-  overlay,
   selectPanelRef,
   provisionPanelRef,
 }: IntakeContainerProps) {
@@ -49,7 +48,6 @@ export function IntakeContainer({
       >
         {provision}
       </section>
-      {overlay}
     </div>
   );
 }

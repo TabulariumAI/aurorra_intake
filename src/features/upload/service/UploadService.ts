@@ -46,8 +46,13 @@ export function resolveUploadContext(runtime: UploadRuntime): UploadContext {
     runtime.messages.UPLOAD_DOCNAME_MISSING,
     runtime,
   );
+  const session = requireString(
+    runtime.store.get("session"),
+    runtime.messages.SESSION_MISSING,
+    runtime,
+  );
 
-  return { sasToken, baseUrl, docName };
+  return { sasToken, baseUrl, docName, session };
 }
 
 export class UploadService implements UploadServiceActions {
@@ -78,15 +83,21 @@ export class UploadService implements UploadServiceActions {
       }
 
       const context = resolveUploadContext(runtime);
-      runtime.intakeShell.progress.startProcessing();
-      runtime.intakeShell.progress.notify("Uploading document...");
-
-      await this.#uploadWorkerClient.upload({
-        sasToken: context.sasToken,
-        baseUrl: context.baseUrl,
-        file: document,
-        path: context.docName,
-      });
+      const jobId = crypto.randomUUID();
+      runtime.onJobEvent?.({ job: "upload.document", jobId, message: "Uploading document", phase: "started", session: context.session });
+      try {
+        await this.#uploadWorkerClient.upload({
+          sasToken: context.sasToken,
+          baseUrl: context.baseUrl,
+          file: document,
+          path: context.docName,
+        });
+        runtime.onJobEvent?.({ job: "upload.document", jobId, message: "Document uploaded", phase: "completed", session: context.session });
+      } catch (error) {
+        const message = getErrorMessage(error, "Document upload failed.");
+        runtime.onJobEvent?.({ error: message, job: "upload.document", jobId, message: "Document upload failed", phase: "failed", session: context.session });
+        throw error;
+      }
 
       runtime.eventBus.emit(runtime.events.reRoute, {
         [runtime.events.reRoute.detail.stage]: "provision",
@@ -98,8 +109,6 @@ export class UploadService implements UploadServiceActions {
       });
       const message = getErrorMessage(error, fallback);
       stateApi.setState({ isProcessing: true, lastError: message });
-      runtime.intakeShell.progress.endProcessing();
-      runtime.intakeShell.progress.hideOverlay();
       runtime.eventBus.emit(runtime.events.showAlert, {
         message,
         onClose: () => runtime.eventBus.emit(runtime.events.newSession, {}),

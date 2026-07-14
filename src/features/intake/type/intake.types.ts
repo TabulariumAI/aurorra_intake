@@ -17,7 +17,6 @@ export type IntakeContainerActions = {
 export type IntakeContainerProps = IntakeContainerState & {
   select: ReactNode;
   provision: ReactNode;
-  overlay?: ReactNode;
   selectPanelRef?: Ref<HTMLElement>;
   provisionPanelRef?: Ref<HTMLElement>;
 };

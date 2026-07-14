@@ -83,18 +83,6 @@ class IndexingService implements IndexingServiceActions {
     return intervalValue + (25 * pages);
   }
 
-  async #emitMessages(messages: string[], intervalMs: number) {
-    if (messages.length === 0) {
-      return;
-    }
-
-    const messageInterval = intervalMs / messages.length;
-    for (const message of messages) {
-      this.#runtime.intakeShell.progress.notify(message);
-      await delay(messageInterval);
-    }
-  }
-
   async process() {
     const runtime = this.#runtime;
     const stateApi = this.#stateApi;
@@ -121,75 +109,64 @@ class IndexingService implements IndexingServiceActions {
         choices,
         runtime.store.get("numOfPages"),
       );
-
-
-      /*Step*/
-        runtime.intakeShell.progress.startProcessing();
-
-      /*Step1: retrive*/
-      isComplete = await this.checkStatus(String(session), documentName);
-      if (!isComplete) {
-
-        await this.#emitMessages([
-          "Retrieving document",
-          "Analyzing Document",
-        ], cycleInterval);
-      }
-
-      /*Step2: recognition nd page analyze*/
-      isComplete = await this.checkStatus(String(session), documentName);
-      if (!isComplete) {
-        await this.start(String(session), documentName, choices);
-        cycleInterval = this.#pageInterval(pages, cycleInterval) * 3;
-        await this.#emitMessages([
-          "Identifying pages",
-          "Refining document",
-          "Recognizing document",
-        ], cycleInterval);
-        isComplete = await this.checkStatus(String(session), documentName);
-      }
-
-      /*Step: page-Indexing*/
-      if (!isComplete) {
-        const indexStatuses = runtime.choices.getIdentifyingIndexes(choices, runtime.choiceStructure);
-        for (let page = 1; page <= pages; page++) {
-          cycleInterval = runtime.baseIntervalMs * indexStatuses.length;
-          await this.#emitMessages(
-            indexStatuses.map((status) => `${status} (page ${page} of ${pages})`),
-            cycleInterval,
-          );
-          isComplete = await this.checkStatus(String(session), documentName);
-          if (isComplete) {
-            break;
-          }
-        }
-      }
-
-      /*Step: Enrichment*/
-      if (!isComplete) {
-        const enrichmentStatuses = runtime.choices.getIdEnh(choices, runtime.choiceStructure);
-        cycleInterval = runtime.baseIntervalMs * enrichmentStatuses.length;
-        await this.#emitMessages(enrichmentStatuses, cycleInterval);
-        isComplete = await this.checkStatus(String(session), documentName);
-      }
-
-      /*Step: Retrive*/
-      if (!isComplete) {
-        let attempts = 0;
-        cycleInterval = runtime.baseIntervalMs * 2;
-        await this.#emitMessages(["Retrieving processed data..."], cycleInterval);
-        while (!isComplete && attempts < 27) {
-          isComplete = await this.checkStatus(String(session), documentName);
-          if (isComplete) {
-            break;
-          }
-          attempts += 1;
+      const sessionId = String(session);
+      const statusJobId = crypto.randomUUID();
+      runtime.onJobEvent?.({ job: "indexing.status", jobId: statusJobId, message: "Processing document", phase: "started", session: sessionId });
+      try {
+        isComplete = await this.checkStatus(sessionId, documentName);
+        if (!isComplete) {
           await delay(cycleInterval);
         }
-      }
 
-      if (!isComplete) {
-        throw new Error(runtime.alert.format(runtime.messages.REPORT_WAIT));
+        isComplete = await this.checkStatus(sessionId, documentName);
+        if (!isComplete) {
+          await this.start(sessionId, documentName, choices);
+          cycleInterval = this.#pageInterval(pages, cycleInterval) * 3;
+          await delay(cycleInterval);
+          isComplete = await this.checkStatus(sessionId, documentName);
+        }
+
+        if (!isComplete) {
+          const indexStatuses = runtime.choices.getIdentifyingIndexes(choices, runtime.choiceStructure);
+          for (let page = 1; page <= pages; page++) {
+            cycleInterval = runtime.baseIntervalMs * indexStatuses.length;
+            await delay(cycleInterval);
+            isComplete = await this.checkStatus(sessionId, documentName);
+            if (isComplete) {
+              break;
+            }
+          }
+        }
+
+        if (!isComplete) {
+          const enrichmentStatuses = runtime.choices.getIdEnh(choices, runtime.choiceStructure);
+          cycleInterval = runtime.baseIntervalMs * enrichmentStatuses.length;
+          await delay(cycleInterval);
+          isComplete = await this.checkStatus(sessionId, documentName);
+        }
+
+        if (!isComplete) {
+          let attempts = 0;
+          cycleInterval = runtime.baseIntervalMs * 2;
+          await delay(cycleInterval);
+          while (!isComplete && attempts < 27) {
+            isComplete = await this.checkStatus(sessionId, documentName);
+            if (isComplete) {
+              break;
+            }
+            attempts += 1;
+            await delay(cycleInterval);
+          }
+        }
+
+        if (!isComplete) {
+          throw new Error(runtime.alert.format(runtime.messages.REPORT_WAIT));
+        }
+        runtime.onJobEvent?.({ job: "indexing.status", jobId: statusJobId, message: "Document processed", phase: "completed", session: sessionId });
+      } catch (error) {
+        const message = getErrorMessage(error, "document processing", runtime);
+        runtime.onJobEvent?.({ error: message, job: "indexing.status", jobId: statusJobId, message: "Document processing failed", phase: "failed", session: sessionId });
+        throw error;
       }
 
       await runtime.notify("src/assets/notify.wav");
@@ -202,9 +179,6 @@ class IndexingService implements IndexingServiceActions {
       throw new Error(String(message), { cause: error });
 
     } finally {
-
-      runtime.intakeShell.progress.endProcessing();
-      runtime.intakeShell.progress.hideOverlay();
 
       runtime.store.set("indexingStepStatus", false);
       stateApi.setState({ isProcessing: false, lastError: null });
@@ -227,7 +201,16 @@ class IndexingService implements IndexingServiceActions {
     if (!Array.isArray(choices)) {
       throw new Error("Index choices are not available.");
     }
-    await runtime.indexingWorkerClient.start(token, session, documentName, choices);
+    const jobId = crypto.randomUUID();
+    runtime.onJobEvent?.({ job: "indexing.start", jobId, message: "Starting document indexing", phase: "started", session });
+    try {
+      await runtime.indexingWorkerClient.start(token, session, documentName, choices);
+      runtime.onJobEvent?.({ job: "indexing.start", jobId, message: "Document indexing started", phase: "completed", session });
+    } catch (error) {
+      const message = resolveMessage(error, "Document indexing start failed.");
+      runtime.onJobEvent?.({ error: message, job: "indexing.start", jobId, message: "Document indexing start failed", phase: "failed", session });
+      throw error;
+    }
   }
 
   async checkStatus(session: string, docName: unknown) {

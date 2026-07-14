@@ -36,8 +36,17 @@ export class ChoicesService {
 
   async load(session: string): Promise<unknown[] | null> {
     const token = getAuthToken(this.#runtime);
-    const choices = await this.#runtime.choicesWorkerClient.load(token, session);
-    return normalizeBackendChoices(choices);
+    const jobId = crypto.randomUUID();
+    this.#runtime.onJobEvent?.({ job: "choices.load", jobId, message: "Loading session choices", phase: "started", session });
+    try {
+      const choices = await this.#runtime.choicesWorkerClient.load(token, session);
+      this.#runtime.onJobEvent?.({ job: "choices.load", jobId, message: "Session choices loaded", phase: "completed", session });
+      return normalizeBackendChoices(choices);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#runtime.onJobEvent?.({ error: message, job: "choices.load", jobId, message: "Session choices load failed", phase: "failed", session });
+      throw error;
+    }
   }
 
   save(choiceJson: ChoiceValue[], alwaysReview: boolean, studioModeEnabled: boolean): ChoicesSaveResult {

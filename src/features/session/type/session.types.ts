@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
+import type { JobEventCallback } from "../../job/type/job.types";
 
 export type SessionDocument = File | { name: string; type: string } | null;
 
@@ -78,7 +78,7 @@ export type SessionRuntime = {
   eventBus: SessionEventBus;
   events: SessionEvents;
   store: StoreAdapter;
-  intakeShell: IntakeShellActions;
+  onJobEvent?: JobEventCallback;
   sessionWorkerClient: SessionWorkerClient;
   loadChoices(session: string): Promise<SessionChoicesData>;
 };

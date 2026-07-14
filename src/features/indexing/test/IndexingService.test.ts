@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { createIndexingService } from "../service/IndexingService";
 import { CHOICESTRUCTURE, ChoiceData } from "../../choices/service/choicesData";
 import type { IndexingRuntime } from "../type/indexing.types";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
@@ -34,23 +33,9 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   } as unknown as StoreAdapter;
 }
 
-function createShell(): IntakeShellActions {
-  return {
-    showSelect: vi.fn(),
-    showProvision: vi.fn(),
-    clearHeader: vi.fn(),
-    progress: {
-      showOverlay: vi.fn(),
-      hideOverlay: vi.fn(),
-      startProcessing: vi.fn(),
-      endProcessing: vi.fn(),
-      notify: vi.fn(),
-    },
-  };
-}
-
 function createRuntime(seed: Partial<StoreValues> = {}) {
   const defaultChoices = new ChoiceData(CHOICESTRUCTURE).generateDefaultJson();
+  const onJobEvent = vi.fn();
   const runtime: IndexingRuntime = {
     alert: { format: vi.fn((message, args) => `formatted:${String((message as { args?: unknown })?.args ? args?.action : message)}`) },
     messages: {
@@ -73,21 +58,21 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     },
     choiceStructure: CHOICESTRUCTURE,
     baseIntervalMs: 1,
-    intakeShell: createShell(),
     indexingWorkerClient: {
       start: vi.fn(async () => undefined),
       status: vi.fn(async () => ({ status: "completed", data: "" })),
     },
+    onJobEvent,
     notify: vi.fn(async () => undefined),
     getAuthToken: vi.fn(() => "token-1"),
   };
 
-  return { defaultChoices, runtime };
+  return { defaultChoices, onJobEvent, runtime };
 }
 
 describe("IndexingService", () => {
   it("starts indexing with normalized choices and emits metadata route when completed", async () => {
-    const { defaultChoices, runtime } = createRuntime({ indexChoices: "null" });
+    const { defaultChoices, onJobEvent, runtime } = createRuntime({ indexChoices: "null" });
     runtime.indexingWorkerClient.status = vi.fn()
       .mockResolvedValueOnce({ status: "pending", data: "" })
       .mockResolvedValueOnce({ status: "pending", data: "" })
@@ -103,6 +88,14 @@ describe("IndexingService", () => {
       runtime.events.reRoute,
       { stage: "metadata" },
     );
+    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
+      "indexing.status:started",
+      "indexing.start:started",
+      "indexing.start:completed",
+      "indexing.status:completed",
+    ]);
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[3][0].jobId);
+    expect(onJobEvent.mock.calls[1][0].jobId).toBe(onJobEvent.mock.calls[2][0].jobId);
   });
 
   it("returns true only for completed status", async () => {

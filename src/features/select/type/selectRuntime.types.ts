@@ -1,5 +1,4 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 
 export type SelectAlertMessage = {
   code: string;
@@ -29,7 +28,6 @@ export type SelectRuntime = {
   messages: SelectAlertMessages;
   eventBus: SelectEventBus;
   events: SelectEvents;
-  intakeShell: IntakeShellActions;
   store: StoreAdapter;
   intervalMs: number;
 };

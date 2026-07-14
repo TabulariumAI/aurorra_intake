@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSelectService, getSelectErrorMessage } from "../service/selectService";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 import type { SelectRuntime } from "../type/selectRuntime.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
@@ -33,23 +32,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   } as unknown as StoreAdapter;
 }
 
-function createShell(): IntakeShellActions {
-  return {
-    showSelect: vi.fn(),
-    showProvision: vi.fn(),
-    clearHeader: vi.fn(),
-    progress: {
-      showOverlay: vi.fn(),
-      hideOverlay: vi.fn(),
-      startProcessing: vi.fn(),
-      endProcessing: vi.fn(),
-      notify: vi.fn(),
-    },
-  };
-}
-
 function createRuntime(seed: Partial<StoreValues> = {}) {
-  const shell = createShell();
   const runtime: SelectRuntime = {
     alert: { format: vi.fn(() => "formatted fallback") },
     messages: { ERR_ACT: { code: "ERR_ACT", args: { action: "action" } } },
@@ -62,11 +45,10 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       showChoices: { name: "showChoices" },
     },
     store: createStore(seed),
-    intakeShell: shell,
     intervalMs: 250,
   };
 
-  return { runtime, shell };
+  return { runtime };
 }
 
 describe("selectService", () => {
@@ -78,19 +60,17 @@ describe("selectService", () => {
   });
 
   it("stores document selection and emits route events", async () => {
-    const { runtime, shell } = createRuntime();
+    const { runtime } = createRuntime();
     const service = createSelectService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
 
     service.setDocumentSelected(true);
     service.setPageCount(7);
-    service.emitProgressStart();
     await service.emitRoute(file);
     service.showSettings();
 
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", true);
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 7);
-    expect(shell.progress.notify).toHaveBeenCalledWith("Screening document...");
     expect(runtime.eventBus.emitAsync).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "session", file },
@@ -98,14 +78,12 @@ describe("selectService", () => {
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.showChoices);
   });
 
-  it("clears document selection and progress state", () => {
-    const { runtime, shell } = createRuntime({ documentSelected: true });
+  it("clears document selection", () => {
+    const { runtime } = createRuntime({ documentSelected: true });
     const service = createSelectService(runtime);
 
     service.clear();
 
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", false);
-    expect(shell.progress.endProcessing).toHaveBeenCalledTimes(1);
-    expect(shell.progress.hideOverlay).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,7 +7,6 @@ import { CHOICESTRUCTURE, ChoiceData, Choices } from "./features/choices/service
 import { createChoicesWorkerClient } from "./features/choices/worker/choicesWorkerClient";
 import { createIndexingWorkerClient } from "./features/indexing/worker/indexingWorkerClient";
 import { IntakeContainer } from "./features/intake/component/IntakeContainer";
-import { ProgressOverlay } from "./features/intake/component/ProgressOverlay";
 import { useIntakeShell } from "./features/intake/hook/useIntakeShell";
 import { ProvisionReview } from "./features/provision/component/ProvisionReview";
 import { createProvisionWorkerClient } from "./features/provision/worker/provisionWorkerClient";
@@ -25,10 +24,10 @@ import type { ProvisionServiceActions, ProvisionState } from "./features/provisi
 import type { SessionServiceActions, SessionState } from "./features/session/type/session.types";
 import type { UploadServiceActions, UploadState } from "./features/upload/type/upload.types";
 import type { ChoiceStructure } from "./features/choices/type/choices.types";
+import type { JobEventCallback } from "./features/job/type/job.types";
 import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "./features/intake/service/intakeOrchestrator";
 import { createStoreAdapter, setRuntimeAuthToken } from "./store/adapter/storeAdapter";
 import { intakeAlert, intakeMessages } from "./features/intake/service/intakeMessages";
-import { ProgressMessageBar } from "@document-pwa/progress-message-bar";
 
 type EventConfig = {
   name: string;
@@ -44,6 +43,7 @@ export type AurorraIntakeProps = {
   onCanceled?: () => void;
   onComplete?: (payload: IntakeCompletePayload) => void;
   onFailure?: (message: string) => void;
+  onJobEvent?: JobEventCallback;
   onStarted?: () => void;
 };
 
@@ -61,6 +61,7 @@ export type {
   StoreAdapter,
   StoreValues,
 } from "./store/type/store.types";
+export type { JobEvent, JobEventCallback, JobName } from "./features/job/type/job.types";
 
 const events = {
   reRoute: { name: "reRoute", detail: { stage: "stage", file: "file" } },
@@ -105,6 +106,7 @@ export function AurorraIntake({
   onCanceled,
   onComplete,
   onFailure,
+  onJobEvent,
   onStarted,
 }: AurorraIntakeProps) {
   const intake = useIntakeShell();
@@ -181,8 +183,9 @@ export function AurorraIntake({
     messages: intakeMessages,
     eventBus,
     onCanceled,
+    onJobEvent,
     store,
-  }), [eventBus, onCanceled, store]);
+  }), [eventBus, onCanceled, onJobEvent, store]);
 
   const selectService = useMemo(() => createSelectService({
     ...commonRuntime,
@@ -190,9 +193,8 @@ export function AurorraIntake({
       reRoute: events.reRoute,
       showChoices: events.showChoices,
     },
-    intakeShell: actions,
     intervalMs,
-  }), [actions, commonRuntime, intervalMs]);
+  }), [commonRuntime, intervalMs]);
 
   const choicesService = useMemo(() => createChoicesService({
     store,
@@ -210,7 +212,8 @@ export function AurorraIntake({
       };
     },
     choicesWorkerClient: createChoicesWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [apiGatewayUrl, eventBus, store]);
+    onJobEvent,
+  }), [apiGatewayUrl, eventBus, onJobEvent, store]);
 
   const sessionService = useMemo(() => createSessionService({
     ...commonRuntime,
@@ -218,7 +221,6 @@ export function AurorraIntake({
       reRoute: events.reRoute,
       showAlert: events.showAlert,
     },
-    intakeShell: actions,
     sessionWorkerClient: createSessionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     loadChoices(session) {
       return choicesService.load(session);
@@ -227,7 +229,7 @@ export function AurorraIntake({
     setState(_: SessionState) {
       return undefined;
     },
-  }), [actions, apiGatewayUrl, choicesService, commonRuntime]);
+  }), [apiGatewayUrl, choicesService, commonRuntime]);
 
   const uploadService = useMemo(() => createUploadService({
     ...commonRuntime,
@@ -236,13 +238,12 @@ export function AurorraIntake({
       newSession: events.newSession,
       reRoute: events.reRoute,
     },
-    intakeShell: actions,
     uploadWorkerClient: createUploadWorkerClient(),
   }, {
     setState(_: UploadState) {
       return undefined;
     },
-  }), [actions, commonRuntime]);
+  }), [commonRuntime]);
 
   const provisionService = useMemo(() => createProvisionService({
     ...commonRuntime,
@@ -260,7 +261,6 @@ export function AurorraIntake({
         return provisionHostRef.current;
       },
     },
-    intakeShell: actions,
     provisionWorkerClient: createProvisionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     createReview(container, options) {
       return new ProvisionReview(container, options);
@@ -295,7 +295,6 @@ export function AurorraIntake({
     },
     choiceStructure: CHOICESTRUCTURE,
     baseIntervalMs: intervalMs,
-    intakeShell: actions,
     indexingWorkerClient: createIndexingWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     async notify() {
       return undefined;
@@ -307,7 +306,7 @@ export function AurorraIntake({
     setState(_: IndexingState) {
       return undefined;
     },
-  }), [actions, apiGatewayUrl, authToken, commonRuntime, intervalMs]);
+  }), [apiGatewayUrl, authToken, commonRuntime, intervalMs]);
 
   useEffect(() => {
     sessionRef.current = sessionService;
@@ -318,12 +317,6 @@ export function AurorraIntake({
 
   const selectContent = selectHost ? (
     <SelectPanel dropTarget={selectHost} actions={actions} service={selectService} />
-  ) : null;
-  const overlay = state.overlay.isVisible ? <ProgressOverlay /> : null;
-  const progressNoticeBox = state.progress.isProcessing && state.progress.messages ? (
-    <div data-testid="progress-notice-host" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 }}>
-      <ProgressMessageBar messages={state.progress.messages} intervalMs={intervalMs} />
-    </div>
   ) : null;
   const initialChoices = store.get("indexChoices");
   const initialAlwaysReview = Boolean(store.get("workflow"));
@@ -340,9 +333,7 @@ export function AurorraIntake({
         }}
         select={selectContent}
         provision={null}
-        overlay={overlay}
       />
-      {progressNoticeBox}
       {choicesOpen ? (
         <Dialog
           open

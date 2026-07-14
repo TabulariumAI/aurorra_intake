@@ -84,9 +84,6 @@ export class ProvisionService {
       onContinue: async () => {
         this.#dismissReview();
         actions.showSelect("", "");
-        runtime.intakeShell.progress.showOverlay();
-        runtime.intakeShell.progress.startProcessing();
-        runtime.intakeShell.progress.notify("Processing document...");
         runtime.eventBus.emit(runtime.events.reRoute, {
           [runtime.events.reRoute.detail.stage]: "indexing",
         });
@@ -136,14 +133,21 @@ export class ProvisionService {
       }
 
       const reviewedDocument = document ?? documentName;
-      runtime.intakeShell.progress.startProcessing();
-      runtime.intakeShell.progress.notify("Screening document...");
-
-      const response = await this.#provisionWorkerClient.provision(
-        token,
-        String(session),
-        String(documentName),
-      );
+      const jobId = crypto.randomUUID();
+      runtime.onJobEvent?.({ job: "provision.document", jobId, message: "Screening document", phase: "started", session: String(session) });
+      let response: unknown;
+      try {
+        response = await this.#provisionWorkerClient.provision(
+          token,
+          String(session),
+          String(documentName),
+        );
+        runtime.onJobEvent?.({ job: "provision.document", jobId, message: "Document screened", phase: "completed", session: String(session) });
+      } catch (error) {
+        const message = getErrorMessage(error, "Document screening failed.");
+        runtime.onJobEvent?.({ error: message, job: "provision.document", jobId, message: "Document screening failed", phase: "failed", session: String(session) });
+        throw error;
+      }
       const result = normalizeProvisionResponse(response);
 
       runtime.store.set("numOfPages", result.pageNum);
@@ -161,8 +165,6 @@ export class ProvisionService {
       throw new Error(String(message), { cause: error });
     } finally {
       runtime.store.set("provisionStepStatus", false);
-      runtime.intakeShell.progress.endProcessing();
-      runtime.intakeShell.progress.hideOverlay();
       stateApi.setState({ isProcessing: false, lastError });
     }
   }
@@ -172,8 +174,6 @@ export class ProvisionService {
     this.#runtime.intake.actions.showSelect("", "");
     this.#runtime.store.set("provisionStepStatus", false);
     this.#stateApi.setState({ isProcessing: false, lastError: null });
-    this.#runtime.intakeShell.progress.endProcessing();
-    this.#runtime.intakeShell.progress.hideOverlay();
   }
 }
 

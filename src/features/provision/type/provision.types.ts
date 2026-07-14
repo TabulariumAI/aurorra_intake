@@ -1,5 +1,6 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
 import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
+import type { JobEventCallback } from "../../job/type/job.types";
 
 export type ProvisionDocument = File | {
   name: string;
@@ -87,7 +88,7 @@ export type ProvisionRuntime = {
     actions: IntakeShellActions;
     provisionHost: HTMLElement;
   };
-  intakeShell: IntakeShellActions;
+  onJobEvent?: JobEventCallback;
   onCanceled?: () => void;
   provisionWorkerClient: ProvisionWorkerClient;
   createReview(container: HTMLElement, options: ProvisionReviewOptions): ProvisionReviewHandle;

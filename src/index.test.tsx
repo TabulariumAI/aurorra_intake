@@ -25,8 +25,6 @@ vi.mock("./features/select/service/selectService", () => ({
     return {
       setDocumentSelected: vi.fn(),
       setPageCount: vi.fn(),
-      emitProgressStart: vi.fn(),
-      emitProgressStop: vi.fn(),
       emitRoute: vi.fn(),
       clear: vi.fn(),
       emitChoices: vi.fn(),

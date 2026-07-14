@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
+import type { JobEventCallback } from "../../job/type/job.types";
 
 export type UploadDocument = File | {
   name: string;
@@ -11,6 +11,7 @@ export type UploadContext = {
   sasToken: string;
   baseUrl: string;
   docName: string;
+  session: string;
 };
 
 export type UploadState = {
@@ -58,6 +59,7 @@ export type UploadRuntime = {
     UPLOAD_TOKEN_MISSING: unknown;
     UPLOAD_BASEURL_MISSING: unknown;
     UPLOAD_DOCNAME_MISSING: unknown;
+    SESSION_MISSING: unknown;
     DOCUMENT_MISSING: unknown;
     ERR_ACT: {
       args: {
@@ -79,6 +81,6 @@ export type UploadRuntime = {
     };
   };
   store: StoreAdapter;
-  intakeShell: IntakeShellActions;
+  onJobEvent?: JobEventCallback;
   uploadWorkerClient: UploadWorkerClient;
 };

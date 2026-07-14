@@ -1,7 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { IntakeContainer } from "../component/IntakeContainer";
-import { ProgressOverlay } from "../component/ProgressOverlay";
 
 describe("IntakeContainer", () => {
   it("renders select and provision slots with visibility controlled by panel state", () => {
@@ -12,7 +11,6 @@ describe("IntakeContainer", () => {
         helper="Check the document"
         select={<div>Select form</div>}
         provision={<div>Provision review</div>}
-        overlay={<ProgressOverlay />}
       />,
     );
 
@@ -26,7 +24,6 @@ describe("IntakeContainer", () => {
     expect(container.style.boxShadow).toBe("none");
     expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
     expect(screen.getByTestId("provision-panel")).not.toHaveStyle({ display: "none" });
-    expect(screen.getByTestId("progress-overlay")).toBeInTheDocument();
     expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
   });
 });

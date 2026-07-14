@@ -11,8 +11,6 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
   return {
     clear() {
       runtime.store.set("documentSelected", false);
-      runtime.intakeShell.progress.endProcessing();
-      runtime.intakeShell.progress.hideOverlay();
     },
     isDocumentSelected() {
       return runtime.store.get("documentSelected") === true;
@@ -22,15 +20,6 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
     },
     setPageCount(pageCount) {
       runtime.store.set("numOfPages", pageCount);
-    },
-    emitProgressStop() {
-      runtime.intakeShell.progress.endProcessing();
-      runtime.intakeShell.progress.hideOverlay();
-    },
-    emitProgressStart() {
-      runtime.intakeShell.progress.showOverlay();
-      runtime.intakeShell.progress.startProcessing();
-      runtime.intakeShell.progress.notify("Screening document...");
     },
     async emitRoute(document) {
       await runtime.eventBus.emitAsync(runtime.events.reRoute, {

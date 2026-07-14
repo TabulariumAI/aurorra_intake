@@ -4,6 +4,7 @@ import type {
   SessionDocument,
   SessionExtension,
   SessionRuntime,
+  SessionStartData,
   SessionWorkerClient,
   SessionServiceActions,
   SessionState,
@@ -100,11 +101,17 @@ export class SessionService implements SessionServiceActions {
         throw new Error("Missing auth token");
       }
 
-      runtime.intakeShell.progress.showOverlay();
-      runtime.intakeShell.progress.startProcessing();
-      runtime.intakeShell.progress.notify("Creating a new session");
-
-      const data = await sessionWorkerClient.newSession(token);
+      const jobId = crypto.randomUUID();
+      runtime.onJobEvent?.({ job: "session.new", jobId, message: "Creating a new session", phase: "started", session: null });
+      let data: SessionStartData;
+      try {
+        data = await sessionWorkerClient.newSession(token);
+        runtime.onJobEvent?.({ job: "session.new", jobId, message: "Session created", phase: "completed", session: data.session });
+      } catch (error) {
+        const message = getErrorMessage(error, "Session creation failed.");
+        runtime.onJobEvent?.({ error: message, job: "session.new", jobId, message: "Session creation failed", phase: "failed", session: null });
+        throw error;
+      }
       storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.${ext}`);
       runtime.eventBus.emit(runtime.events.reRoute, {
         [runtime.events.reRoute.detail.stage]: "upload",
@@ -116,8 +123,6 @@ export class SessionService implements SessionServiceActions {
       });
       const message = getErrorMessage(error, fallback);
       stateApi.setState({ isProcessing: true, lastError: message });
-      runtime.intakeShell.progress.endProcessing();
-      runtime.intakeShell.progress.hideOverlay();
       runtime.eventBus.emit(runtime.events.showAlert, { message });
       console.error("Step1:", message);
     } finally {
@@ -135,7 +140,17 @@ export class SessionService implements SessionServiceActions {
     }
 
     const choices = normalizeChoices(JSON.parse(JSON.stringify(await runtime.loadChoices(session))) as SessionChoicesData);
-    const data = await sessionWorkerClient.sessionData(token, session);
+    const jobId = crypto.randomUUID();
+    runtime.onJobEvent?.({ job: "session.load", jobId, message: "Loading session data", phase: "started", session });
+    let data: SessionStartData;
+    try {
+      data = await sessionWorkerClient.sessionData(token, session);
+      runtime.onJobEvent?.({ job: "session.load", jobId, message: "Session data loaded", phase: "completed", session });
+    } catch (error) {
+      const message = getErrorMessage(error, "Session data load failed.");
+      runtime.onJobEvent?.({ error: message, job: "session.load", jobId, message: "Session data load failed", phase: "failed", session });
+      throw error;
+    }
     storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.pdf`, choices);
   }
 
@@ -145,8 +160,6 @@ export class SessionService implements SessionServiceActions {
     runtime.store.reset("sasToken");
     runtime.store.reset("session");
     runtime.store.reset("numOfPages");
-    runtime.intakeShell.progress.endProcessing();
-    runtime.intakeShell.progress.hideOverlay();
   }
 }
 

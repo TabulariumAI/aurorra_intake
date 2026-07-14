@@ -38,18 +38,12 @@ function createShell(): IntakeShellActions {
     showSelect: vi.fn(),
     showProvision: vi.fn(),
     clearHeader: vi.fn(),
-    progress: {
-      showOverlay: vi.fn(),
-      hideOverlay: vi.fn(),
-      startProcessing: vi.fn(),
-      endProcessing: vi.fn(),
-      notify: vi.fn(),
-    },
   };
 }
 
 function createRuntime(seed: Partial<StoreValues> = {}) {
   const shell = createShell();
+  const onJobEvent = vi.fn();
   let reviewOptions: ProvisionReviewOptions | null = null;
   const runtime: ProvisionRuntime = {
     alert: { format: vi.fn((message) => `formatted:${String(message)}`) },
@@ -69,7 +63,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       actions: shell,
       provisionHost: document.createElement("section"),
     },
-    intakeShell: shell,
+    onJobEvent,
     onCanceled: vi.fn(),
     provisionWorkerClient: {
       provision: vi.fn(async () => ({
@@ -85,12 +79,12 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     }),
   };
 
-  return { runtime, reviewOptions: () => reviewOptions, shell };
+  return { onJobEvent, runtime, reviewOptions: () => reviewOptions, shell };
 }
 
 describe("ProvisionService", () => {
   it("screens the document, stores page count, and renders review", async () => {
-    const { runtime, reviewOptions, shell } = createRuntime();
+    const { onJobEvent, runtime, reviewOptions, shell } = createRuntime();
     const service = createProvisionService(runtime, { setState: vi.fn() });
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 
@@ -104,6 +98,11 @@ describe("ProvisionService", () => {
       document: file,
     }));
     expect(shell.showProvision).toHaveBeenCalledWith("", "");
+    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
+      "provision.document:started",
+      "provision.document:completed",
+    ]);
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
   });
 
   it("continues from review by rerouting to indexing", async () => {
@@ -114,7 +113,6 @@ describe("ProvisionService", () => {
     await reviewOptions()?.onContinue("session-1.pdf");
 
     expect(shell.showSelect).toHaveBeenCalledWith("", "");
-    expect(shell.progress.showOverlay).toHaveBeenCalledTimes(1);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "indexing" },

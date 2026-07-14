@@ -38,24 +38,19 @@ function createShell(): IntakeShellActions {
     showSelect: vi.fn(),
     showProvision: vi.fn(),
     clearHeader: vi.fn(),
-    progress: {
-      showOverlay: vi.fn(),
-      hideOverlay: vi.fn(),
-      startProcessing: vi.fn(),
-      endProcessing: vi.fn(),
-      notify: vi.fn(),
-    },
   };
 }
 
 function createRuntime(seed: Partial<StoreValues> = {}) {
   const shell = createShell();
+  const onJobEvent = vi.fn();
   const runtime: UploadRuntime = {
     alert: { format: vi.fn((message) => `formatted:${String(message)}`) },
     messages: {
       UPLOAD_TOKEN_MISSING: "token missing",
       UPLOAD_BASEURL_MISSING: "base url missing",
       UPLOAD_DOCNAME_MISSING: "document missing",
+      SESSION_MISSING: "session missing",
       DOCUMENT_MISSING: "document missing",
       ERR_ACT: { args: { action: "action" } },
     },
@@ -66,28 +61,29 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       reRoute: { detail: { stage: "stage", file: "file" } },
     },
     store: createStore(seed),
-    intakeShell: shell,
+    onJobEvent,
     uploadWorkerClient: {
       upload: vi.fn(async () => undefined),
     },
   };
 
-  return { runtime, shell };
+  return { onJobEvent, runtime, shell };
 }
 
 describe("UploadService", () => {
   it("resolves upload context from stored SAS, base URL, and document path", () => {
-    const { runtime } = createRuntime();
+    const { runtime } = createRuntime({ session: "session-1" });
 
     expect(resolveUploadContext(runtime)).toEqual({
       sasToken: "sas-1",
       baseUrl: "https://storage.test",
       docName: "session-1.pdf",
+      session: "session-1",
     });
   });
 
   it("uploads the selected document and reroutes to provision", async () => {
-    const { runtime, shell } = createRuntime();
+    const { onJobEvent, runtime } = createRuntime({ session: "session-1" });
     const setState = vi.fn();
     const service = createUploadService(runtime, { setState });
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
@@ -100,7 +96,11 @@ describe("UploadService", () => {
       file,
       path: "session-1.pdf",
     });
-    expect(shell.progress.notify).toHaveBeenCalledWith("Uploading document...");
+    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
+      "upload.document:started",
+      "upload.document:completed",
+    ]);
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "provision", file },
@@ -109,7 +109,7 @@ describe("UploadService", () => {
   });
 
   it("emits an alert and new-session close handler on upload failure", async () => {
-    const { runtime } = createRuntime();
+    const { onJobEvent, runtime } = createRuntime({ session: "session-1" });
     runtime.uploadWorkerClient.upload = vi.fn(async () => {
       throw { error: "Upload failed" };
     });
@@ -121,5 +121,11 @@ describe("UploadService", () => {
       runtime.events.showAlert,
       expect.objectContaining({ message: "Upload failed" }),
     );
+    expect(onJobEvent).toHaveBeenLastCalledWith(expect.objectContaining({
+      error: "Upload failed",
+      job: "upload.document",
+      phase: "failed",
+      session: "session-1",
+    }));
   });
 });

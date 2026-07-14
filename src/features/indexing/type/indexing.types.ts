@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
+import type { JobEventCallback } from "../../job/type/job.types";
 
 export type IndexingWorkerCommand =
   | {
@@ -85,8 +85,8 @@ export type IndexingRuntime = {
   };
   choiceStructure: unknown;
   baseIntervalMs: number;
-  intakeShell: IntakeShellActions;
   indexingWorkerClient: IndexingWorkerClient;
+  onJobEvent?: JobEventCallback;
   notify(src: string): Promise<void>;
   getAuthToken(): string;
 };

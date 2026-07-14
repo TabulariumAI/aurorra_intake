@@ -19,8 +19,6 @@ function createService(documentSelected = true): SelectService {
     isDocumentSelected: vi.fn(() => documentSelected),
     setDocumentSelected: vi.fn(),
     setPageCount: vi.fn(),
-    emitProgressStop: vi.fn(),
-    emitProgressStart: vi.fn(),
     emitRoute: vi.fn(async () => undefined),
     showSettings: vi.fn(),
     getProgressIntervalMs: vi.fn(() => 1000),

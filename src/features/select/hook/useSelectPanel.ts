@@ -113,7 +113,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       },
       onError(error: ErrorLike) {
         if (loadId !== loadIdRef.current) return;
-        service.emitProgressStop();
         showFailureMessage(typeof error.message === "string" ? error.message : "Document could not be loaded.");
       },
       onStateChange(state) {
@@ -156,7 +155,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     disposeLens();
     disposeProgress();
     actions.showSelect(SELECT_COPY.title, SELECT_COPY.helper);
-    service.emitProgressStop();
     setMode("select");
   }, [actions, disposeLens, disposeProgress, resetReviewState, service]);
 
@@ -167,7 +165,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   }, [actions]);
 
   const restoreViewer = useCallback(async () => {
-    service.emitProgressStop();
     disposeLens();
     disposeProgress();
     sourceFileRef.current = null;
@@ -258,7 +255,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       const message = service.getErrorMessage(error, "An error occurred while analyzing document.");
       console.error("Selection analysis error:", message);
       showFailureMessage(message);
-      service.emitProgressStop();
       service.setDocumentSelected(false);
     } finally {
       disposeProgress();
@@ -285,8 +281,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setStarting(true);
 
     try {
-      service.emitProgressStop();
-      service.emitProgressStart();
       service.setPageCount(getPageCount(viewerState));
       const document = await getFile();
       if (!document) {
@@ -296,7 +290,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     } catch (error) {
       showFailureMessage(error instanceof Error ? error.message : String(error));
       console.error("Step1:", service.getErrorMessage(error, "An error occurred while processing the document."));
-      service.emitProgressStop();
       startingRef.current = false;
       setStarting(false);
     }

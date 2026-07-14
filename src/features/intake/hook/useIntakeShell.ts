@@ -10,13 +10,6 @@ const initialContainerState: IntakeContainerState = {
 
 const initialState: IntakeShellState = {
   container: initialContainerState,
-  overlay: {
-    isVisible: false,
-  },
-  progress: {
-    isProcessing: false,
-    messages: null,
-  },
 };
 
 export function useIntakeShell(): IntakeShell {
@@ -55,76 +48,14 @@ export function useIntakeShell(): IntakeShell {
     }));
   }, []);
 
-  const showOverlay = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      overlay: {
-        isVisible: true,
-      },
-    }));
-  }, []);
-
-  const hideOverlay = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      overlay: {
-        isVisible: false,
-      },
-    }));
-  }, []);
-
-  const startProcessing = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      progress: {
-        isProcessing: true,
-        messages: null,
-      },
-    }));
-  }, []);
-
-  const endProcessing = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      progress: {
-        isProcessing: false,
-        messages: null,
-      },
-    }));
-  }, []);
-
-  const notify = useCallback((message: string) => {
-    setState((current) => ({
-      ...current,
-      progress: {
-        ...current.progress,
-        messages: current.progress.messages
-          ? [...current.progress.messages, message]
-          : [message],
-      },
-    }));
-  }, []);
-
   const actions = useMemo(() => ({
     showSelect,
     showProvision,
     clearHeader,
-    progress: {
-      showOverlay,
-      hideOverlay,
-      startProcessing,
-      endProcessing,
-      notify,
-    },
   }), [
     clearHeader,
-    endProcessing,
-    hideOverlay,
-    notify,
-    showOverlay,
     showProvision,
     showSelect,
-    startProcessing,
   ]);
 
   return {

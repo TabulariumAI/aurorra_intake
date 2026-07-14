@@ -1,4 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
+import type { JobEventCallback } from "../../job/type/job.types";
 
 export type ChoiceOption = {
   level: string;
@@ -98,6 +99,7 @@ export type ChoicesRuntime = {
   dialogHost: HTMLElement;
   createDialogFrame(host: HTMLElement, onClose: () => void): ChoicesDialogFrame;
   choicesWorkerClient: ChoicesWorkerClient;
+  onJobEvent?: JobEventCallback;
 };
 
 export type ChoicesDialogFrame = {
