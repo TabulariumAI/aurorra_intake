@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { JobEventCallback } from "../../job/type/job.types";
+import type { JobEventCallback } from "aurora-contracts";
 
 export type ChoiceOption = {
   level: string;

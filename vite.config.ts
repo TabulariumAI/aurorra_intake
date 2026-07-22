@@ -22,7 +22,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     lib: {
-      entry: "src/index.tsx",
+      entry: "src/public-api.ts",
       formats: ["es"],
     },
     rollupOptions: {

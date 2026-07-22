@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { AurorraIntake } from "./index";
+import { Container } from "../component/Container";
 
 type MockEventBus = {
   emit(eventConfig: unknown, payload?: Record<string, unknown>): void;
@@ -12,14 +12,14 @@ function captureEventBus(runtime: { eventBus: MockEventBus }) {
   capturedEventBus = runtime.eventBus;
 }
 
-vi.mock("./features/intake/service/intakeOrchestrator", () => ({
+vi.mock("../service/intakeOrchestrator", () => ({
   createIntakeOrchestrator: vi.fn(() => ({
     route: vi.fn(async () => undefined),
     reset: vi.fn(),
   })),
 }));
 
-vi.mock("./features/select/service/selectService", () => ({
+vi.mock("../../select/service/selectService", () => ({
   createSelectService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
     return {
@@ -32,14 +32,14 @@ vi.mock("./features/select/service/selectService", () => ({
   }),
 }));
 
-vi.mock("./features/choices/service/ChoicesService", () => ({
+vi.mock("../../choices/service/ChoicesService", () => ({
   createChoicesService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
     return { load: vi.fn(), save: vi.fn() } as const;
   }),
 }));
 
-vi.mock("./features/session/service/SessionService", () => ({
+vi.mock("../../session/service/SessionService", () => ({
   createSessionService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
     return {
@@ -50,38 +50,38 @@ vi.mock("./features/session/service/SessionService", () => ({
   }),
 }));
 
-vi.mock("./features/upload/service/UploadService", () => ({
+vi.mock("../../upload/service/UploadService", () => ({
   createUploadService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
     return { process: vi.fn() } as const;
   }),
 }));
 
-vi.mock("./features/provision/service/ProvisionService", () => ({
+vi.mock("../../provision/service/ProvisionService", () => ({
   createProvisionService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
     return { process: vi.fn(), clear: vi.fn() } as const;
   }),
 }));
 
-vi.mock("./features/indexing/service/IndexingService", () => ({
+vi.mock("../../indexing/service/IndexingService", () => ({
   createIndexingService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
     return { process: vi.fn(), start: vi.fn(), checkStatus: vi.fn() } as const;
   }),
 }));
 
-vi.mock("./features/select/component/SelectPanel", () => ({
+vi.mock("../../select/component/SelectPanel", () => ({
   SelectPanel: () => <div data-testid="select-panel-mock" />,
 }));
 
-describe("AurorraIntake", () => {
+describe("Container", () => {
   it("bubbles showAlert into onFailure and onAlert without rendering an error panel", () => {
     const onFailure = vi.fn();
     const onAlert = vi.fn();
 
     render(
-      <AurorraIntake
+      <Container
         authToken="token"
         apiGatewayUrl="https://doc.example.com"
         onFailure={onFailure}
@@ -101,7 +101,7 @@ describe("AurorraIntake", () => {
 
   it("renders settings in medium aurorra-ui dialog with height override", () => {
     render(
-      <AurorraIntake
+      <Container
         authToken="token"
         apiGatewayUrl="https://doc.example.com"
       />,

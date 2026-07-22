@@ -3,13 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "./src/index.tsx",
-  "module": "./src/index.tsx",
-  "types": "./src/index.tsx",
+  "main": "./src/public-api.ts",
+  "module": "./src/public-api.ts",
+  "types": "./src/public-api.ts",
   "exports": {
     ".": {
-      "types": "./src/index.tsx",
-      "import": "./src/index.tsx"
+      "types": "./src/public-api.ts",
+      "import": "./src/public-api.ts"
     }
   },
   "scripts": {
@@ -24,6 +24,7 @@
     "@radix-ui/react-popover": "^1.1.16",
     "@radix-ui/react-progress": "^1.1.9",
     "@tabulariumai/aurora-lens": "^0.2.1",
+    "aurora-contracts": "file:../aurora_contracts",
     "aurorra-ui": "file:../aurorra_ui",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

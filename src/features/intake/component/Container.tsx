@@ -1,40 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DIALOG_BODY, DIALOG_SIZE, Dialog } from "aurorra-ui";
 import type { DialogHeightStyle } from "aurorra-ui";
-import { ChoiceForm } from "./features/choices/component/ChoiceForm";
-import { createChoicesService } from "./features/choices/service/ChoicesService";
-import { CHOICESTRUCTURE, ChoiceData, Choices } from "./features/choices/service/choicesData";
-import { createChoicesWorkerClient } from "./features/choices/worker/choicesWorkerClient";
-import { createIndexingWorkerClient } from "./features/indexing/worker/indexingWorkerClient";
-import { IntakeContainer } from "./features/intake/component/IntakeContainer";
-import { useIntakeShell } from "./features/intake/hook/useIntakeShell";
-import { ProvisionReview } from "./features/provision/component/ProvisionReview";
-import { createProvisionWorkerClient } from "./features/provision/worker/provisionWorkerClient";
-import { SelectPanel } from "./features/select/component/SelectPanel";
-import { createSelectService } from "./features/select/service/selectService";
-import { createSessionWorkerClient } from "./features/session/worker/sessionWorkerClient";
-import { createUploadWorkerClient } from "./features/upload/worker/uploadWorkerClient";
-import { createIndexingService } from "./features/indexing/service/IndexingService";
-import { createProvisionService } from "./features/provision/service/ProvisionService";
-import { createSessionService } from "./features/session/service/SessionService";
-import { createUploadService } from "./features/upload/service/UploadService";
-import { createIntakeOrchestrator } from "./features/intake/service/intakeOrchestrator";
-import type { IndexingServiceActions, IndexingState } from "./features/indexing/type/indexing.types";
-import type { ProvisionServiceActions, ProvisionState } from "./features/provision/type/provision.types";
-import type { SessionServiceActions, SessionState } from "./features/session/type/session.types";
-import type { UploadServiceActions, UploadState } from "./features/upload/type/upload.types";
-import type { ChoiceStructure } from "./features/choices/type/choices.types";
-import type { JobEventCallback } from "./features/job/type/job.types";
-import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "./features/intake/service/intakeOrchestrator";
-import { createStoreAdapter, setRuntimeAuthToken } from "./store/adapter/storeAdapter";
-import { intakeAlert, intakeMessages } from "./features/intake/service/intakeMessages";
+import type { JobEventCallback } from "aurora-contracts";
+import { ChoiceForm } from "../../choices/component/ChoiceForm";
+import { createChoicesService } from "../../choices/service/ChoicesService";
+import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choicesData";
+import type { ChoiceStructure } from "../../choices/type/choices.types";
+import { createChoicesWorkerClient } from "../../choices/worker/choicesWorkerClient";
+import { createIndexingService } from "../../indexing/service/IndexingService";
+import type { IndexingServiceActions, IndexingState } from "../../indexing/type/indexing.types";
+import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
+import { ProvisionReview } from "../../provision/component/ProvisionReview";
+import { createProvisionService } from "../../provision/service/ProvisionService";
+import type { ProvisionServiceActions, ProvisionState } from "../../provision/type/provision.types";
+import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
+import { SelectPanel } from "../../select/component/SelectPanel";
+import { createSelectService } from "../../select/service/selectService";
+import { createSessionService } from "../../session/service/SessionService";
+import type { SessionServiceActions, SessionState } from "../../session/type/session.types";
+import { createSessionWorkerClient } from "../../session/worker/sessionWorkerClient";
+import { createUploadService } from "../../upload/service/UploadService";
+import type { UploadServiceActions, UploadState } from "../../upload/type/upload.types";
+import { createUploadWorkerClient } from "../../upload/worker/uploadWorkerClient";
+import { createStoreAdapter, setRuntimeAuthToken } from "../../../store/adapter/storeAdapter";
+import { IntakeContainer } from "./IntakeContainer";
+import { useIntakeShell } from "../hook/useIntakeShell";
+import { intakeAlert, intakeMessages } from "../service/intakeMessages";
+import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
+import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "../service/intakeOrchestrator";
 
 type EventConfig = {
   name: string;
   detail?: Record<string, string>;
 };
 
-export type AurorraIntakeProps = {
+export type ContainerProps = {
   authToken: string | null;
   apiGatewayUrl: string;
   intervalMs?: number;
@@ -46,22 +46,6 @@ export type AurorraIntakeProps = {
   onJobEvent?: JobEventCallback;
   onStarted?: () => void;
 };
-
-export { CHOICESTRUCTURE, ChoiceData, Choices };
-export { useStore } from "./store/hook/useStore";
-export {
-  clearStorage,
-  createStoreAdapter,
-  getStoredInformation,
-  setRuntimeAuthToken,
-} from "./store/adapter/storeAdapter";
-export type {
-  StateKey,
-  StoredInformation,
-  StoreAdapter,
-  StoreValues,
-} from "./store/type/store.types";
-export type { JobEvent, JobEventCallback, JobName } from "./features/job/type/job.types";
 
 const events = {
   reRoute: { name: "reRoute", detail: { stage: "stage", file: "file" } },
@@ -97,7 +81,7 @@ const choicesDialogHeader = (
   </div>
 );
 
-export function AurorraIntake({
+export function Container({
   authToken,
   apiGatewayUrl,
   intervalMs = 10000,
@@ -108,7 +92,7 @@ export function AurorraIntake({
   onFailure,
   onJobEvent,
   onStarted,
-}: AurorraIntakeProps) {
+}: ContainerProps) {
   const intake = useIntakeShell();
   const { actions, state } = intake;
   const [selectHost, setSelectHost] = useState<HTMLElement | null>(null);
