@@ -11,9 +11,10 @@ export function SelectPanel({
   dropTarget,
   actions,
   service,
+  selectionResetVersion,
 }: SelectPanelInternalProps) {
   const initializedRef = useRef(false);
-  const select = useSelectPanel({ dropTarget, actions, service });
+  const select = useSelectPanel({ dropTarget, actions, service, selectionResetVersion });
 
   useEffect(() => {
     if (initializedRef.current) return;

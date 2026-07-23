@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { validateSelectFile } from "../service/selectFileHelper";
+import { clearViewerSession } from "../service/viewerSessionService";
 import type {
   ErrorLike,
   SelectUploadStatus,
@@ -26,12 +27,11 @@ function getPageCount(state: ReviewDocumentState) {
 }
 
 export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelResult {
-  const { actions, service } = options;
+  const { actions, service, selectionResetVersion } = options;
   const lensRef = useRef<ReviewDocumentLens | null>(null);
-  const viewerApiRef = useRef<ViewerApi | null>(null);
-  const resolveViewerApiRef = useRef<(api: ViewerApi) => void>(() => undefined);
   const sourceFileRef = useRef<File | null>(null);
   const loadIdRef = useRef(0);
+  const selectionResetVersionRef = useRef(0);
   const startingRef = useRef(false);
   const [initialized, setInitialized] = useState(false);
   const [mode, setMode] = useState<"select" | "review">("select");
@@ -46,13 +46,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     durationMs: service.getProgressIntervalMs(),
   });
   const [viewerProps, setViewerProps] = useState<UseSelectPanelResult["viewer"]["props"]>(null);
-
-  const waitForViewerApi = useCallback(() => {
-    if (viewerApiRef.current) return Promise.resolve(viewerApiRef.current);
-    return new Promise<ViewerApi>((resolve) => {
-      resolveViewerApiRef.current = resolve;
-    });
-  }, []);
 
   const disposeProgress = useCallback(() => {
     setProgress({
@@ -74,10 +67,21 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     loadIdRef.current += 1;
     lensRef.current?.close();
     lensRef.current = null;
-    viewerApiRef.current = null;
-    resolveViewerApiRef.current = () => undefined;
     setViewerProps(null);
     setCancelNeedsConfirm(false);
+  }, []);
+
+  const clearLens = useCallback(async () => {
+    loadIdRef.current += 1;
+    const lens = lensRef.current;
+    lensRef.current = null;
+    setViewerProps(null);
+    setCancelNeedsConfirm(false);
+    if (lens) {
+      await lens.clear();
+      return;
+    }
+    await clearViewerSession();
   }, []);
 
   const resetReviewState = useCallback(() => {
@@ -98,7 +102,36 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   }, []);
 
   const createViewer = useCallback((loadId: number): ReviewDocumentLens => {
-    viewerApiRef.current = null;
+    let viewerApi: ViewerApi | null = null;
+    let release: "clear" | "close" | null = null;
+    let resolveViewerApi: (api: ViewerApi) => void = () => undefined;
+    let rejectViewerApi: (error: Error) => void = () => undefined;
+    const viewerApiReady = new Promise<ViewerApi>((resolve, reject) => {
+      resolveViewerApi = resolve;
+      rejectViewerApi = reject;
+    });
+
+    const waitForViewerApi = () => viewerApi ? Promise.resolve(viewerApi) : viewerApiReady;
+    const releaseViewer = (nextRelease: "clear" | "close") => {
+      if (release !== null) return false;
+      release = nextRelease;
+      rejectViewerApi(new Error("Aurora Lens is no longer available."));
+      setViewerProps(null);
+      return true;
+    };
+    const clearViewer = async () => {
+      if (!releaseViewer("clear")) return;
+      if (viewerApi) {
+        viewerApi.clear();
+        return;
+      }
+      await clearViewerSession();
+    };
+    const closeViewer = () => {
+      if (!releaseViewer("close")) return;
+      viewerApi?.close();
+    };
+
     setViewerProps({
       allowEdit: true,
       onAddError(error: ErrorLike) {
@@ -106,10 +139,17 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
         showFailureMessage(typeof error.message === "string" ? error.message : "Some pages could not be added.");
       },
       onApiReady(api) {
-        viewerApiRef.current = api;
-        if (api) {
-          resolveViewerApiRef.current(api);
+        if (api === null) return;
+        viewerApi = api;
+        if (release === "clear") {
+          api.close();
+          return;
         }
+        if (release === "close" || loadId !== loadIdRef.current) {
+          api.close();
+          return;
+        }
+        resolveViewerApi(api);
       },
       onError(error: ErrorLike) {
         if (loadId !== loadIdRef.current) return;
@@ -126,6 +166,9 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     });
 
     return {
+      clear() {
+        return clearViewer();
+      },
       decodeDoc(file, decodeOptions) {
         return waitForViewerApi().then((api) => api.decodeDoc(file, decodeOptions));
       },
@@ -133,7 +176,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
         return waitForViewerApi().then((api) => api.restoreSession());
       },
       hasChanges() {
-        return typeof viewerApiRef.current?.isDirty === "function" ? viewerApiRef.current.isDirty() : false;
+        return typeof viewerApi?.isDirty === "function" ? viewerApi.isDirty() : false;
       },
       exportTiff() {
         return waitForViewerApi().then((api) => api.exportTiff());
@@ -142,12 +185,10 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
         return waitForViewerApi().then((api) => api.showThumbnails());
       },
       close() {
-        viewerApiRef.current?.close();
-        viewerApiRef.current = null;
-        setViewerProps(null);
+        closeViewer();
       },
     };
-  }, [actions, service, showFailureMessage, waitForViewerApi]);
+  }, [showFailureMessage]);
 
   const mountSelectForm = useCallback(() => {
     resetReviewState();
@@ -174,23 +215,25 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
     showProgress(false);
 
+    const loadId = loadIdRef.current + 1;
+    loadIdRef.current = loadId;
     try {
-      const loadId = loadIdRef.current + 1;
-      loadIdRef.current = loadId;
       const lens = createViewer(loadId);
+      lensRef.current = lens;
       setMode("review");
       const restored = await lens.restoreSession();
+      if (loadId !== loadIdRef.current) return;
       if (!restored) {
         mountSelectForm();
         return;
       }
       lens.showThumbnails();
       service.setDocumentSelected(true);
-      lensRef.current = lens;
       setCancelNeedsConfirm(lens.hasChanges());
       setMode("review");
       disposeProgress();
     } catch {
+      if (loadId !== loadIdRef.current) return;
       mountSelectForm();
     }
   }, [actions, createViewer, disposeLens, disposeProgress, mountSelectForm, service, showProgress]);
@@ -220,6 +263,23 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setInitialized(false);
   }, [disposeLens, disposeProgress, service]);
 
+  const resetForNewSession = useCallback(async () => {
+    service.clear();
+    disposeProgress();
+    resetReviewState();
+    setUploadStatus({ kind: "idle" });
+    actions.showSelect(SELECT_COPY.title, SELECT_COPY.helper);
+    setMode("select");
+    setInitialized(true);
+    try {
+      await clearLens();
+    } catch (error) {
+      const message = service.getErrorMessage(error, "Unable to clear selected document.");
+      console.error("Selection reset error:", message);
+      showFailureMessage(message);
+    }
+  }, [actions, clearLens, disposeProgress, resetReviewState, service, showFailureMessage]);
+
   const selectFile = useCallback(async (file: File) => {
     const failure = validateSelectFile(file);
     if (failure) {
@@ -241,23 +301,27 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     disposeProgress();
     showProgress(true);
 
+    const loadId = loadIdRef.current + 1;
+    loadIdRef.current = loadId;
     try {
-      const loadId = loadIdRef.current + 1;
-      loadIdRef.current = loadId;
       const lens = createViewer(loadId);
-      await lens.decodeDoc(file, { page: 0, viewMode: "thumbnails" });
-      lens.showThumbnails();
       lensRef.current = lens;
+      await lens.decodeDoc(file, { page: 0, viewMode: "thumbnails" });
+      if (loadId !== loadIdRef.current) return;
+      lens.showThumbnails();
       setCancelNeedsConfirm(lens.hasChanges());
       service.setDocumentSelected(true);
       setMode("review");
     } catch (error) {
+      if (loadId !== loadIdRef.current) return;
       const message = service.getErrorMessage(error, "An error occurred while analyzing document.");
       console.error("Selection analysis error:", message);
       showFailureMessage(message);
       service.setDocumentSelected(false);
     } finally {
-      disposeProgress();
+      if (loadId === loadIdRef.current) {
+        disposeProgress();
+      }
     }
   }, [actions, createViewer, disposeLens, disposeProgress, showFailureMessage, service, showProgress]);
 
@@ -312,6 +376,13 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   useEffect(() => () => {
     disposeLens();
   }, [disposeLens]);
+
+  useEffect(() => {
+    const resetVersion = selectionResetVersion ?? 0;
+    if (resetVersion <= selectionResetVersionRef.current) return;
+    selectionResetVersionRef.current = resetVersion;
+    void resetForNewSession();
+  }, [resetForNewSession, selectionResetVersion]);
 
   return useMemo(() => ({
     mode: initialized ? mode : "pending",

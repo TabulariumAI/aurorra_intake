@@ -45,6 +45,7 @@ export type ContainerProps = {
   onFailure?: (message: string) => void;
   onJobEvent?: JobEventCallback;
   onStarted?: () => void;
+  selectionResetVersion?: number;
 };
 
 const events = {
@@ -92,6 +93,7 @@ export function Container({
   onFailure,
   onJobEvent,
   onStarted,
+  selectionResetVersion = 0,
 }: ContainerProps) {
   const intake = useIntakeShell();
   const { actions, state } = intake;
@@ -300,7 +302,12 @@ export function Container({
   }, [indexingService, provisionService, sessionService, uploadService]);
 
   const selectContent = selectHost ? (
-    <SelectPanel dropTarget={selectHost} actions={actions} service={selectService} />
+    <SelectPanel
+      dropTarget={selectHost}
+      actions={actions}
+      service={selectService}
+      selectionResetVersion={selectionResetVersion}
+    />
   ) : null;
   const initialChoices = store.get("indexChoices");
   const initialAlwaysReview = Boolean(store.get("workflow"));

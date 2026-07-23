@@ -26,6 +26,7 @@ export type SelectPanelActions = {
 export type SelectPanelProps = {
   dropTarget: HTMLElement;
   actions: IntakeShellActions;
+  selectionResetVersion?: number;
 };
 
 export type SelectFormProps = {
@@ -42,6 +43,7 @@ export type ReviewDocumentStatus = "idle" | "loadingPage" | "ready" | string;
 export type ReviewDocumentState = { pageCount?: number } | null;
 
 export type ReviewDocumentLens = {
+  clear(): Promise<void>;
   decodeDoc(file: File, options: ViewerDecodeOptions): Promise<void>;
   restoreSession(): Promise<boolean>;
   hasChanges(): boolean;
@@ -66,6 +68,7 @@ export type UseSelectPanelOptions = {
   dropTarget: HTMLElement;
   actions: IntakeContainerActions;
   service: SelectService;
+  selectionResetVersion?: number;
 };
 
 export type SelectProgressState = {

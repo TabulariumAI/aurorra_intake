@@ -72,7 +72,9 @@ vi.mock("../../indexing/service/IndexingService", () => ({
 }));
 
 vi.mock("../../select/component/SelectPanel", () => ({
-  SelectPanel: () => <div data-testid="select-panel-mock" />,
+  SelectPanel: ({ selectionResetVersion }: { selectionResetVersion?: number }) => (
+    <div data-testid="select-panel-mock" data-selection-reset-version={selectionResetVersion} />
+  ),
 }));
 
 describe("Container", () => {
@@ -123,5 +125,27 @@ describe("Container", () => {
       "--dialog-transform": "translate(-50%, -50%)",
     });
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("passes the host selection reset version to the selection owner", () => {
+    const { rerender } = render(
+      <Container
+        authToken="token"
+        apiGatewayUrl="https://doc.example.com"
+        selectionResetVersion={0}
+      />,
+    );
+
+    expect(screen.getByTestId("select-panel-mock")).toHaveAttribute("data-selection-reset-version", "0");
+
+    rerender(
+      <Container
+        authToken="token"
+        apiGatewayUrl="https://doc.example.com"
+        selectionResetVersion={1}
+      />,
+    );
+
+    expect(screen.getByTestId("select-panel-mock")).toHaveAttribute("data-selection-reset-version", "1");
   });
 });

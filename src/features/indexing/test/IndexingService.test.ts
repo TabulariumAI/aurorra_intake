@@ -117,6 +117,16 @@ describe("IndexingService", () => {
     await expect(service.checkStatus("session-1", "session-1.pdf")).rejects.toThrow("worker failed");
   });
 
+  it("does not route to metadata when indexing fails", async () => {
+    const { runtime } = createRuntime();
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "error", data: "worker failed" }));
+    const service = createIndexingService(runtime, { setState: vi.fn() });
+
+    await expect(service.process()).rejects.toThrow("worker failed");
+
+    expect(runtime.eventBus.emit).not.toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
+  });
+
   it("does not start when indexing is already in process", async () => {
     const { runtime } = createRuntime({ indexingStepStatus: true });
     const service = createIndexingService(runtime, { setState: vi.fn() });
