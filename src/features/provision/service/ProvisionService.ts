@@ -134,7 +134,7 @@ export class ProvisionService {
 
       const reviewedDocument = document ?? documentName;
       const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ job: "provision.document", jobId, message: "Screening document", phase: "started", session: String(session) });
+      runtime.onJobEvent?.({ jobId, message: "Screening document", phase: "started", session: String(session) });
       let response: unknown;
       try {
         response = await this.#provisionWorkerClient.provision(
@@ -142,10 +142,10 @@ export class ProvisionService {
           String(session),
           String(documentName),
         );
-        runtime.onJobEvent?.({ job: "provision.document", jobId, message: "Document screened", phase: "completed", session: String(session) });
+        runtime.onJobEvent?.({ jobId, message: "Document screened", phase: "completed", session: String(session) });
       } catch (error) {
         const message = getErrorMessage(error, "Document screening failed.");
-        runtime.onJobEvent?.({ error: message, job: "provision.document", jobId, message: "Document screening failed", phase: "failed", session: String(session) });
+        runtime.onJobEvent?.({ error: message, jobId, message: "Document screening failed", phase: "failed", session: String(session) });
         throw error;
       }
       const result = normalizeProvisionResponse(response);

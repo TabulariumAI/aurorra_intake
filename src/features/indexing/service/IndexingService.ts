@@ -111,7 +111,7 @@ class IndexingService implements IndexingServiceActions {
       );
       const sessionId = String(session);
       const statusJobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ job: "indexing.status", jobId: statusJobId, message: "Processing document", phase: "started", session: sessionId });
+      runtime.onJobEvent?.({ jobId: statusJobId, message: "Processing document", phase: "started", session: sessionId });
       try {
         isComplete = await this.checkStatus(sessionId, documentName);
         if (!isComplete) {
@@ -162,10 +162,10 @@ class IndexingService implements IndexingServiceActions {
         if (!isComplete) {
           throw new Error(runtime.alert.format(runtime.messages.REPORT_WAIT));
         }
-        runtime.onJobEvent?.({ job: "indexing.status", jobId: statusJobId, message: "Document processed", phase: "completed", session: sessionId });
+        runtime.onJobEvent?.({ jobId: statusJobId, message: "Document processed", phase: "completed", session: sessionId });
       } catch (error) {
         const message = getErrorMessage(error, "document processing", runtime);
-        runtime.onJobEvent?.({ error: message, job: "indexing.status", jobId: statusJobId, message: "Document processing failed", phase: "failed", session: sessionId });
+        runtime.onJobEvent?.({ error: message, jobId: statusJobId, message: "Document processing failed", phase: "failed", session: sessionId });
         throw error;
       }
 
@@ -202,13 +202,13 @@ class IndexingService implements IndexingServiceActions {
       throw new Error("Index choices are not available.");
     }
     const jobId = crypto.randomUUID();
-    runtime.onJobEvent?.({ job: "indexing.start", jobId, message: "Starting document indexing", phase: "started", session });
+    runtime.onJobEvent?.({ jobId, message: "Starting document indexing", phase: "started", session });
     try {
       await runtime.indexingWorkerClient.start(token, session, documentName, choices);
-      runtime.onJobEvent?.({ job: "indexing.start", jobId, message: "Document indexing started", phase: "completed", session });
+      runtime.onJobEvent?.({ jobId, message: "Document indexing started", phase: "completed", session });
     } catch (error) {
       const message = resolveMessage(error, "Document indexing start failed.");
-      runtime.onJobEvent?.({ error: message, job: "indexing.start", jobId, message: "Document indexing start failed", phase: "failed", session });
+      runtime.onJobEvent?.({ error: message, jobId, message: "Document indexing start failed", phase: "failed", session });
       throw error;
     }
   }

@@ -96,10 +96,7 @@ describe("UploadService", () => {
       file,
       path: "session-1.pdf",
     });
-    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
-      "upload.document:started",
-      "upload.document:completed",
-    ]);
+    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
     expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
@@ -123,7 +120,7 @@ describe("UploadService", () => {
     );
     expect(onJobEvent).toHaveBeenLastCalledWith(expect.objectContaining({
       error: "Upload failed",
-      job: "upload.document",
+      message: "Document upload failed",
       phase: "failed",
       session: "session-1",
     }));

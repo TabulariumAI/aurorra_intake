@@ -84,7 +84,7 @@ export class UploadService implements UploadServiceActions {
 
       const context = resolveUploadContext(runtime);
       const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ job: "upload.document", jobId, message: "Uploading document", phase: "started", session: context.session });
+      runtime.onJobEvent?.({ jobId, message: "Uploading document", phase: "started", session: context.session });
       try {
         await this.#uploadWorkerClient.upload({
           sasToken: context.sasToken,
@@ -92,10 +92,10 @@ export class UploadService implements UploadServiceActions {
           file: document,
           path: context.docName,
         });
-        runtime.onJobEvent?.({ job: "upload.document", jobId, message: "Document uploaded", phase: "completed", session: context.session });
+        runtime.onJobEvent?.({ jobId, message: "Document uploaded", phase: "completed", session: context.session });
       } catch (error) {
         const message = getErrorMessage(error, "Document upload failed.");
-        runtime.onJobEvent?.({ error: message, job: "upload.document", jobId, message: "Document upload failed", phase: "failed", session: context.session });
+        runtime.onJobEvent?.({ error: message, jobId, message: "Document upload failed", phase: "failed", session: context.session });
         throw error;
       }
 

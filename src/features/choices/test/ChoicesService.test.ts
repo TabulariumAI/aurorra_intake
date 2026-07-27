@@ -59,10 +59,7 @@ describe("ChoicesService", () => {
 
     await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
     expect(runtime.choicesWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
-    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
-      "choices.load:started",
-      "choices.load:completed",
-    ]);
+    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
     expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
   });
 

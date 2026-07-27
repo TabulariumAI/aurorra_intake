@@ -102,14 +102,14 @@ export class SessionService implements SessionServiceActions {
       }
 
       const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ job: "session.new", jobId, message: "Creating a new session", phase: "started", session: null });
+      runtime.onJobEvent?.({ jobId, message: "Creating a new session", phase: "started", session: null });
       let data: SessionStartData;
       try {
         data = await sessionWorkerClient.newSession(token);
-        runtime.onJobEvent?.({ job: "session.new", jobId, message: "Session created", phase: "completed", session: data.session });
+        runtime.onJobEvent?.({ jobId, message: "Session created", phase: "completed", session: data.session });
       } catch (error) {
         const message = getErrorMessage(error, "Session creation failed.");
-        runtime.onJobEvent?.({ error: message, job: "session.new", jobId, message: "Session creation failed", phase: "failed", session: null });
+        runtime.onJobEvent?.({ error: message, jobId, message: "Session creation failed", phase: "failed", session: null });
         throw error;
       }
       storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.${ext}`);
@@ -141,14 +141,14 @@ export class SessionService implements SessionServiceActions {
 
     const choices = normalizeChoices(JSON.parse(JSON.stringify(await runtime.loadChoices(session))) as SessionChoicesData);
     const jobId = crypto.randomUUID();
-    runtime.onJobEvent?.({ job: "session.load", jobId, message: "Loading session data", phase: "started", session });
+    runtime.onJobEvent?.({ jobId, message: "Loading session data", phase: "started", session });
     let data: SessionStartData;
     try {
       data = await sessionWorkerClient.sessionData(token, session);
-      runtime.onJobEvent?.({ job: "session.load", jobId, message: "Session data loaded", phase: "completed", session });
+      runtime.onJobEvent?.({ jobId, message: "Session data loaded", phase: "completed", session });
     } catch (error) {
       const message = getErrorMessage(error, "Session data load failed.");
-      runtime.onJobEvent?.({ error: message, job: "session.load", jobId, message: "Session data load failed", phase: "failed", session });
+      runtime.onJobEvent?.({ error: message, jobId, message: "Session data load failed", phase: "failed", session });
       throw error;
     }
     storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.pdf`, choices);

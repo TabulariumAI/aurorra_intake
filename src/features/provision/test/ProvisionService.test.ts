@@ -98,10 +98,7 @@ describe("ProvisionService", () => {
       document: file,
     }));
     expect(shell.showProvision).toHaveBeenCalledWith("", "");
-    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
-      "provision.document:started",
-      "provision.document:completed",
-    ]);
+    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
     expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
   });
 

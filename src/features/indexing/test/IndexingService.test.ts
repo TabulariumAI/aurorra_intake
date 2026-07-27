@@ -88,12 +88,7 @@ describe("IndexingService", () => {
       runtime.events.reRoute,
       { stage: "metadata" },
     );
-    expect(onJobEvent.mock.calls.map(([event]) => `${event.job}:${event.phase}`)).toEqual([
-      "indexing.status:started",
-      "indexing.start:started",
-      "indexing.start:completed",
-      "indexing.status:completed",
-    ]);
+    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "started", "completed", "completed"]);
     expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[3][0].jobId);
     expect(onJobEvent.mock.calls[1][0].jobId).toBe(onJobEvent.mock.calls[2][0].jobId);
   });
