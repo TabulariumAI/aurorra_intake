@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DIALOG_BODY, DIALOG_SIZE, Dialog } from "aurorra-ui";
 import type { DialogHeightStyle } from "aurorra-ui";
-import type { JobEventCallback } from "aurora-contracts";
+import type { JobEventCallback } from "aurorra-ui";
 import { ChoiceForm } from "../../choices/component/ChoiceForm";
 import { createChoicesService } from "../../choices/service/ChoicesService";
 import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choicesData";

@@ -14,4 +14,4 @@ export type {
   StoreAdapter,
   StoreValues,
 } from "./store/type/store.types";
-export type { JobEvent, JobEventCallback } from "aurora-contracts";
+export type { JobEvent, JobEventCallback } from "aurorra-ui";

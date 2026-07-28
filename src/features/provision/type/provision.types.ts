@@ -1,6 +1,6 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
 import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
-import type { JobEventCallback } from "aurora-contracts";
+import type { JobEventCallback } from "aurorra-ui";
 
 export type ProvisionDocument = File | {
   name: string;

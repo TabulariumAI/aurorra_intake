@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { JobEventCallback } from "aurora-contracts";
+import type { JobEventCallback } from "aurorra-ui";
 
 export type UploadDocument = File | {
   name: string;
