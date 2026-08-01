@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
 import type { StoreAdapter } from "../../../store/type/store.types";
 
-function createStore(): StoreAdapter {
+function createStore(seed: Record<string, unknown> = {}): StoreAdapter {
   const values = {
     baseUrl: "https://storage.test",
     document: "session-1.pdf",
@@ -11,6 +11,7 @@ function createStore(): StoreAdapter {
     sasToken: "sas-1",
     session: "session-1",
     workflow: true,
+    ...seed,
   } as Record<string, unknown>;
 
   return {
@@ -36,12 +37,12 @@ describe("IntakeOrchestrator", () => {
       store: createStore(),
     });
 
-    await orchestrator.route({ stage: "session", file });
+    await orchestrator.route({ stage: "session", file, jobId: "job-1" });
     await orchestrator.route({ stage: "upload", file });
     await orchestrator.route({ stage: "provision", file });
     await orchestrator.route({ stage: "indexing" });
 
-    expect(services.session.process).toHaveBeenCalledWith(file);
+    expect(services.session.process).toHaveBeenCalledWith(file, "job-1");
     expect(services.upload.process).toHaveBeenCalledWith(file);
     expect(services.provision.process).toHaveBeenCalledWith(file);
     expect(services.indexing.process).toHaveBeenCalledTimes(1);
@@ -56,6 +57,16 @@ describe("IntakeOrchestrator", () => {
     await expect(orchestrator.route({ stage: "session" })).rejects.toThrow("Document is missing.");
     await expect(orchestrator.route({ stage: "upload" })).rejects.toThrow("Document is missing.");
     await expect(orchestrator.route({ stage: "provision" })).rejects.toThrow("Document is missing.");
+  });
+
+  it("requires the session job id", async () => {
+    const orchestrator = createIntakeOrchestrator({
+      getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
+      store: createStore(),
+    });
+    const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
+
+    await expect(orchestrator.route({ stage: "session", file })).rejects.toThrow("Job id is missing.");
   });
 
   it("emits metadata completion payload from persisted store values", async () => {
@@ -77,6 +88,19 @@ describe("IntakeOrchestrator", () => {
       session: "session-1",
       workflow: true,
     });
+  });
+
+  it("emits metadata completion payload with the fresh workflow state", async () => {
+    const onComplete = vi.fn();
+    const orchestrator = createIntakeOrchestrator({
+      getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
+      onComplete,
+      store: createStore({ workflow: null }),
+    });
+
+    await orchestrator.route({ stage: "metadata" });
+
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ workflow: null }));
   });
 
   it("rejects unknown route stages", async () => {

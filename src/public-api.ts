@@ -1,5 +1,11 @@
 export { Container as AurorraIntake } from "./features/intake/component/Container";
-export type { ContainerProps as AurorraIntakeProps } from "./features/intake/component/Container";
+export type {
+  ContainerProps as AurorraIntakeProps,
+  IntakeChoicesRequest,
+  IntakeProvisionRequest,
+  IntakeSessionRequest,
+} from "./features/intake/component/Container";
+export type { SessionLoaded } from "./features/session/type/session.types";
 export { CHOICESTRUCTURE, ChoiceData, Choices } from "./features/choices/service/choicesData";
 export { useStore } from "./store/hook/useStore";
 export {

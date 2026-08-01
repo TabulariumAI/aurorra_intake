@@ -80,9 +80,7 @@ export class ChoicesService {
 
   applyStudioModeSetting(studioModeEnabled: boolean): void {
     const runtime = this.#runtime;
-
-
-    queueMicrotask(() => runtime.eventBus.emit(runtime.events.toggleLayout));
+    queueMicrotask(() => runtime.eventBus.emit(runtime.events.toggleLayout, { studioModeEnabled }));
   }
 
   emitUpdateChoices(): void {

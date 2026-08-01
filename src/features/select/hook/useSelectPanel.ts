@@ -345,12 +345,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setStarting(true);
 
     try {
-      service.setPageCount(getPageCount(viewerState));
-      const document = await getFile();
-      if (!document) {
-        throw new Error("Failed to get the selected file.");
-      }
-      await service.emitRoute(document);
+      await service.start(getPageCount(viewerState), getFile);
     } catch (error) {
       showFailureMessage(error instanceof Error ? error.message : String(error));
       console.error("Step1:", service.getErrorMessage(error, "An error occurred while processing the document."));

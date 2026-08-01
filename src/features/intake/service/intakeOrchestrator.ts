@@ -11,12 +11,14 @@ export type IntakeRouteEvent = {
   detail: {
     stage: string;
     file: string;
+    jobId: string;
   };
 };
 
 export type IntakeRoutePayload = {
   stage?: IntakeRouteStage;
   file?: unknown;
+  jobId?: unknown;
 };
 
 export type IntakeCompletePayload = {
@@ -87,7 +89,8 @@ export class IntakeOrchestrator {
 
     if (stage === "session") {
       if (!file) throw new Error("Document is missing.");
-      await services.session?.process(file as SessionDocument);
+      if (typeof payload?.jobId !== "string") throw new Error("Job id is missing.");
+      await services.session?.process(file as SessionDocument, payload.jobId);
       return;
     }
 

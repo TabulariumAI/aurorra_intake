@@ -86,5 +86,13 @@ describe("ChoicesService", () => {
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", choices);
     expect(runtime.store.set).toHaveBeenCalledWith("workflow", true);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.updateChoices);
+    return new Promise<void>((resolve) => {
+      queueMicrotask(() => {
+        expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.toggleLayout, {
+          studioModeEnabled: false,
+        });
+        resolve();
+      });
+    });
   });
 });

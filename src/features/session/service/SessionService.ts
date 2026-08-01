@@ -4,6 +4,7 @@ import type {
   SessionDocument,
   SessionExtension,
   SessionRuntime,
+  SessionLoaded,
   SessionStartData,
   SessionWorkerClient,
   SessionServiceActions,
@@ -82,7 +83,7 @@ export class SessionService implements SessionServiceActions {
     this.#sessionWorkerClient = sessionWorkerClient;
   }
 
-  async process(document: SessionDocument) {
+  async process(document: SessionDocument, jobId: string) {
     const runtime = this.#runtime;
     const stateApi = this.#stateApi;
     const sessionWorkerClient = this.#sessionWorkerClient;
@@ -101,23 +102,16 @@ export class SessionService implements SessionServiceActions {
         throw new Error("Missing auth token");
       }
 
-      const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ jobId, message: "Creating a new session", phase: "started", session: null });
-      let data: SessionStartData;
-      try {
-        data = await sessionWorkerClient.newSession(token);
-        runtime.onJobEvent?.({ jobId, message: "Session created", phase: "completed", session: data.session });
-      } catch (error) {
-        const message = getErrorMessage(error, "Session creation failed.");
-        runtime.onJobEvent?.({ error: message, jobId, message: "Session creation failed", phase: "failed", session: null });
-        throw error;
-      }
+      const data: SessionStartData = await sessionWorkerClient.newSession(token);
       storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.${ext}`);
+      runtime.onJobEvent?.({ jobId, message: "Session created", phase: "completed", session: data.session });
       runtime.eventBus.emit(runtime.events.reRoute, {
         [runtime.events.reRoute.detail.stage]: "upload",
         [runtime.events.reRoute.detail.file]: document,
       });
     } catch (error) {
+      const jobMessage = getErrorMessage(error, "Session creation failed.");
+      runtime.onJobEvent?.({ error: jobMessage, jobId, message: "Session creation failed", phase: "failed", session: null });
       const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
         [runtime.messages.ERR_ACT.args.action]: "processing request",
       });
@@ -131,7 +125,7 @@ export class SessionService implements SessionServiceActions {
     }
   }
 
-  async setSession(session: string) {
+  async setSession(session: string): Promise<SessionLoaded> {
     const runtime = this.#runtime;
     const sessionWorkerClient = this.#sessionWorkerClient;
     const token = getAuthToken(runtime);
@@ -151,7 +145,15 @@ export class SessionService implements SessionServiceActions {
       runtime.onJobEvent?.({ error: message, jobId, message: "Session data load failed", phase: "failed", session });
       throw error;
     }
-    storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.pdf`, choices);
+    const loaded = {
+      baseUrl: data.base_url,
+      document: `${data.session}.pdf`,
+      indexChoices: choices,
+      sasToken: data.sas_token,
+      session: data.session,
+    } satisfies SessionLoaded;
+    storeSession(runtime, loaded.session, loaded.sasToken, loaded.baseUrl, loaded.document, loaded.indexChoices);
+    return loaded;
   }
 
   clear() {

@@ -88,9 +88,17 @@ export type SessionState = {
   lastError: string | null;
 };
 
+export type SessionLoaded = {
+  baseUrl: string;
+  document: string;
+  indexChoices: unknown[] | null;
+  sasToken: string;
+  session: string;
+};
+
 export type SessionServiceActions = {
-  process(document: SessionDocument): Promise<void>;
-  setSession(session: string): Promise<void>;
+  process(document: SessionDocument, jobId: string): Promise<void>;
+  setSession(session: string): Promise<SessionLoaded>;
   clear(): void;
 };
 

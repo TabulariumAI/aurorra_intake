@@ -56,8 +56,7 @@ export type SelectService = {
   clear(): void;
   isDocumentSelected(): boolean;
   setDocumentSelected(selected: boolean): void;
-  setPageCount(pageCount: number): void;
-  emitRoute(document: File): Promise<void>;
+  start(pageCount: number, getDocument: () => Promise<File | null>): Promise<void>;
   showSettings(): void;
   getProgressIntervalMs(): number;
   createTiffFile(blob: Blob): File;

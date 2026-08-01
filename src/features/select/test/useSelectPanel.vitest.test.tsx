@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import type { ViewerState } from "@tabulariumai/aurora-lens";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSelectPanel } from "../hook/useSelectPanel";
 import type { IntakeContainerActions } from "../../intake/type/intake.types";
@@ -31,8 +32,9 @@ function createService(documentSelected = true): SelectService {
     clear: vi.fn(),
     isDocumentSelected: vi.fn(() => documentSelected),
     setDocumentSelected: vi.fn(),
-    setPageCount: vi.fn(),
-    emitRoute: vi.fn(async () => undefined),
+    start: vi.fn(async (_pageCount, getDocument) => {
+      await getDocument();
+    }),
     showSettings: vi.fn(),
     getProgressIntervalMs: vi.fn(() => 1000),
     createTiffFile: vi.fn((blob) => new File([blob], "review.tiff", { type: "image/tiff" })),
@@ -50,6 +52,40 @@ function createViewerApi(restored: boolean): ViewerApi {
     clear: vi.fn(),
     close: vi.fn(),
   } as unknown as ViewerApi;
+}
+
+function createViewerState(pageCount: number): ViewerState {
+  return {
+    canActualSize: true,
+    canClearSelection: false,
+    canCopy: false,
+    canDraw: true,
+    canFitHeight: true,
+    canFitPage: true,
+    canFitWidth: true,
+    canGoFirst: false,
+    canGoLast: pageCount > 1,
+    canGoNext: pageCount > 1,
+    canGoPrevious: false,
+    canSearch: true,
+    canShowThumbnails: true,
+    canZoomIn: true,
+    canZoomOut: true,
+    coordinates: null,
+    displayCoordinates: null,
+    drawMode: false,
+    metadataPageCount: pageCount,
+    pageCount,
+    pageHeight: 1000,
+    pageIndex: 0,
+    pageInfo: null,
+    pageWidth: 800,
+    selectionCounts: { context: 0, figures: 0, tokens: 0 },
+    sourceName: "document.pdf",
+    status: "ready",
+    viewMode: "thumbnails",
+    zoom: 1,
+  };
 }
 
 function deferred<Value>() {
@@ -390,5 +426,40 @@ describe("useSelectPanel", () => {
     expect(service.setDocumentSelected).not.toHaveBeenCalledWith(true);
     expect(viewer.showThumbnails).not.toHaveBeenCalled();
     expect(result.current.mode).toBe("select");
+  });
+
+  it("starts processing with the selected page count and document", async () => {
+    const actions = createActions();
+    const service = createService(false);
+    const dropTarget = document.createElement("section");
+    const viewer = createViewerApi(false);
+    const file = new File(["document"], "document.pdf", { type: "application/pdf" });
+    const { result } = renderHook(() => useSelectPanel({ dropTarget, actions, service }));
+
+    let selectFile: Promise<void> = Promise.resolve();
+    act(() => {
+      selectFile = result.current.actions.selectFile(file);
+    });
+    await waitFor(() => {
+      expect(result.current.viewer.props).not.toBeNull();
+    });
+    act(() => {
+      result.current.viewer.props?.onApiReady?.(viewer);
+      result.current.viewer.props?.onStateChange?.(createViewerState(3));
+      result.current.viewer.props?.onStatusChange?.("ready");
+    });
+    await act(async () => {
+      await selectFile;
+    });
+    await waitFor(() => {
+      expect(result.current.review.startDisabled).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.actions.start();
+    });
+
+    expect(service.start).toHaveBeenCalledWith(3, expect.any(Function));
+    expect(viewer.exportTiff).not.toHaveBeenCalled();
   });
 });

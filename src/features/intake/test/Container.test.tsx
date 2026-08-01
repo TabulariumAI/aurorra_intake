@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Container } from "../component/Container";
 
@@ -7,6 +7,8 @@ type MockEventBus = {
 };
 
 let capturedEventBus: MockEventBus | null = null;
+const setSession = vi.fn();
+const processProvision = vi.fn();
 
 function captureEventBus(runtime: { eventBus: MockEventBus }) {
   capturedEventBus = runtime.eventBus;
@@ -24,8 +26,7 @@ vi.mock("../../select/service/selectService", () => ({
     captureEventBus(runtime);
     return {
       setDocumentSelected: vi.fn(),
-      setPageCount: vi.fn(),
-      emitRoute: vi.fn(),
+      start: vi.fn(),
       clear: vi.fn(),
       emitChoices: vi.fn(),
     } as const;
@@ -44,7 +45,7 @@ vi.mock("../../session/service/SessionService", () => ({
     captureEventBus(runtime);
     return {
       process: vi.fn(),
-      setSession: vi.fn(),
+      setSession,
       clear: vi.fn(),
     } as const;
   }),
@@ -60,7 +61,7 @@ vi.mock("../../upload/service/UploadService", () => ({
 vi.mock("../../provision/service/ProvisionService", () => ({
   createProvisionService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
-    return { process: vi.fn(), clear: vi.fn() } as const;
+    return { process: processProvision, clear: vi.fn() } as const;
   }),
 }));
 
@@ -78,6 +79,59 @@ vi.mock("../../select/component/SelectPanel", () => ({
 }));
 
 describe("Container", () => {
+  it("handles typed host requests and reports the loaded session", async () => {
+    const loaded = {
+      baseUrl: "https://storage.test",
+      document: "session-1.pdf",
+      indexChoices: [],
+      sasToken: "sas-1",
+      session: "session-1",
+    };
+    setSession.mockResolvedValueOnce(loaded);
+    processProvision.mockResolvedValueOnce(undefined);
+    const onSessionLoaded = vi.fn();
+    const onLayoutChange = vi.fn();
+
+    const { rerender } = render(
+      <Container
+        authToken="token"
+        apiGatewayUrl="https://doc.example.com"
+        choicesRequest={{ id: 1 }}
+        onLayoutChange={onLayoutChange}
+        onSessionLoaded={onSessionLoaded}
+        provisionRequest={{ document: "session-1.pdf", id: 2 }}
+        sessionRequest={{ id: 3, session: "session-1" }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(setSession).toHaveBeenCalledWith("session-1");
+      expect(processProvision).toHaveBeenCalledWith("session-1.pdf");
+      expect(onSessionLoaded).toHaveBeenCalledWith(loaded);
+      expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+    });
+
+    act(() => {
+      capturedEventBus!.emit({ name: "toggleLayout" }, { studioModeEnabled: true });
+    });
+    expect(onLayoutChange).toHaveBeenCalledWith(true);
+
+    rerender(
+      <Container
+        authToken="token"
+        apiGatewayUrl="https://doc.example.com"
+        choicesRequest={{ id: 1 }}
+        onLayoutChange={onLayoutChange}
+        onSessionLoaded={onSessionLoaded}
+        provisionRequest={{ document: "session-1.pdf", id: 2 }}
+        sessionRequest={{ id: 3, session: "session-1" }}
+      />,
+    );
+
+    expect(setSession).toHaveBeenCalledTimes(1);
+    expect(processProvision).toHaveBeenCalledTimes(1);
+  });
+
   it("bubbles showAlert into onFailure and onAlert without rendering an error panel", () => {
     const onFailure = vi.fn();
     const onAlert = vi.fn();

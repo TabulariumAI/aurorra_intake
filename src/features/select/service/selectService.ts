@@ -18,14 +18,25 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
     setDocumentSelected(selected) {
       runtime.store.set("documentSelected", selected);
     },
-    setPageCount(pageCount) {
-      runtime.store.set("numOfPages", pageCount);
-    },
-    async emitRoute(document) {
-      await runtime.eventBus.emitAsync(runtime.events.reRoute, {
-        [runtime.events.reRoute.detail.stage]: "session",
-        [runtime.events.reRoute.detail.file]: document,
-      });
+    async start(pageCount, getDocument) {
+      const jobId = crypto.randomUUID();
+      runtime.onJobEvent?.({ jobId, message: "Creating a new session", phase: "started", session: null });
+      try {
+        runtime.store.set("numOfPages", pageCount);
+        const document = await getDocument();
+        if (!document) {
+          throw new Error("Failed to get the selected file.");
+        }
+        await runtime.eventBus.emitAsync(runtime.events.reRoute, {
+          [runtime.events.reRoute.detail.stage]: "session",
+          [runtime.events.reRoute.detail.file]: document,
+          [runtime.events.reRoute.detail.jobId]: jobId,
+        });
+      } catch (error) {
+        const message = getSelectErrorMessage(error, "Session creation failed.");
+        runtime.onJobEvent?.({ error: message, jobId, message: "Session creation failed", phase: "failed", session: null });
+        throw error;
+      }
     },
     showSettings() {
       runtime.eventBus.emit(runtime.events.showChoices);

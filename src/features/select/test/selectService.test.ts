@@ -33,6 +33,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
 }
 
 function createRuntime(seed: Partial<StoreValues> = {}) {
+  const onJobEvent = vi.fn();
   const runtime: SelectRuntime = {
     alert: { format: vi.fn(() => "formatted fallback") },
     messages: { ERR_ACT: { code: "ERR_ACT", args: { action: "action" } } },
@@ -41,14 +42,15 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       emitAsync: vi.fn(async () => undefined),
     },
     events: {
-      reRoute: { detail: { stage: "stage", file: "file" } },
+      reRoute: { detail: { stage: "stage", file: "file", jobId: "jobId" } },
       showChoices: { name: "showChoices" },
     },
+    onJobEvent,
     store: createStore(seed),
     intervalMs: 250,
   };
 
-  return { runtime };
+  return { onJobEvent, runtime };
 }
 
 describe("selectService", () => {
@@ -59,23 +61,50 @@ describe("selectService", () => {
     expect(getSelectErrorMessage({}, "fallback")).toBe("fallback");
   });
 
-  it("stores document selection and emits route events", async () => {
-    const { runtime } = createRuntime();
+  it("emits session start before resolving the document and routes the same job", async () => {
+    const { onJobEvent, runtime } = createRuntime();
     const service = createSelectService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
+    const getDocument = vi.fn(async () => file);
 
     service.setDocumentSelected(true);
-    service.setPageCount(7);
-    await service.emitRoute(file);
+    await service.start(7, getDocument);
     service.showSettings();
 
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", true);
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 7);
+    expect(onJobEvent).toHaveBeenCalledWith({
+      jobId: expect.any(String),
+      message: "Creating a new session",
+      phase: "started",
+      session: null,
+    });
+    expect(onJobEvent.mock.invocationCallOrder[0]).toBeLessThan(getDocument.mock.invocationCallOrder[0]);
+    const jobId = onJobEvent.mock.calls[0][0].jobId;
     expect(runtime.eventBus.emitAsync).toHaveBeenCalledWith(
       runtime.events.reRoute,
-      { stage: "session", file },
+      { stage: "session", file, jobId },
     );
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.showChoices);
+  });
+
+  it("fails the immediate session job when document preparation fails", async () => {
+    const { onJobEvent, runtime } = createRuntime();
+    const service = createSelectService(runtime);
+    const failure = new Error("TIFF export failed.");
+
+    await expect(service.start(7, vi.fn(async () => {
+      throw failure;
+    }))).rejects.toThrow(failure);
+
+    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "failed"]);
+    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
+    expect(onJobEvent).toHaveBeenLastCalledWith(expect.objectContaining({
+      error: "TIFF export failed.",
+      message: "Session creation failed",
+      session: null,
+    }));
+    expect(runtime.eventBus.emitAsync).not.toHaveBeenCalled();
   });
 
   it("clears document selection", () => {

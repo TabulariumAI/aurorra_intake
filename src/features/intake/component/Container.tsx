@@ -17,7 +17,7 @@ import { createProvisionWorkerClient } from "../../provision/worker/provisionWor
 import { SelectPanel } from "../../select/component/SelectPanel";
 import { createSelectService } from "../../select/service/selectService";
 import { createSessionService } from "../../session/service/SessionService";
-import type { SessionServiceActions, SessionState } from "../../session/type/session.types";
+import type { SessionLoaded, SessionServiceActions, SessionState } from "../../session/type/session.types";
 import { createSessionWorkerClient } from "../../session/worker/sessionWorkerClient";
 import { createUploadService } from "../../upload/service/UploadService";
 import type { UploadServiceActions, UploadState } from "../../upload/type/upload.types";
@@ -37,6 +37,7 @@ type EventConfig = {
 export type ContainerProps = {
   authToken: string | null;
   apiGatewayUrl: string;
+  choicesRequest?: IntakeChoicesRequest;
   intervalMs?: number;
   initialStudioModeEnabled?: boolean;
   onAlert?: (message: string) => void;
@@ -44,12 +45,20 @@ export type ContainerProps = {
   onComplete?: (payload: IntakeCompletePayload) => void;
   onFailure?: (message: string) => void;
   onJobEvent?: JobEventCallback;
+  onLayoutChange?: (studioModeEnabled: boolean) => void;
+  onSessionLoaded?: (session: SessionLoaded) => void;
   onStarted?: () => void;
+  provisionRequest?: IntakeProvisionRequest;
   selectionResetVersion?: number;
+  sessionRequest?: IntakeSessionRequest;
 };
 
+export type IntakeChoicesRequest = { id: number };
+export type IntakeProvisionRequest = { document: string; id: number };
+export type IntakeSessionRequest = { id: number; session: string };
+
 const events = {
-  reRoute: { name: "reRoute", detail: { stage: "stage", file: "file" } },
+  reRoute: { name: "reRoute", detail: { stage: "stage", file: "file", jobId: "jobId" } },
   showAlert: { name: "showAlert" },
   newSession: { name: "newSession" },
   showChoices: { name: "showChoices" },
@@ -85,6 +94,7 @@ const choicesDialogHeader = (
 export function Container({
   authToken,
   apiGatewayUrl,
+  choicesRequest,
   intervalMs = 10000,
   initialStudioModeEnabled = false,
   onAlert,
@@ -92,8 +102,12 @@ export function Container({
   onComplete,
   onFailure,
   onJobEvent,
+  onLayoutChange,
+  onSessionLoaded,
   onStarted,
+  provisionRequest,
   selectionResetVersion = 0,
+  sessionRequest,
 }: ContainerProps) {
   const intake = useIntakeShell();
   const { actions, state } = intake;
@@ -103,6 +117,9 @@ export function Container({
   const uploadRef = useRef<UploadServiceActions | null>(null);
   const provisionRef = useRef<ProvisionServiceActions | null>(null);
   const indexingRef = useRef<IndexingServiceActions | null>(null);
+  const choicesRequestRef = useRef<number | null>(null);
+  const provisionRequestRef = useRef<number | null>(null);
+  const sessionRequestRef = useRef<number | null>(null);
   const [choicesOpen, setChoicesOpen] = useState(false);
   const store = useMemo(() => createStoreAdapter(), []);
 
@@ -143,6 +160,12 @@ export function Container({
         onAlert?.(message);
         return;
       }
+      if (event.name === events.toggleLayout.name) {
+        if (typeof payload?.studioModeEnabled === "boolean") {
+          onLayoutChange?.(payload.studioModeEnabled);
+        }
+        return;
+      }
       if (event.name === events.newSession.name) {
         orchestrator.reset();
         actions.showSelect("", "");
@@ -162,7 +185,7 @@ export function Container({
     listen() {
       return undefined;
     },
-  }), [actions, onAlert, onFailure, onStarted, orchestrator]);
+  }), [actions, onAlert, onFailure, onLayoutChange, onStarted, orchestrator]);
 
   const commonRuntime = useMemo(() => ({
     alert: intakeAlert,
@@ -300,6 +323,28 @@ export function Container({
     provisionRef.current = provisionService;
     indexingRef.current = indexingService;
   }, [indexingService, provisionService, sessionService, uploadService]);
+
+  useEffect(() => {
+    if (!choicesRequest || choicesRequest.id === choicesRequestRef.current) return;
+    choicesRequestRef.current = choicesRequest.id;
+    setChoicesOpen(true);
+  }, [choicesRequest]);
+
+  useEffect(() => {
+    if (!provisionRequest || provisionRequest.id === provisionRequestRef.current) return;
+    provisionRequestRef.current = provisionRequest.id;
+    void provisionService.process(provisionRequest.document).catch(() => undefined);
+  }, [provisionRequest, provisionService]);
+
+  useEffect(() => {
+    if (!sessionRequest || sessionRequest.id === sessionRequestRef.current) return;
+    sessionRequestRef.current = sessionRequest.id;
+    void sessionService.setSession(sessionRequest.session).then(onSessionLoaded).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      onFailure?.(message);
+      onAlert?.(message);
+    });
+  }, [onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService]);
 
   const selectContent = selectHost ? (
     <SelectPanel

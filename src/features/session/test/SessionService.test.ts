@@ -98,27 +98,53 @@ describe("SessionService", () => {
     const service = createSessionService(runtime, { setState: vi.fn() });
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
 
-    await service.process(file);
+    await service.process(file, "job-1");
 
     expect(runtime.sessionWorkerClient.newSession).toHaveBeenCalledWith("token-1");
     expect(store.set).toHaveBeenCalledWith("session", "session-1");
     expect(store.set).toHaveBeenCalledWith("sasToken", "sas-1");
     expect(store.set).toHaveBeenCalledWith("baseUrl", "https://storage.test");
     expect(store.set).toHaveBeenCalledWith("document", "session-1.pdf");
-    expect(onJobEvent).toHaveBeenNthCalledWith(1, expect.objectContaining({ message: "Creating a new session", phase: "started", session: null }));
-    expect(onJobEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({ message: "Session created", phase: "completed", session: "session-1" }));
-    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
+    expect(onJobEvent).toHaveBeenCalledWith({
+      jobId: "job-1",
+      message: "Session created",
+      phase: "completed",
+      session: "session-1",
+    });
     expect(emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "upload", file },
     );
   });
 
+  it("fails the supplied session job when session creation fails", async () => {
+    const { onJobEvent, runtime } = createRuntime();
+    const service = createSessionService(runtime, { setState: vi.fn() });
+    const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
+    vi.mocked(runtime.sessionWorkerClient.newSession).mockRejectedValueOnce(new Error("Session API failed."));
+
+    await service.process(file, "job-2");
+
+    expect(onJobEvent).toHaveBeenCalledWith({
+      error: "Session API failed.",
+      jobId: "job-2",
+      message: "Session creation failed",
+      phase: "failed",
+      session: null,
+    });
+  });
+
   it("stores existing session data and normalized choices", async () => {
     const { onJobEvent, runtime, store } = createRuntime();
     const service = createSessionService(runtime, { setState: vi.fn() });
 
-    await service.setSession("session-2");
+    await expect(service.setSession("session-2")).resolves.toEqual({
+      baseUrl: "https://storage-2.test",
+      document: "session-2.pdf",
+      indexChoices: [{ service: "Recognition", level: 5 }],
+      sasToken: "sas-2",
+      session: "session-2",
+    });
 
     expect(runtime.loadChoices).toHaveBeenCalledWith("session-2");
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");

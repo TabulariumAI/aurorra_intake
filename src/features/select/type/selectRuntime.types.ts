@@ -1,4 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
+import type { JobEventCallback } from "aurorra-ui";
 
 export type SelectAlertMessage = {
   code: string;
@@ -14,7 +15,7 @@ export type SelectAlert = {
 };
 
 export type SelectEvents = {
-  reRoute: { detail: { stage: string; file: string } };
+  reRoute: { detail: { stage: string; file: string; jobId: string } };
   showChoices: unknown;
 };
 
@@ -28,6 +29,7 @@ export type SelectRuntime = {
   messages: SelectAlertMessages;
   eventBus: SelectEventBus;
   events: SelectEvents;
+  onJobEvent?: JobEventCallback;
   store: StoreAdapter;
   intervalMs: number;
 };
