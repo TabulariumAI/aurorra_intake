@@ -92,7 +92,7 @@ export class ChoicesWorker {
 
   buildUrl(command: ChoicesWorkerCommand): string {
     const API_BASE_URL = trimTrailingSlash(command.config.apiBaseUrl);
-    return `${API_BASE_URL}/v1/document/${encodeURIComponent(command.session)}/choices`;
+    return `${API_BASE_URL}/v1/index/${encodeURIComponent(command.session)}/choices`;
   }
 }
 

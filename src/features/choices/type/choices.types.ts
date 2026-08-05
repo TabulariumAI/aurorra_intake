@@ -83,7 +83,6 @@ export type ChoicesWorkerClient = {
 
 export type ChoicesEventBus = {
   emit(eventConfig: unknown, payload?: Record<string, unknown>): void;
-  listen(eventConfig: unknown, handler: (...args: unknown[]) => unknown): void;
 };
 
 export type ChoicesEvents = {
@@ -96,15 +95,8 @@ export type ChoicesRuntime = {
   store: StoreAdapter;
   eventBus: ChoicesEventBus;
   events: ChoicesEvents;
-  dialogHost: HTMLElement;
-  createDialogFrame(host: HTMLElement, onClose: () => void): ChoicesDialogFrame;
   choicesWorkerClient: ChoicesWorkerClient;
   onJobEvent?: JobEventCallback;
-};
-
-export type ChoicesDialogFrame = {
-  open(): HTMLElement | null;
-  close(): void;
 };
 
 export type ChoicesSaveResult = {

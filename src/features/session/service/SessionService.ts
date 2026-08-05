@@ -8,12 +8,7 @@ import type {
   SessionStartData,
   SessionWorkerClient,
   SessionServiceActions,
-  SessionState,
 } from "../type/session.types";
-
-type SessionStateApi = {
-  setState(state: SessionState): void;
-};
 
 function getErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
@@ -74,18 +69,15 @@ function getAuthToken(runtime: SessionRuntime): string {
 
 export class SessionService implements SessionServiceActions {
   #runtime: SessionRuntime;
-  #stateApi: SessionStateApi;
   #sessionWorkerClient: SessionWorkerClient;
 
-  constructor(runtime: SessionRuntime, stateApi: SessionStateApi, sessionWorkerClient: SessionWorkerClient) {
+  constructor(runtime: SessionRuntime, sessionWorkerClient: SessionWorkerClient) {
     this.#runtime = runtime;
-    this.#stateApi = stateApi;
     this.#sessionWorkerClient = sessionWorkerClient;
   }
 
   async process(document: SessionDocument, jobId: string) {
     const runtime = this.#runtime;
-    const stateApi = this.#stateApi;
     const sessionWorkerClient = this.#sessionWorkerClient;
 
     if (runtime.store.get("isSessionInProcess") === true) {
@@ -93,7 +85,6 @@ export class SessionService implements SessionServiceActions {
     }
 
     runtime.store.set("isSessionInProcess", true);
-    stateApi.setState({ isProcessing: true, lastError: null });
 
     try {
       const ext = validateSessionDocument(runtime, document);
@@ -116,12 +107,10 @@ export class SessionService implements SessionServiceActions {
         [runtime.messages.ERR_ACT.args.action]: "processing request",
       });
       const message = getErrorMessage(error, fallback);
-      stateApi.setState({ isProcessing: true, lastError: message });
       runtime.eventBus.emit(runtime.events.showAlert, { message });
       console.error("Step1:", message);
     } finally {
       runtime.store.set("isSessionInProcess", false);
-      stateApi.setState({ isProcessing: false, lastError: null });
     }
   }
 
@@ -165,9 +154,6 @@ export class SessionService implements SessionServiceActions {
   }
 }
 
-export function createSessionService(
-  runtime: SessionRuntime,
-  stateApi: SessionStateApi,
-): SessionServiceActions {
-  return new SessionService(runtime, stateApi, runtime.sessionWorkerClient);
+export function createSessionService(runtime: SessionRuntime): SessionServiceActions {
+  return new SessionService(runtime, runtime.sessionWorkerClient);
 }

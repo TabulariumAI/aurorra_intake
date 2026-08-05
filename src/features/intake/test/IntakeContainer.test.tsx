@@ -18,10 +18,12 @@ describe("IntakeContainer", () => {
     expect(screen.getByTestId("helper-panel")).toHaveTextContent("Check the document");
     const container = screen.getByTestId("intake-container");
     expect(container).toHaveStyle({ height: "100%", minHeight: "0" });
-    expect(container.style.backgroundColor).toBe("transparent");
-    expect(container.style.borderStyle).toBe("none");
-    expect(container.style.borderRadius).toBe("0px");
-    expect(container.style.boxShadow).toBe("none");
+    expect(container.style.backgroundColor).toBe("");
+    expect(container.style.borderStyle).toBe("");
+    expect(container.style.borderRadius).toBe("");
+    expect(container.style.boxShadow).toBe("");
+    expect(container.style.margin).toBe("");
+    expect(container.style.padding).toBe("");
     expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
     expect(screen.getByTestId("provision-panel")).not.toHaveStyle({ display: "none" });
     expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();

@@ -12,6 +12,11 @@ export const SESSION_STATE_STORAGE_KEY = "aurorra-intake.session-state";
 export const LOCAL_STATE_STORAGE_KEY = "aurorra-intake.local-state";
 
 export type StoreActions = {
+  closeChoices(): void;
+  openChoices(): void;
+  requestProvision(document: string): void;
+  requestSession(session: string): void;
+  resetSelection(): void;
   setValue<Key extends StateKey>(name: Key, value: StoreValues[Key]): void;
   resetValue(name: StateKey): void;
   resetMemoryState(): void;
@@ -24,11 +29,15 @@ export type StoreState = StoreValues & StoreActions;
 
 type JsonStorage = typeof sessionJsonStorage;
 
+let requestId = 0;
+
 const DEFAULT_STATE: StoreValues = {
+  choicesOpen: false,
   isSessionInProcess: false,
   uploadingStepStatus: false,
   documentSelected: false,
   provisionStepStatus: false,
+  provisionRequest: null,
   indexingStepStatus: false,
   userToken: null,
   session: null,
@@ -37,6 +46,8 @@ const DEFAULT_STATE: StoreValues = {
   document: null,
   numOfPages: 1,
   indexChoices: null,
+  selectionResetVersion: 0,
+  sessionRequest: null,
   workflow: null,
 };
 
@@ -123,6 +134,11 @@ function statePatch<Key extends StateKey>(name: Key, value: StoreValues[Key]): P
 
 export const useStore = create<StoreState>()((set, get) => ({
   ...getInitialValues(),
+  closeChoices: () => set({ choicesOpen: false }),
+  openChoices: () => set({ choicesOpen: true }),
+  requestProvision: (document) => set({ provisionRequest: { document, id: ++requestId } }),
+  requestSession: (session) => set({ sessionRequest: { id: ++requestId, session } }),
+  resetSelection: () => set((state) => ({ selectionResetVersion: state.selectionResetVersion + 1 })),
   setValue: (name, value) => {
     if (!isValidValue(name, value)) return;
     set(statePatch(name, value));

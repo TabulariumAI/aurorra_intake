@@ -18,5 +18,4 @@ export type IntakeContainerProps = IntakeContainerState & {
   select: ReactNode;
   provision: ReactNode;
   selectPanelRef?: Ref<HTMLElement>;
-  provisionPanelRef?: Ref<HTMLElement>;
 };

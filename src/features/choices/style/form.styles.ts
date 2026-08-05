@@ -6,8 +6,6 @@ export const choiceFormStyles = {
     flexDirection: "column",
     gap: "0.1rem",
     width: "100%",
-    maxWidth: "60rem",
-    margin: "0 auto",
     boxSizing: "border-box",
   },
   form: {

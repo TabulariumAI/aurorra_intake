@@ -6,6 +6,10 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    choicesOpen: false,
+    provisionRequest: null,
+    selectionResetVersion: 0,
+    sessionRequest: null,
     isSessionInProcess: false,
     uploadingStepStatus: false,
     documentSelected: false,
@@ -53,7 +57,6 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       getActualPages: vi.fn(() => 1),
       getIdentifyingIndexes: vi.fn(() => []),
       getIdEnh: vi.fn(() => []),
-      getDefaultChoices: vi.fn(() => defaultChoices),
       normalizeChoices: vi.fn((choices) => new ChoiceData(CHOICESTRUCTURE).normalizeChoiceValues(choices)),
     },
     choiceStructure: CHOICESTRUCTURE,
@@ -63,7 +66,6 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       status: vi.fn(async () => ({ status: "completed", data: "" })),
     },
     onJobEvent,
-    notify: vi.fn(async () => undefined),
     getAuthToken: vi.fn(() => "token-1"),
   };
 
@@ -77,13 +79,12 @@ describe("IndexingService", () => {
       .mockResolvedValueOnce({ status: "pending", data: "" })
       .mockResolvedValueOnce({ status: "pending", data: "" })
       .mockResolvedValueOnce({ status: "completed", data: "" });
-    const service = createIndexingService(runtime, { setState: vi.fn() });
+    const service = createIndexingService(runtime);
 
     await service.process();
 
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", defaultChoices);
     expect(runtime.indexingWorkerClient.start).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf", defaultChoices);
-    expect(runtime.notify).toHaveBeenCalledWith("src/assets/notify.wav");
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "metadata" },
@@ -98,33 +99,33 @@ describe("IndexingService", () => {
     runtime.indexingWorkerClient.status = vi.fn()
       .mockResolvedValueOnce({ status: "processing", data: "" })
       .mockResolvedValueOnce({ status: "completed", data: "" });
-    const service = createIndexingService(runtime, { setState: vi.fn() });
+    const service = createIndexingService(runtime);
 
-    await expect(service.checkStatus("session-1", "session-1.pdf")).resolves.toBe(false);
-    await expect(service.checkStatus("session-1", "session-1.pdf")).resolves.toBe(true);
+    await expect(service.checkStatus("session-1")).resolves.toBe(false);
+    await expect(service.checkStatus("session-1")).resolves.toBe(true);
   });
 
   it("rejects worker error statuses with formatted context", async () => {
     const { runtime } = createRuntime();
     runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "error", data: "worker failed" }));
-    const service = createIndexingService(runtime, { setState: vi.fn() });
+    const service = createIndexingService(runtime);
 
-    await expect(service.checkStatus("session-1", "session-1.pdf")).rejects.toThrow("worker failed");
+    await expect(service.checkStatus("session-1")).rejects.toThrow("worker failed");
   });
 
   it("does not route to metadata when indexing fails", async () => {
     const { runtime } = createRuntime();
     runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "error", data: "worker failed" }));
-    const service = createIndexingService(runtime, { setState: vi.fn() });
+    const service = createIndexingService(runtime);
 
-    await expect(service.process()).rejects.toThrow("worker failed");
+    await expect(service.process()).resolves.toBeUndefined();
 
     expect(runtime.eventBus.emit).not.toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
   });
 
   it("does not start when indexing is already in process", async () => {
     const { runtime } = createRuntime({ indexingStepStatus: true });
-    const service = createIndexingService(runtime, { setState: vi.fn() });
+    const service = createIndexingService(runtime);
 
     await service.process();
 

@@ -69,6 +69,28 @@ describe("IntakeOrchestrator", () => {
     await expect(orchestrator.route({ stage: "session", file })).rejects.toThrow("Job id is missing.");
   });
 
+  it("requires an explicit route stage", async () => {
+    const orchestrator = createIntakeOrchestrator({
+      getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
+      store: createStore(),
+    });
+
+    await expect(orchestrator.route({} as never)).rejects.toThrow("Unknown intake route stage: undefined");
+  });
+
+  it("rejects routes whose service is not ready", async () => {
+    const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
+    const orchestrator = createIntakeOrchestrator({
+      getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
+      store: createStore(),
+    });
+
+    await expect(orchestrator.route({ stage: "session", file, jobId: "job-1" })).rejects.toThrow("Session service is not ready.");
+    await expect(orchestrator.route({ stage: "upload", file })).rejects.toThrow("Upload service is not ready.");
+    await expect(orchestrator.route({ stage: "provision", file })).rejects.toThrow("Provision service is not ready.");
+    await expect(orchestrator.route({ stage: "indexing" })).rejects.toThrow("Indexing service is not ready.");
+  });
+
   it("emits metadata completion payload from persisted store values", async () => {
     const onComplete = vi.fn();
     const orchestrator = createIntakeOrchestrator({

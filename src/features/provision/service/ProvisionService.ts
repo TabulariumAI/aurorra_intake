@@ -1,16 +1,10 @@
 import type {
   ProvisionDocument,
   ProvisionRuntime,
-  ProvisionReviewHandle,
   ProvisionReviewOptions,
   ProvisionResult,
   ProvisionServiceActions,
-  ProvisionState,
 } from "../type/provision.types";
-
-type ProvisionStateApi = {
-  setState(state: ProvisionState): void;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -56,19 +50,15 @@ function normalizeProvisionResponse(raw: unknown): ProvisionResult {
 
 export class ProvisionService {
   #runtime: ProvisionRuntime;
-  #stateApi: ProvisionStateApi;
   #provisionWorkerClient: ProvisionRuntime["provisionWorkerClient"];
-  #review: ProvisionReviewHandle | null = null;
 
-  constructor(runtime: ProvisionRuntime, stateApi: ProvisionStateApi) {
+  constructor(runtime: ProvisionRuntime) {
     this.#runtime = runtime;
-    this.#stateApi = stateApi;
     this.#provisionWorkerClient = runtime.provisionWorkerClient;
   }
 
   #dismissReview() {
-    this.#review?.dispose();
-    this.#review = null;
+    this.#runtime.intake.showReview(null);
   }
 
   async #renderReview(description: unknown, accepted: unknown, document: ProvisionDocument | string): Promise<void> {
@@ -96,20 +86,17 @@ export class ProvisionService {
       },
     };
 
-    this.#review = this.#runtime.createReview(runtime.intake.provisionHost, reviewOptions);
+    runtime.intake.showReview(reviewOptions);
   }
 
   async process(document: ProvisionDocument | string) {
     const runtime = this.#runtime;
-    const stateApi = this.#stateApi;
 
     if (runtime.store.get("provisionStepStatus") === true) {
       return;
     }
 
     runtime.store.set("provisionStepStatus", true);
-    stateApi.setState({ isProcessing: true, lastError: null });
-    let lastError: string | null = null;
 
     try {
 
@@ -161,11 +148,8 @@ export class ProvisionService {
       runtime.eventBus.emit(runtime.events.showAlert, {
         message,
       });
-      lastError = message;
-      throw new Error(String(message), { cause: error });
     } finally {
       runtime.store.set("provisionStepStatus", false);
-      stateApi.setState({ isProcessing: false, lastError });
     }
   }
 
@@ -173,10 +157,9 @@ export class ProvisionService {
     this.#dismissReview();
     this.#runtime.intake.actions.showSelect("", "");
     this.#runtime.store.set("provisionStepStatus", false);
-    this.#stateApi.setState({ isProcessing: false, lastError: null });
   }
 }
 
-export function createProvisionService(runtime: ProvisionRuntime, stateApi: ProvisionStateApi): ProvisionServiceActions {
-  return new ProvisionService(runtime, stateApi);
+export function createProvisionService(runtime: ProvisionRuntime): ProvisionServiceActions {
+  return new ProvisionService(runtime);
 }

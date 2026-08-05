@@ -1,6 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { DIALOG_BODY, DIALOG_SIZE, Dialog } from "aurorra-ui";
-import type { DialogHeightStyle } from "aurorra-ui";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { JobEventCallback } from "aurorra-ui";
 import { ChoiceForm } from "../../choices/component/ChoiceForm";
 import { createChoicesService } from "../../choices/service/ChoicesService";
@@ -8,21 +6,22 @@ import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choi
 import type { ChoiceStructure } from "../../choices/type/choices.types";
 import { createChoicesWorkerClient } from "../../choices/worker/choicesWorkerClient";
 import { createIndexingService } from "../../indexing/service/IndexingService";
-import type { IndexingServiceActions, IndexingState } from "../../indexing/type/indexing.types";
+import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
 import { ProvisionReview } from "../../provision/component/ProvisionReview";
 import { createProvisionService } from "../../provision/service/ProvisionService";
-import type { ProvisionServiceActions, ProvisionState } from "../../provision/type/provision.types";
+import type { ProvisionReviewOptions, ProvisionServiceActions } from "../../provision/type/provision.types";
 import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
 import { SelectPanel } from "../../select/component/SelectPanel";
 import { createSelectService } from "../../select/service/selectService";
 import { createSessionService } from "../../session/service/SessionService";
-import type { SessionLoaded, SessionServiceActions, SessionState } from "../../session/type/session.types";
+import type { SessionLoaded, SessionServiceActions } from "../../session/type/session.types";
 import { createSessionWorkerClient } from "../../session/worker/sessionWorkerClient";
 import { createUploadService } from "../../upload/service/UploadService";
-import type { UploadServiceActions, UploadState } from "../../upload/type/upload.types";
+import type { UploadServiceActions } from "../../upload/type/upload.types";
 import { createUploadWorkerClient } from "../../upload/worker/uploadWorkerClient";
 import { createStoreAdapter, setRuntimeAuthToken } from "../../../store/adapter/storeAdapter";
+import { useStore } from "../../../store/state/store";
 import { IntakeContainer } from "./IntakeContainer";
 import { useIntakeShell } from "../hook/useIntakeShell";
 import { intakeAlert, intakeMessages } from "../service/intakeMessages";
@@ -37,8 +36,7 @@ type EventConfig = {
 export type ContainerProps = {
   authToken: string | null;
   apiGatewayUrl: string;
-  choicesRequest?: IntakeChoicesRequest;
-  intervalMs?: number;
+  intervalMs: number;
   initialStudioModeEnabled?: boolean;
   onAlert?: (message: string) => void;
   onCanceled?: () => void;
@@ -46,16 +44,19 @@ export type ContainerProps = {
   onFailure?: (message: string) => void;
   onJobEvent?: JobEventCallback;
   onLayoutChange?: (studioModeEnabled: boolean) => void;
+  onLoaderChange(lines: readonly string[] | null): void;
+  onReadyChange(ready: boolean): void;
   onSessionLoaded?: (session: SessionLoaded) => void;
+  renderSettings(props: IntakeSettingsProps): ReactNode;
   onStarted?: () => void;
-  provisionRequest?: IntakeProvisionRequest;
-  selectionResetVersion?: number;
-  sessionRequest?: IntakeSessionRequest;
 };
 
-export type IntakeChoicesRequest = { id: number };
-export type IntakeProvisionRequest = { document: string; id: number };
-export type IntakeSessionRequest = { id: number; session: string };
+export type IntakeSettingsProps = {
+  children: ReactNode;
+  onClose(): void;
+  onOpenChange(open: boolean): void;
+  open: boolean;
+};
 
 const events = {
   reRoute: { name: "reRoute", detail: { stage: "stage", file: "file", jobId: "jobId" } },
@@ -66,36 +67,10 @@ const events = {
   toggleLayout: { name: "toggleLayout" },
 } satisfies Record<string, EventConfig> & { reRoute: IntakeRouteEvent };
 
-const dialogHeightStyle = {
-  height: "calc(84vh * 0.85)",
-  maxHeight: "calc(84vh * 0.85)",
-} satisfies DialogHeightStyle;
-
-const choicesDialogHeader = (
-  <div style={{
-    alignItems: "center",
-    display: "flex",
-    justifyContent: "center",
-    minHeight: "2.9rem",
-    width: "100%",
-  }}>
-    <div style={{
-      color: "#0f172a",
-      fontSize: "1.35rem",
-      fontWeight: 800,
-      letterSpacing: "-0.015em",
-      lineHeight: 1.1,
-    }}>
-      Settings
-    </div>
-  </div>
-);
-
 export function Container({
   authToken,
   apiGatewayUrl,
-  choicesRequest,
-  intervalMs = 10000,
+  intervalMs,
   initialStudioModeEnabled = false,
   onAlert,
   onCanceled,
@@ -103,25 +78,35 @@ export function Container({
   onFailure,
   onJobEvent,
   onLayoutChange,
+  onLoaderChange,
+  onReadyChange,
   onSessionLoaded,
+  renderSettings,
   onStarted,
-  provisionRequest,
-  selectionResetVersion = 0,
-  sessionRequest,
 }: ContainerProps) {
   const intake = useIntakeShell();
   const { actions, state } = intake;
   const [selectHost, setSelectHost] = useState<HTMLElement | null>(null);
-  const provisionHostRef = useRef<HTMLElement | null>(null);
+  const [selectReady, setSelectReady] = useState(true);
+  const [provisionReview, setProvisionReview] = useState<ProvisionReviewOptions | null>(null);
   const sessionRef = useRef<SessionServiceActions | null>(null);
   const uploadRef = useRef<UploadServiceActions | null>(null);
   const provisionRef = useRef<ProvisionServiceActions | null>(null);
   const indexingRef = useRef<IndexingServiceActions | null>(null);
-  const choicesRequestRef = useRef<number | null>(null);
   const provisionRequestRef = useRef<number | null>(null);
   const sessionRequestRef = useRef<number | null>(null);
-  const [choicesOpen, setChoicesOpen] = useState(false);
+  const choicesOpen = useStore((state) => state.choicesOpen);
+  const closeChoices = useStore((state) => state.closeChoices);
+  const openChoices = useStore((state) => state.openChoices);
+  const provisionRequest = useStore((state) => state.provisionRequest);
+  const selectionResetVersion = useStore((state) => state.selectionResetVersion);
+  const sessionRequest = useStore((state) => state.sessionRequest);
+  const setStoreValue = useStore((state) => state.setValue);
   const store = useMemo(() => createStoreAdapter(), []);
+
+  useEffect(() => {
+    onReadyChange(selectHost !== null && selectReady);
+  }, [onReadyChange, selectHost, selectReady]);
 
   useEffect(() => {
     setRuntimeAuthToken(authToken);
@@ -151,7 +136,7 @@ export function Container({
         return;
       }
       if (event.name === events.showChoices.name) {
-        setChoicesOpen(true);
+        openChoices();
         return;
       }
       if (event.name === events.showAlert.name) {
@@ -167,7 +152,6 @@ export function Container({
         return;
       }
       if (event.name === events.newSession.name) {
-        orchestrator.reset();
         actions.showSelect("", "");
       }
     },
@@ -181,9 +165,6 @@ export function Container({
         return;
       }
       this.emit(eventConfig, payload);
-    },
-    listen() {
-      return undefined;
     },
   }), [actions, onAlert, onFailure, onLayoutChange, onStarted, orchestrator]);
 
@@ -202,8 +183,7 @@ export function Container({
       reRoute: events.reRoute,
       showChoices: events.showChoices,
     },
-    intervalMs,
-  }), [commonRuntime, intervalMs]);
+  }), [commonRuntime]);
 
   const choicesService = useMemo(() => createChoicesService({
     store,
@@ -212,13 +192,6 @@ export function Container({
       showChoices: events.showChoices,
       updateChoices: events.updateChoices,
       toggleLayout: events.toggleLayout,
-    },
-    dialogHost: document.body,
-    createDialogFrame() {
-      return {
-        open: () => document.body,
-        close: () => undefined,
-      };
     },
     choicesWorkerClient: createChoicesWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     onJobEvent,
@@ -234,10 +207,6 @@ export function Container({
     loadChoices(session) {
       return choicesService.load(session);
     },
-  }, {
-    setState(_: SessionState) {
-      return undefined;
-    },
   }), [apiGatewayUrl, choicesService, commonRuntime]);
 
   const uploadService = useMemo(() => createUploadService({
@@ -248,10 +217,6 @@ export function Container({
       reRoute: events.reRoute,
     },
     uploadWorkerClient: createUploadWorkerClient(),
-  }, {
-    setState(_: UploadState) {
-      return undefined;
-    },
   }), [commonRuntime]);
 
   const provisionService = useMemo(() => createProvisionService({
@@ -263,21 +228,9 @@ export function Container({
     },
     intake: {
       actions,
-      get provisionHost() {
-        if (!provisionHostRef.current) {
-          throw new Error("Provision host is not ready.");
-        }
-        return provisionHostRef.current;
-      },
+      showReview: setProvisionReview,
     },
     provisionWorkerClient: createProvisionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-    createReview(container, options) {
-      return new ProvisionReview(container, options);
-    },
-  }, {
-    setState(_: ProvisionState) {
-      return undefined;
-    },
   }), [actions, apiGatewayUrl, commonRuntime]);
 
   const indexingService = useMemo(() => createIndexingService({
@@ -295,9 +248,6 @@ export function Container({
       getIdEnh(choices, structure) {
         return Choices.getIdEnh(choices, structure as ChoiceStructure);
       },
-      getDefaultChoices(structure) {
-        return new ChoiceData(structure as ChoiceStructure).generateDefaultJson();
-      },
       normalizeChoices(choices, structure) {
         return new ChoiceData(structure as ChoiceStructure).normalizeChoiceValues(choices);
       },
@@ -305,15 +255,8 @@ export function Container({
     choiceStructure: CHOICESTRUCTURE,
     baseIntervalMs: intervalMs,
     indexingWorkerClient: createIndexingWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-    async notify() {
-      return undefined;
-    },
     getAuthToken() {
       return authToken ?? "";
-    },
-  }, {
-    setState(_: IndexingState) {
-      return undefined;
     },
   }), [apiGatewayUrl, authToken, commonRuntime, intervalMs]);
 
@@ -325,31 +268,30 @@ export function Container({
   }, [indexingService, provisionService, sessionService, uploadService]);
 
   useEffect(() => {
-    if (!choicesRequest || choicesRequest.id === choicesRequestRef.current) return;
-    choicesRequestRef.current = choicesRequest.id;
-    setChoicesOpen(true);
-  }, [choicesRequest]);
-
-  useEffect(() => {
     if (!provisionRequest || provisionRequest.id === provisionRequestRef.current) return;
     provisionRequestRef.current = provisionRequest.id;
-    void provisionService.process(provisionRequest.document).catch(() => undefined);
-  }, [provisionRequest, provisionService]);
+    setStoreValue("provisionRequest", null);
+    void provisionService.process(provisionRequest.document);
+  }, [provisionRequest, provisionService, setStoreValue]);
 
   useEffect(() => {
     if (!sessionRequest || sessionRequest.id === sessionRequestRef.current) return;
     sessionRequestRef.current = sessionRequest.id;
+    setStoreValue("sessionRequest", null);
+    setRuntimeAuthToken(authToken);
     void sessionService.setSession(sessionRequest.session).then(onSessionLoaded).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       onFailure?.(message);
       onAlert?.(message);
     });
-  }, [onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService]);
+  }, [authToken, onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService, setStoreValue]);
 
   const selectContent = selectHost ? (
     <SelectPanel
       dropTarget={selectHost}
       actions={actions}
+      onLoaderChange={onLoaderChange}
+      onReadyChange={setSelectReady}
       service={selectService}
       selectionResetVersion={selectionResetVersion}
     />
@@ -364,26 +306,11 @@ export function Container({
         title={state.container.title}
         helper={state.container.helper}
         selectPanelRef={setSelectHost}
-        provisionPanelRef={(host) => {
-          provisionHostRef.current = host;
-        }}
         select={selectContent}
-        provision={null}
+        provision={provisionReview ? <ProvisionReview {...provisionReview} /> : null}
       />
-      {choicesOpen ? (
-        <Dialog
-          open
-          aria-label="Settings"
-          bodyMode={DIALOG_BODY.TOP}
-          draggable
-          header={choicesDialogHeader}
-          heightMode={DIALOG_SIZE.MEDIUM}
-          heightStyle={dialogHeightStyle}
-          onClose={() => setChoicesOpen(false)}
-          onOpenChange={setChoicesOpen}
-          showHeader
-          showOverlay
-        >
+      {renderSettings({
+        children: (
           <ChoiceForm
             structure={CHOICESTRUCTURE}
             initialChoices={initialChoices}
@@ -391,13 +318,16 @@ export function Container({
             initialStudioModeEnabled={initialStudioModeEnabled}
             onSave={(payload) => {
               choicesService.save(payload.choices, payload.alwaysReview, payload.studioModeEnabled);
-              setChoicesOpen(false);
+              closeChoices();
             }}
-            onCancel={() => setChoicesOpen(false)}
-            onClose={() => setChoicesOpen(false)}
+            onCancel={closeChoices}
+            onClose={closeChoices}
           />
-        </Dialog>
-      ) : null}
+        ),
+        onClose: closeChoices,
+        onOpenChange: (open) => setStoreValue("choicesOpen", open),
+        open: choicesOpen,
+      })}
     </>
   );
 }

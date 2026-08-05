@@ -1,13 +1,8 @@
 import type {
   IndexingRuntime,
   IndexingServiceActions,
-  IndexingState,
   IndexingStatusResponse,
 } from "../type/indexing.types";
-
-type IndexingStateApi = {
-  setState(state: IndexingState): void;
-};
 
 type ErrorLike = {
   error?: unknown;
@@ -69,11 +64,9 @@ function normalizeChoices(value: unknown, runtime: IndexingRuntime): unknown[] {
 
 class IndexingService implements IndexingServiceActions {
   #runtime: IndexingRuntime;
-  #stateApi: IndexingStateApi;
 
-  constructor(runtime: IndexingRuntime, stateApi: IndexingStateApi) {
+  constructor(runtime: IndexingRuntime) {
     this.#runtime = runtime;
-    this.#stateApi = stateApi;
   }
 
   #pageInterval(pages: number, intervalValue: number) {
@@ -85,13 +78,11 @@ class IndexingService implements IndexingServiceActions {
 
   async process() {
     const runtime = this.#runtime;
-    const stateApi = this.#stateApi;
     if (runtime.store.get("indexingStepStatus") === true) {
       return;
     }
 
     runtime.store.set("indexingStepStatus", true);
-    stateApi.setState({ isProcessing: true, lastError: null });
     let isComplete = false;
     let cycleInterval = runtime.baseIntervalMs;
 
@@ -113,17 +104,17 @@ class IndexingService implements IndexingServiceActions {
       const statusJobId = crypto.randomUUID();
       runtime.onJobEvent?.({ jobId: statusJobId, message: "Processing document", phase: "started", session: sessionId });
       try {
-        isComplete = await this.checkStatus(sessionId, documentName);
+        isComplete = await this.checkStatus(sessionId);
         if (!isComplete) {
           await delay(cycleInterval);
         }
 
-        isComplete = await this.checkStatus(sessionId, documentName);
+        isComplete = await this.checkStatus(sessionId);
         if (!isComplete) {
           await this.start(sessionId, documentName, choices);
           cycleInterval = this.#pageInterval(pages, cycleInterval) * 3;
           await delay(cycleInterval);
-          isComplete = await this.checkStatus(sessionId, documentName);
+          isComplete = await this.checkStatus(sessionId);
         }
 
         if (!isComplete) {
@@ -131,7 +122,7 @@ class IndexingService implements IndexingServiceActions {
           for (let page = 1; page <= pages; page++) {
             cycleInterval = runtime.baseIntervalMs * indexStatuses.length;
             await delay(cycleInterval);
-            isComplete = await this.checkStatus(sessionId, documentName);
+            isComplete = await this.checkStatus(sessionId);
             if (isComplete) {
               break;
             }
@@ -142,7 +133,7 @@ class IndexingService implements IndexingServiceActions {
           const enrichmentStatuses = runtime.choices.getIdEnh(choices, runtime.choiceStructure);
           cycleInterval = runtime.baseIntervalMs * enrichmentStatuses.length;
           await delay(cycleInterval);
-          isComplete = await this.checkStatus(sessionId, documentName);
+          isComplete = await this.checkStatus(sessionId);
         }
 
         if (!isComplete) {
@@ -150,7 +141,7 @@ class IndexingService implements IndexingServiceActions {
           cycleInterval = runtime.baseIntervalMs * 2;
           await delay(cycleInterval);
           while (!isComplete && attempts < 27) {
-            isComplete = await this.checkStatus(sessionId, documentName);
+            isComplete = await this.checkStatus(sessionId);
             if (isComplete) {
               break;
             }
@@ -169,19 +160,14 @@ class IndexingService implements IndexingServiceActions {
         throw error;
       }
 
-      await runtime.notify("src/assets/notify.wav");
-
     } catch (error) {
       const message = getErrorMessage(error, "processing request", runtime);
-      stateApi.setState({ isProcessing: true, lastError: message });
       runtime.eventBus.emit(runtime.events.showAlert, { message });
       console.error("Step4:", message);
-      throw new Error(String(message), { cause: error });
 
     } finally {
 
       runtime.store.set("indexingStepStatus", false);
-      stateApi.setState({ isProcessing: false, lastError: null });
       if (isComplete) {
         runtime.eventBus.emit(runtime.events.reRoute, {
           [runtime.events.reRoute.detail.stage]: "metadata",
@@ -213,9 +199,8 @@ class IndexingService implements IndexingServiceActions {
     }
   }
 
-  async checkStatus(session: string, docName: unknown) {
+  async checkStatus(session: string) {
     const runtime = this.#runtime;
-    void docName;
     const token = runtime.getAuthToken();
     if (!token) {
       throw new Error("Missing auth token");
@@ -241,6 +226,6 @@ class IndexingService implements IndexingServiceActions {
   }
 }
 
-export function createIndexingService(runtime: IndexingRuntime, stateApi: IndexingStateApi): IndexingServiceActions {
-  return new IndexingService(runtime, stateApi);
+export function createIndexingService(runtime: IndexingRuntime): IndexingServiceActions {
+  return new IndexingService(runtime);
 }

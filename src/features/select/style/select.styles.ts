@@ -12,8 +12,6 @@ export const selectFormStyles = {
     width: "100%",
     height: "100%",
     minHeight: "0",
-    margin: "0 auto",
-    padding: "0.75rem 1.5rem 1.25rem 1.5rem",
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
@@ -29,17 +27,7 @@ export const selectFormStyles = {
     width: "100%",
     margin: "0",
     padding: "2.25rem",
-    borderRadius: "0.45rem",
-    border: "1.5px dashed color-mix(in srgb, var(--primary-color-light, #008ba3) 48%, rgba(15, 23, 42, 0.18))",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.88), rgba(239,251,253,0.74)), rgba(248, 253, 254, 0.72)",
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 0.45rem rgba(255,255,255,0.32), 0 0.8rem 2rem rgba(0, 92, 122, 0.08)",
     boxSizing: "border-box",
-  },
-  dropZoneError: {
-    borderColor: "#fca5a5",
-    background: "linear-gradient(180deg, #fff7f7, #fef2f2)",
   },
   center: {
     display: "flex",
@@ -92,10 +80,6 @@ export const selectFormStyles = {
     margin: "0",
     padding: "1.05rem 1.35rem",
     color: "var(--text-color-light)",
-    borderRadius: "0.45rem",
-    border: "1px solid rgba(0, 139, 163, 0.12)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.84), rgba(238,251,252,0.58))",
     textAlign: "left",
     boxSizing: "border-box",
   },
@@ -124,12 +108,6 @@ export const selectFormStyles = {
     opacity: 0.78,
   },
 } satisfies Record<string, CSSProperties>;
-
-export function getSelectDropZoneStyle(isError: boolean): CSSProperties {
-  return isError
-    ? { ...selectFormStyles.dropZone, ...selectFormStyles.dropZoneError }
-    : selectFormStyles.dropZone;
-}
 
 export function getSelectInfoStyle(isError: boolean): CSSProperties {
   return isError

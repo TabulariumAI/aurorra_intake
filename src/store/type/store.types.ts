@@ -1,8 +1,10 @@
 export type StoreValues = {
+  choicesOpen: boolean;
   isSessionInProcess: boolean;
   uploadingStepStatus: boolean;
   documentSelected: boolean;
   provisionStepStatus: boolean;
+  provisionRequest: IntakeProvisionRequest | null;
   indexingStepStatus: boolean;
   userToken: unknown;
   session: unknown;
@@ -11,16 +13,25 @@ export type StoreValues = {
   document: unknown;
   numOfPages: unknown;
   indexChoices: unknown;
+  selectionResetVersion: number;
+  sessionRequest: IntakeSessionRequest | null;
   workflow: unknown;
 };
+
+export type IntakeProvisionRequest = { document: string; id: number };
+export type IntakeSessionRequest = { id: number; session: string };
 
 export type StateKey = keyof StoreValues;
 
 export const MEMORY_STATE_KEYS = [
+  "choicesOpen",
   "isSessionInProcess",
   "uploadingStepStatus",
   "provisionStepStatus",
+  "provisionRequest",
   "indexingStepStatus",
+  "selectionResetVersion",
+  "sessionRequest",
 ] as const satisfies readonly StateKey[];
 
 export const SESSION_STATE_KEYS = [

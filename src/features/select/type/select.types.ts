@@ -9,7 +9,6 @@ export type SelectUploadStatus =
 export type SelectReviewState = {
   startDisabled: boolean;
   cancelDisabled: boolean;
-  cancelNeedsConfirm: boolean;
 };
 
 export type SelectPanelActions = {
@@ -58,28 +57,20 @@ export type SelectService = {
   setDocumentSelected(selected: boolean): void;
   start(pageCount: number, getDocument: () => Promise<File | null>): Promise<void>;
   showSettings(): void;
-  getProgressIntervalMs(): number;
   createTiffFile(blob: Blob): File;
   getErrorMessage(error: unknown, fallback: string): string;
 };
 
 export type UseSelectPanelOptions = {
-  dropTarget: HTMLElement;
   actions: IntakeContainerActions;
   service: SelectService;
   selectionResetVersion?: number;
 };
 
-export type SelectProgressState = {
-  visible: boolean;
-  showText: boolean;
-  durationMs: number;
-};
-
 export type UseSelectPanelResult = {
   mode: "pending" | "select" | "review";
   uploadStatus: SelectUploadStatus;
-  progress: SelectProgressState;
+  loading: boolean;
   viewer: {
     visible: boolean;
     props: SelectViewerProps | null;

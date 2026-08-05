@@ -83,11 +83,6 @@ export type SessionRuntime = {
   loadChoices(session: string): Promise<SessionChoicesData>;
 };
 
-export type SessionState = {
-  isProcessing: boolean;
-  lastError: string | null;
-};
-
 export type SessionLoaded = {
   baseUrl: string;
   document: string;

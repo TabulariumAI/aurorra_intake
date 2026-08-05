@@ -1,6 +1,8 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Container } from "../component/Container";
+import type { ContainerProps, IntakeSettingsProps } from "../component/Container";
+import { storeApi } from "../../../store/state/store";
 
 type MockEventBus = {
   emit(eventConfig: unknown, payload?: Record<string, unknown>): void;
@@ -9,6 +11,27 @@ type MockEventBus = {
 let capturedEventBus: MockEventBus | null = null;
 const setSession = vi.fn();
 const processProvision = vi.fn();
+const workerMocks = vi.hoisted(() => ({
+  createChoicesWorkerClient: vi.fn(() => ({ load: vi.fn() })),
+  createSessionWorkerClient: vi.fn(() => ({
+    newSession: vi.fn(),
+    sessionData: vi.fn(),
+    setTags: vi.fn(),
+    summary: vi.fn(),
+  })),
+}));
+
+function renderSettings({ children, open }: IntakeSettingsProps) {
+  return open ? <section aria-label="Settings" role="dialog">{children}</section> : null;
+}
+
+function hostProps(): Pick<ContainerProps, "intervalMs" | "onLoaderChange" | "renderSettings"> {
+  return {
+    intervalMs: 13000,
+    onLoaderChange: vi.fn(),
+    renderSettings,
+  };
+}
 
 function captureEventBus(runtime: { eventBus: MockEventBus }) {
   capturedEventBus = runtime.eventBus;
@@ -17,7 +40,6 @@ function captureEventBus(runtime: { eventBus: MockEventBus }) {
 vi.mock("../service/intakeOrchestrator", () => ({
   createIntakeOrchestrator: vi.fn(() => ({
     route: vi.fn(async () => undefined),
-    reset: vi.fn(),
   })),
 }));
 
@@ -40,6 +62,10 @@ vi.mock("../../choices/service/ChoicesService", () => ({
   }),
 }));
 
+vi.mock("../../choices/worker/choicesWorkerClient", () => ({
+  createChoicesWorkerClient: workerMocks.createChoicesWorkerClient,
+}));
+
 vi.mock("../../session/service/SessionService", () => ({
   createSessionService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
@@ -49,6 +75,10 @@ vi.mock("../../session/service/SessionService", () => ({
       clear: vi.fn(),
     } as const;
   }),
+}));
+
+vi.mock("../../session/worker/sessionWorkerClient", () => ({
+  createSessionWorkerClient: workerMocks.createSessionWorkerClient,
 }));
 
 vi.mock("../../upload/service/UploadService", () => ({
@@ -79,6 +109,15 @@ vi.mock("../../select/component/SelectPanel", () => ({
 }));
 
 describe("Container", () => {
+  beforeEach(() => {
+    storeApi.getState().resetAllState();
+    setSession.mockReset();
+    processProvision.mockReset();
+    workerMocks.createChoicesWorkerClient.mockClear();
+    workerMocks.createSessionWorkerClient.mockClear();
+    capturedEventBus = null;
+  });
+
   it("handles typed host requests and reports the loaded session", async () => {
     const loaded = {
       baseUrl: "https://storage.test",
@@ -91,16 +130,18 @@ describe("Container", () => {
     processProvision.mockResolvedValueOnce(undefined);
     const onSessionLoaded = vi.fn();
     const onLayoutChange = vi.fn();
+    const onReadyChange = vi.fn();
+    storeApi.getState().requestProvision("session-1.pdf");
+    storeApi.getState().requestSession("session-1");
 
     const { rerender } = render(
       <Container
+        {...hostProps()}
         authToken="token"
-        apiGatewayUrl="https://doc.example.com"
-        choicesRequest={{ id: 1 }}
+        apiGatewayUrl="https://user.example.com"
         onLayoutChange={onLayoutChange}
+        onReadyChange={onReadyChange}
         onSessionLoaded={onSessionLoaded}
-        provisionRequest={{ document: "session-1.pdf", id: 2 }}
-        sessionRequest={{ id: 3, session: "session-1" }}
       />,
     );
 
@@ -108,7 +149,14 @@ describe("Container", () => {
       expect(setSession).toHaveBeenCalledWith("session-1");
       expect(processProvision).toHaveBeenCalledWith("session-1.pdf");
       expect(onSessionLoaded).toHaveBeenCalledWith(loaded);
-      expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+      expect(onReadyChange).toHaveBeenNthCalledWith(1, false);
+      expect(onReadyChange).toHaveBeenLastCalledWith(true);
+    });
+    expect(workerMocks.createChoicesWorkerClient).toHaveBeenCalledWith({
+      apiBaseUrl: "https://user.example.com",
+    });
+    expect(workerMocks.createSessionWorkerClient).toHaveBeenCalledWith({
+      apiBaseUrl: "https://user.example.com",
     });
 
     act(() => {
@@ -118,18 +166,45 @@ describe("Container", () => {
 
     rerender(
       <Container
+        {...hostProps()}
         authToken="token"
-        apiGatewayUrl="https://doc.example.com"
-        choicesRequest={{ id: 1 }}
+        apiGatewayUrl="https://user.example.com"
         onLayoutChange={onLayoutChange}
+        onReadyChange={onReadyChange}
         onSessionLoaded={onSessionLoaded}
-        provisionRequest={{ document: "session-1.pdf", id: 2 }}
-        sessionRequest={{ id: 3, session: "session-1" }}
       />,
     );
 
     expect(setSession).toHaveBeenCalledTimes(1);
     expect(processProvision).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores its received token when a cleared runtime requests a session", async () => {
+    setSession.mockResolvedValueOnce(undefined);
+
+    render(
+      <Container
+        {...hostProps()}
+        authToken="token"
+        apiGatewayUrl="https://user.example.com"
+        onReadyChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(storeApi.getState().userToken).toEqual({ token: "token" });
+    });
+
+    act(() => {
+      storeApi.getState().resetAllState();
+      storeApi.getState().requestSession("session-2");
+    });
+
+    await waitFor(() => {
+      expect(setSession).toHaveBeenCalledWith("session-2");
+    });
+
+    expect(storeApi.getState().userToken).toEqual({ token: "token" });
   });
 
   it("bubbles showAlert into onFailure and onAlert without rendering an error panel", () => {
@@ -138,10 +213,12 @@ describe("Container", () => {
 
     render(
       <Container
+        {...hostProps()}
         authToken="token"
-        apiGatewayUrl="https://doc.example.com"
+        apiGatewayUrl="https://user.example.com"
         onFailure={onFailure}
         onAlert={onAlert}
+        onReadyChange={vi.fn()}
       />,
     );
 
@@ -155,11 +232,15 @@ describe("Container", () => {
     expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
   });
 
-  it("renders settings in medium aurorra-ui dialog with height override", () => {
+  it("provides settings state and content to the host renderer", () => {
+    const hostRender = vi.fn(renderSettings);
     render(
       <Container
+        {...hostProps()}
         authToken="token"
-        apiGatewayUrl="https://doc.example.com"
+        apiGatewayUrl="https://user.example.com"
+        onReadyChange={vi.fn()}
+        renderSettings={hostRender}
       />,
     );
 
@@ -168,37 +249,48 @@ describe("Container", () => {
       capturedEventBus!.emit({ name: "showChoices" });
     });
 
-    const dialog = screen.getByRole("dialog", { name: "Settings" });
-    expect(dialog).toHaveAttribute("data-height-mode", "medium");
-    expect(dialog.querySelector("[data-dialog-header='true']")).toBeInTheDocument();
-    expect(dialog.querySelector("[data-dialog-body]")).toHaveAttribute("data-body-mode", "top");
-    expect(dialog).toHaveStyle({
-      "--dialog-height": "calc(84vh * 0.85)",
-      "--dialog-max-height": "calc(84vh * 0.85)",
-      "--dialog-top": "50vh",
-      "--dialog-transform": "translate(-50%, -50%)",
-    });
+    expect(hostRender).toHaveBeenLastCalledWith(expect.objectContaining({
+      children: expect.anything(),
+      onClose: expect.any(Function),
+      onOpenChange: expect.any(Function),
+      open: true,
+    }));
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 
-  it("passes the host selection reset version to the selection owner", () => {
-    const { rerender } = render(
+  it("opens settings from the intake store action", () => {
+    render(
       <Container
+        {...hostProps()}
         authToken="token"
-        apiGatewayUrl="https://doc.example.com"
-        selectionResetVersion={0}
+        apiGatewayUrl="https://user.example.com"
+        onReadyChange={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      storeApi.getState().openChoices();
+    });
+
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("passes the intake selection reset version to the selection owner", () => {
+    render(
+      <Container
+        {...hostProps()}
+        authToken="token"
+        apiGatewayUrl="https://user.example.com"
+        onReadyChange={vi.fn()}
       />,
     );
 
     expect(screen.getByTestId("select-panel-mock")).toHaveAttribute("data-selection-reset-version", "0");
 
-    rerender(
-      <Container
-        authToken="token"
-        apiGatewayUrl="https://doc.example.com"
-        selectionResetVersion={1}
-      />,
-    );
+    act(() => {
+      storeApi.getState().resetSelection();
+    });
 
     expect(screen.getByTestId("select-panel-mock")).toHaveAttribute("data-selection-reset-version", "1");
   });

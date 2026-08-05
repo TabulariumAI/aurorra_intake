@@ -6,6 +6,10 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    choicesOpen: false,
+    provisionRequest: null,
+    selectionResetVersion: 0,
+    sessionRequest: null,
     isSessionInProcess: false,
     uploadingStepStatus: false,
     documentSelected: false,
@@ -95,7 +99,7 @@ describe("SessionService", () => {
 
   it("creates a session, stores runtime values, and reroutes to upload", async () => {
     const { emit, onJobEvent, runtime, store } = createRuntime();
-    const service = createSessionService(runtime, { setState: vi.fn() });
+    const service = createSessionService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
 
     await service.process(file, "job-1");
@@ -119,7 +123,7 @@ describe("SessionService", () => {
 
   it("fails the supplied session job when session creation fails", async () => {
     const { onJobEvent, runtime } = createRuntime();
-    const service = createSessionService(runtime, { setState: vi.fn() });
+    const service = createSessionService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
     vi.mocked(runtime.sessionWorkerClient.newSession).mockRejectedValueOnce(new Error("Session API failed."));
 
@@ -136,7 +140,7 @@ describe("SessionService", () => {
 
   it("stores existing session data and normalized choices", async () => {
     const { onJobEvent, runtime, store } = createRuntime();
-    const service = createSessionService(runtime, { setState: vi.fn() });
+    const service = createSessionService(runtime);
 
     await expect(service.setSession("session-2")).resolves.toEqual({
       baseUrl: "https://storage-2.test",
@@ -156,7 +160,7 @@ describe("SessionService", () => {
 
   it("clears persisted session values", () => {
     const { runtime, store } = createRuntime();
-    const service = createSessionService(runtime, { setState: vi.fn() });
+    const service = createSessionService(runtime);
 
     service.clear();
 

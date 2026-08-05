@@ -36,7 +36,6 @@ function createService(documentSelected = true): SelectService {
       await getDocument();
     }),
     showSettings: vi.fn(),
-    getProgressIntervalMs: vi.fn(() => 1000),
     createTiffFile: vi.fn((blob) => new File([blob], "review.tiff", { type: "image/tiff" })),
     getErrorMessage: vi.fn((_error, fallback) => fallback),
   };
@@ -97,14 +96,46 @@ function deferred<Value>() {
 }
 
 describe("useSelectPanel", () => {
+  it("reports loading without package progress presentation", async () => {
+    const actions = createActions();
+    const service = createService(false);
+    const decode = deferred<void>();
+    const viewer = createViewerApi(false);
+    viewer.decodeDoc = vi.fn(() => decode.promise);
+    const { result } = renderHook(() => useSelectPanel({ actions, service }));
+
+    let selectFile: Promise<void> = Promise.resolve();
+    act(() => {
+      selectFile = result.current.actions.selectFile(new File(["document"], "document.pdf", { type: "application/pdf" }));
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewer.props).not.toBeNull();
+    });
+    act(() => {
+      result.current.viewer.props?.onApiReady?.(viewer);
+    });
+    await waitFor(() => {
+      expect(viewer.decodeDoc).toHaveBeenCalledTimes(1);
+    });
+
+    expect(result.current).toHaveProperty("loading", true);
+    expect(result.current).not.toHaveProperty("progress");
+
+    await act(async () => {
+      decode.resolve();
+      await selectFile;
+    });
+
+    expect(result.current).toHaveProperty("loading", false);
+  });
+
   it("keeps pending restore viewer props when the service object changes", async () => {
     const actions = createActions();
     const firstService = createService();
     const secondService = createService();
-    const dropTarget = document.createElement("section");
-
     const { result, rerender } = renderHook(
-      ({ service }) => useSelectPanel({ dropTarget, actions, service }),
+      ({ service }) => useSelectPanel({ actions, service }),
       { initialProps: { service: firstService } },
     );
 
@@ -126,8 +157,7 @@ describe("useSelectPanel", () => {
   it("returns to select mode when stored lens restore is unavailable", async () => {
     const actions = createActions();
     const service = createService();
-    const dropTarget = document.createElement("section");
-    const { result } = renderHook(() => useSelectPanel({ dropTarget, actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ actions, service }));
 
     act(() => {
       result.current.actions.initialize();
@@ -155,9 +185,8 @@ describe("useSelectPanel", () => {
   it("closes the restored Aurora Lens when the select panel unmounts", async () => {
     const actions = createActions();
     const service = createService();
-    const dropTarget = document.createElement("section");
     const viewer = createViewerApi(true);
-    const { result, unmount } = renderHook(() => useSelectPanel({ dropTarget, actions, service }));
+    const { result, unmount } = renderHook(() => useSelectPanel({ actions, service }));
 
     act(() => {
       result.current.actions.initialize();
@@ -183,9 +212,8 @@ describe("useSelectPanel", () => {
   it("keeps normal cancellation as a close without clearing the persisted session", async () => {
     const actions = createActions();
     const service = createService();
-    const dropTarget = document.createElement("section");
     const viewer = createViewerApi(true);
-    const { result } = renderHook(() => useSelectPanel({ dropTarget, actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ actions, service }));
 
     act(() => {
       result.current.actions.initialize();
@@ -226,11 +254,9 @@ describe("useSelectPanel", () => {
       }),
       isDocumentSelected: vi.fn(() => documentSelected),
     };
-    const dropTarget = document.createElement("section");
     const viewer = createViewerApi(true);
     const { result, rerender } = renderHook(
       ({ selectionResetVersion }) => useSelectPanel({
-        dropTarget,
         actions,
         service,
         selectionResetVersion,
@@ -285,9 +311,7 @@ describe("useSelectPanel", () => {
       }),
       isDocumentSelected: vi.fn(() => documentSelected),
     };
-    const dropTarget = document.createElement("section");
     const { result } = renderHook(() => useSelectPanel({
-      dropTarget,
       actions,
       service,
       selectionResetVersion: 1,
@@ -311,9 +335,7 @@ describe("useSelectPanel", () => {
     deleteStoredViewerSession.mockRejectedValueOnce(new Error("IndexedDB delete failed"));
     const actions = createActions();
     const service = createService();
-    const dropTarget = document.createElement("section");
     const { result } = renderHook(() => useSelectPanel({
-      dropTarget,
       actions,
       service,
       selectionResetVersion: 1,
@@ -332,13 +354,11 @@ describe("useSelectPanel", () => {
   it("does not restore a cleared lens when reset races with session restoration", async () => {
     const actions = createActions();
     const service = createService();
-    const dropTarget = document.createElement("section");
     const restore = deferred<boolean>();
     const viewer = createViewerApi(true);
     viewer.restoreSession = vi.fn(() => restore.promise);
     const { result, rerender } = renderHook(
       ({ selectionResetVersion }) => useSelectPanel({
-        dropTarget,
         actions,
         service,
         selectionResetVersion,
@@ -381,13 +401,11 @@ describe("useSelectPanel", () => {
   it("does not retain a decoded file when reset races with document analysis", async () => {
     const actions = createActions();
     const service = createService(false);
-    const dropTarget = document.createElement("section");
     const decode = deferred<void>();
     const viewer = createViewerApi(false);
     viewer.decodeDoc = vi.fn(() => decode.promise);
     const { result, rerender } = renderHook(
       ({ selectionResetVersion }) => useSelectPanel({
-        dropTarget,
         actions,
         service,
         selectionResetVersion,
@@ -431,10 +449,9 @@ describe("useSelectPanel", () => {
   it("starts processing with the selected page count and document", async () => {
     const actions = createActions();
     const service = createService(false);
-    const dropTarget = document.createElement("section");
     const viewer = createViewerApi(false);
     const file = new File(["document"], "document.pdf", { type: "application/pdf" });
-    const { result } = renderHook(() => useSelectPanel({ dropTarget, actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ actions, service }));
 
     let selectFile: Promise<void> = Promise.resolve();
     act(() => {

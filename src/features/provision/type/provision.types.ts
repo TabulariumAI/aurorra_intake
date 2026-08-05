@@ -13,21 +13,12 @@ export type ProvisionResult = {
   accepted: unknown;
 };
 
-export type ProvisionState = {
-  isProcessing: boolean;
-  lastError: string | null;
-};
-
 export type ProvisionReviewOptions = {
   description: string;
   accepted: boolean;
   document: ProvisionDocument | string;
   onContinue: (document: ProvisionDocument | string) => Promise<void>;
   onCancel: () => void;
-};
-
-export type ProvisionReviewHandle = {
-  dispose(): void;
 };
 
 export type ProvisionWorkerCommand =
@@ -86,12 +77,11 @@ export type ProvisionRuntime = {
   store: StoreAdapter;
   intake: {
     actions: IntakeShellActions;
-    provisionHost: HTMLElement;
+    showReview(options: ProvisionReviewOptions | null): void;
   };
   onJobEvent?: JobEventCallback;
   onCanceled?: () => void;
   provisionWorkerClient: ProvisionWorkerClient;
-  createReview(container: HTMLElement, options: ProvisionReviewOptions): ProvisionReviewHandle;
 };
 
 export type ProvisionServiceActions = {

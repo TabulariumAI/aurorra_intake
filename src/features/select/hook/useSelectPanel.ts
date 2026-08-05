@@ -38,37 +38,15 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   const [uploadStatus, setUploadStatus] = useState<SelectUploadStatus>({ kind: "idle" });
   const [viewerState, setViewerState] = useState<ReviewDocumentState>(null);
   const [viewerStatus, setViewerStatus] = useState<ReviewDocumentStatus>("idle");
-  const [cancelNeedsConfirm, setCancelNeedsConfirm] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [progress, setProgress] = useState({
-    visible: false,
-    showText: false,
-    durationMs: service.getProgressIntervalMs(),
-  });
+  const [loading, setLoading] = useState(false);
   const [viewerProps, setViewerProps] = useState<UseSelectPanelResult["viewer"]["props"]>(null);
-
-  const disposeProgress = useCallback(() => {
-    setProgress({
-      visible: false,
-      showText: false,
-      durationMs: service.getProgressIntervalMs(),
-    });
-  }, [service]);
-
-  const showProgress = useCallback((showText: boolean) => {
-    setProgress({
-      visible: true,
-      showText,
-      durationMs: service.getProgressIntervalMs(),
-    });
-  }, [service]);
 
   const disposeLens = useCallback(() => {
     loadIdRef.current += 1;
     lensRef.current?.close();
     lensRef.current = null;
     setViewerProps(null);
-    setCancelNeedsConfirm(false);
   }, []);
 
   const clearLens = useCallback(async () => {
@@ -76,7 +54,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     const lens = lensRef.current;
     lensRef.current = null;
     setViewerProps(null);
-    setCancelNeedsConfirm(false);
     if (lens) {
       await lens.clear();
       return;
@@ -194,10 +171,10 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     resetReviewState();
     service.setDocumentSelected(false);
     disposeLens();
-    disposeProgress();
+    setLoading(false);
     actions.showSelect(SELECT_COPY.title, SELECT_COPY.helper);
     setMode("select");
-  }, [actions, disposeLens, disposeProgress, resetReviewState, service]);
+  }, [actions, disposeLens, resetReviewState, service]);
 
   const mountViewer = useCallback(() => {
     actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
@@ -207,13 +184,12 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
 
   const restoreViewer = useCallback(async () => {
     disposeLens();
-    disposeProgress();
     sourceFileRef.current = null;
     setViewerState(null);
     setViewerStatus("loadingPage");
     setStarting(false);
     actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
-    showProgress(false);
+    setLoading(true);
 
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
@@ -229,14 +205,13 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       }
       lens.showThumbnails();
       service.setDocumentSelected(true);
-      setCancelNeedsConfirm(lens.hasChanges());
       setMode("review");
-      disposeProgress();
+      setLoading(false);
     } catch {
       if (loadId !== loadIdRef.current) return;
       mountSelectForm();
     }
-  }, [actions, createViewer, disposeLens, disposeProgress, mountSelectForm, service, showProgress]);
+  }, [actions, createViewer, disposeLens, mountSelectForm, service]);
 
   const initialize = useCallback(() => {
     setInitialized(true);
@@ -252,7 +227,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   const clear = useCallback(() => {
     service.clear();
     disposeLens();
-    disposeProgress();
+    setLoading(false);
     sourceFileRef.current = null;
     setViewerState(null);
     setViewerStatus("idle");
@@ -261,11 +236,11 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setUploadStatus({ kind: "idle" });
     setMode("select");
     setInitialized(false);
-  }, [disposeLens, disposeProgress, service]);
+  }, [disposeLens, service]);
 
   const resetForNewSession = useCallback(async () => {
     service.clear();
-    disposeProgress();
+    setLoading(false);
     resetReviewState();
     setUploadStatus({ kind: "idle" });
     actions.showSelect(SELECT_COPY.title, SELECT_COPY.helper);
@@ -278,7 +253,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       console.error("Selection reset error:", message);
       showFailureMessage(message);
     }
-  }, [actions, clearLens, disposeProgress, resetReviewState, service, showFailureMessage]);
+  }, [actions, clearLens, resetReviewState, service, showFailureMessage]);
 
   const selectFile = useCallback(async (file: File) => {
     const failure = validateSelectFile(file);
@@ -298,8 +273,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setMode("review");
     actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
     disposeLens();
-    disposeProgress();
-    showProgress(true);
+    setLoading(true);
 
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
@@ -309,7 +283,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       await lens.decodeDoc(file, { page: 0, viewMode: "thumbnails" });
       if (loadId !== loadIdRef.current) return;
       lens.showThumbnails();
-      setCancelNeedsConfirm(lens.hasChanges());
       service.setDocumentSelected(true);
       setMode("review");
     } catch (error) {
@@ -320,10 +293,10 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       service.setDocumentSelected(false);
     } finally {
       if (loadId === loadIdRef.current) {
-        disposeProgress();
+        setLoading(false);
       }
     }
-  }, [actions, createViewer, disposeLens, disposeProgress, showFailureMessage, service, showProgress]);
+  }, [actions, createViewer, disposeLens, showFailureMessage, service]);
 
   const getFile = useCallback(async () => {
     const lens = lensRef.current;
@@ -352,7 +325,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       startingRef.current = false;
       setStarting(false);
     }
-  }, [actions, getFile, showFailureMessage, viewerState, viewerStatus, service]);
+  }, [getFile, showFailureMessage, viewerState, viewerStatus, service]);
 
   const cancel = useCallback(() => {
     mountSelectForm();
@@ -363,9 +336,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   }, [service]);
 
   const refreshCancelConfirm = useCallback(() => {
-    const needsConfirm = Boolean(lensRef.current?.hasChanges());
-    setCancelNeedsConfirm(needsConfirm);
-    return needsConfirm;
+    return Boolean(lensRef.current?.hasChanges());
   }, []);
 
   useEffect(() => () => {
@@ -382,7 +353,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   return useMemo(() => ({
     mode: initialized ? mode : "pending",
     uploadStatus,
-    progress,
+    loading,
     viewer: {
       visible: mode === "review" && viewerProps !== null,
       props: viewerProps,
@@ -390,7 +361,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     review: {
       startDisabled: starting || viewerStatus !== "ready" || !getPageCount(viewerState),
       cancelDisabled: starting,
-      cancelNeedsConfirm,
     },
     actions: {
       selectFile,
@@ -402,5 +372,5 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       resetStatus,
       refreshCancelConfirm,
     },
-  }), [cancel, cancelNeedsConfirm, clear, initialized, initialize, mode, progress, refreshCancelConfirm, resetStatus, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
+  }), [cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, resetStatus, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
 }

@@ -16,7 +16,7 @@ export type IntakeRouteEvent = {
 };
 
 export type IntakeRoutePayload = {
-  stage?: IntakeRouteStage;
+  stage: IntakeRouteStage;
   file?: unknown;
   jobId?: unknown;
 };
@@ -58,13 +58,13 @@ function getCompletePayload(store: StoreAdapter): IntakeCompletePayload {
   };
 }
 
-function getRouteFile(payload?: IntakeRoutePayload): File | null {
-  const file = payload?.file;
+function getRouteFile(payload: IntakeRoutePayload): File | null {
+  const file = payload.file;
   return file instanceof File ? file : null;
 }
 
-function getRouteStage(payload?: IntakeRoutePayload): IntakeRouteStage {
-  const stage = payload?.stage ?? "session";
+function getRouteStage(payload: IntakeRoutePayload): IntakeRouteStage {
+  const stage = payload.stage;
   if (!ROUTE_STAGES.has(stage)) {
     throw new Error(`Unknown intake route stage: ${String(stage)}`);
   }
@@ -78,36 +78,36 @@ export class IntakeOrchestrator {
     this.#runtime = runtime;
   }
 
-  reset() {
-    return undefined;
-  }
-
-  async route(payload?: IntakeRoutePayload) {
+  async route(payload: IntakeRoutePayload) {
     const stage = getRouteStage(payload);
     const file = getRouteFile(payload);
     const services = this.#runtime.getServices();
 
     if (stage === "session") {
       if (!file) throw new Error("Document is missing.");
-      if (typeof payload?.jobId !== "string") throw new Error("Job id is missing.");
-      await services.session?.process(file as SessionDocument, payload.jobId);
+      if (typeof payload.jobId !== "string") throw new Error("Job id is missing.");
+      if (!services.session) throw new Error("Session service is not ready.");
+      await services.session.process(file as SessionDocument, payload.jobId);
       return;
     }
 
     if (stage === "upload") {
       if (!file) throw new Error("Document is missing.");
-      await services.upload?.process(file as UploadDocument);
+      if (!services.upload) throw new Error("Upload service is not ready.");
+      await services.upload.process(file as UploadDocument);
       return;
     }
 
     if (stage === "provision") {
       if (!file) throw new Error("Document is missing.");
-      await services.provision?.process(file as ProvisionDocument);
+      if (!services.provision) throw new Error("Provision service is not ready.");
+      await services.provision.process(file as ProvisionDocument);
       return;
     }
 
     if (stage === "indexing") {
-      await services.indexing?.process();
+      if (!services.indexing) throw new Error("Indexing service is not ready.");
+      await services.indexing.process();
       return;
     }
 

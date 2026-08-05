@@ -14,11 +14,6 @@ export type UploadContext = {
   session: string;
 };
 
-export type UploadState = {
-  isProcessing: boolean;
-  lastError: string | null;
-};
-
 export type UploadWorkerCommand = {
   type: "upload";
   sasToken: string;

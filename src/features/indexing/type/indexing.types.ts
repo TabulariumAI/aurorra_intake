@@ -41,11 +41,6 @@ export type IndexingWorkerConfig = {
   apiBaseUrl: string;
 };
 
-export type IndexingState = {
-  isProcessing: boolean;
-  lastError: string | null;
-};
-
 export type IndexingStatusValue = "pending" | "processing" | "completed" | "error";
 
 export type IndexingStatusResponse = {
@@ -56,7 +51,7 @@ export type IndexingStatusResponse = {
 export type IndexingServiceActions = {
   process(): Promise<void>;
   start(session: string, name: unknown, choices: unknown): Promise<void>;
-  checkStatus(session: string, docName: unknown): Promise<boolean>;
+  checkStatus(session: string): Promise<boolean>;
 };
 
 export type IndexingRuntime = {
@@ -80,13 +75,11 @@ export type IndexingRuntime = {
     getActualPages(choices: unknown, pages: unknown): number;
     getIdentifyingIndexes(choices: unknown, structure: unknown): string[];
     getIdEnh(choices: unknown, structure: unknown): string[];
-    getDefaultChoices(structure: unknown): unknown[];
     normalizeChoices(choices: unknown, structure: unknown): unknown[];
   };
   choiceStructure: unknown;
   baseIntervalMs: number;
   indexingWorkerClient: IndexingWorkerClient;
   onJobEvent?: JobEventCallback;
-  notify(src: string): Promise<void>;
   getAuthToken(): string;
 };

@@ -1,6 +1,6 @@
 import { type ChangeEvent, useEffect, useRef } from "react";
 import { ConfButton } from "aurorra-ui";
-import { getSelectDropZoneStyle, getSelectInfoStyle, selectFormStyles } from "../style/select.styles";
+import { getSelectInfoStyle, selectFormStyles } from "../style/select.styles";
 import type { SelectFormProps } from "../type/select.types";
 
 function DocumentUploadIcon() {
@@ -98,7 +98,7 @@ export function SelectForm({
         ref={dropZoneRef}
         className="file-drop text-center"
         data-upload-drop-zone="true"
-        style={getSelectDropZoneStyle(isError)}
+        style={selectFormStyles.dropZone}
         onClick={() => fileInputRef.current?.click()}
       >
         <div style={selectFormStyles.center}>

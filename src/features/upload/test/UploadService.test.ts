@@ -6,6 +6,10 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    choicesOpen: false,
+    provisionRequest: null,
+    selectionResetVersion: 0,
+    sessionRequest: null,
     isSessionInProcess: false,
     uploadingStepStatus: false,
     documentSelected: false,
@@ -84,8 +88,7 @@ describe("UploadService", () => {
 
   it("uploads the selected document and reroutes to provision", async () => {
     const { onJobEvent, runtime } = createRuntime({ session: "session-1" });
-    const setState = vi.fn();
-    const service = createUploadService(runtime, { setState });
+    const service = createUploadService(runtime);
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 
     await service.process(file);
@@ -102,7 +105,6 @@ describe("UploadService", () => {
       runtime.events.reRoute,
       { stage: "provision", file },
     );
-    expect(setState).toHaveBeenLastCalledWith({ isProcessing: false, lastError: null });
   });
 
   it("emits an alert and new-session close handler on upload failure", async () => {
@@ -110,7 +112,7 @@ describe("UploadService", () => {
     runtime.uploadWorkerClient.upload = vi.fn(async () => {
       throw { error: "Upload failed" };
     });
-    const service = createUploadService(runtime, { setState: vi.fn() });
+    const service = createUploadService(runtime);
 
     await service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }));
 

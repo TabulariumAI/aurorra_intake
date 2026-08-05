@@ -3,13 +3,8 @@ import type {
   UploadDocument,
   UploadRuntime,
   UploadServiceActions,
-  UploadState,
   UploadWorkerClient,
 } from "../type/upload.types";
-
-type UploadStateApi = {
-  setState(state: UploadState): void;
-};
 
 type ErrorLike = {
   error?: unknown;
@@ -57,25 +52,21 @@ export function resolveUploadContext(runtime: UploadRuntime): UploadContext {
 
 export class UploadService implements UploadServiceActions {
   #runtime: UploadRuntime;
-  #stateApi: UploadStateApi;
   #uploadWorkerClient: UploadWorkerClient;
 
-  constructor(runtime: UploadRuntime, stateApi: UploadStateApi, uploadWorkerClient: UploadWorkerClient) {
+  constructor(runtime: UploadRuntime, uploadWorkerClient: UploadWorkerClient) {
     this.#runtime = runtime;
-    this.#stateApi = stateApi;
     this.#uploadWorkerClient = uploadWorkerClient;
   }
 
   async process(document: UploadDocument) {
     const runtime = this.#runtime;
-    const stateApi = this.#stateApi;
 
     if (runtime.store.get("uploadingStepStatus") === true) {
       return;
     }
 
     runtime.store.set("uploadingStepStatus", true);
-    stateApi.setState({ isProcessing: true, lastError: null });
 
     try {
       if (!document) {
@@ -108,24 +99,21 @@ export class UploadService implements UploadServiceActions {
         [runtime.messages.ERR_ACT.args.action]: "processing request",
       });
       const message = getErrorMessage(error, fallback);
-      stateApi.setState({ isProcessing: true, lastError: message });
       runtime.eventBus.emit(runtime.events.showAlert, {
         message,
         onClose: () => runtime.eventBus.emit(runtime.events.newSession, {}),
       });
     } finally {
       runtime.store.set("uploadingStepStatus", false);
-      stateApi.setState({ isProcessing: false, lastError: null });
     }
   }
 
   clear() {
     const runtime = this.#runtime;
     runtime.store.set("uploadingStepStatus", false);
-    this.#stateApi.setState({ isProcessing: false, lastError: null });
   }
 }
 
-export function createUploadService(runtime: UploadRuntime, stateApi: UploadStateApi): UploadServiceActions {
-  return new UploadService(runtime, stateApi, runtime.uploadWorkerClient);
+export function createUploadService(runtime: UploadRuntime): UploadServiceActions {
+  return new UploadService(runtime, runtime.uploadWorkerClient);
 }

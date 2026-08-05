@@ -19,12 +19,11 @@ function createSelect(needsConfirm: boolean) {
   const select: UseSelectPanelResult = {
     mode: "review",
     uploadStatus: { kind: "idle" },
-    progress: { visible: false, showText: false, durationMs: 1000 },
+    loading: false,
     viewer: { visible: false, props: null },
     review: {
       startDisabled: false,
       cancelDisabled: false,
-      cancelNeedsConfirm: needsConfirm,
     },
     actions,
   };

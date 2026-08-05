@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { ConfButton, ProgressBar } from "aurorra-ui";
+import { ConfButton } from "aurorra-ui";
 import { getSelectReviewHostStyle, selectPanelStyles } from "../style/select.styles";
 import type { UseSelectPanelResult } from "../type/select.types";
 import { SelectForm } from "./SelectForm";
@@ -31,9 +31,6 @@ export function SelectPanelView({ dropTarget, select }: SelectPanelViewProps) {
         data-select-review-host="true"
         style={getSelectReviewHostStyle(select.mode === "review")}
       >
-        {select.progress.visible ? (
-          <ProgressBar running continuous durationMs={select.progress.durationMs} showText={select.progress.showText} />
-        ) : null}
         {select.viewer.visible && select.viewer.props ? (
           <Suspense fallback={null}>
             <SelectViewer {...select.viewer.props} />

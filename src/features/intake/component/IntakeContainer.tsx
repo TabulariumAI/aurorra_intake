@@ -12,7 +12,6 @@ export function IntakeContainer({
   select,
   provision,
   selectPanelRef,
-  provisionPanelRef,
 }: IntakeContainerProps) {
   const isHeaderVisible = Boolean(title) || Boolean(helper);
   const isSelectPanelVisible = panel === "select";
@@ -42,7 +41,6 @@ export function IntakeContainer({
       </section>
       <section
         id="provision-panel"
-        ref={provisionPanelRef}
         data-testid="provision-panel"
         style={getIntakeSlotStyle(isProvisionPanelVisible)}
       >

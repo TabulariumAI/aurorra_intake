@@ -5,6 +5,10 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    choicesOpen: false,
+    provisionRequest: null,
+    selectionResetVersion: 0,
+    sessionRequest: null,
     isSessionInProcess: false,
     uploadingStepStatus: false,
     documentSelected: false,
@@ -46,10 +50,8 @@ describe("ChoicesService", () => {
     const onJobEvent = vi.fn();
     const runtime: ChoicesRuntime = {
       store: createStore(),
-      eventBus: { emit: vi.fn(), listen: vi.fn() },
+    eventBus: { emit: vi.fn() },
       events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
-      dialogHost: document.createElement("section"),
-      createDialogFrame: vi.fn(() => ({ open: vi.fn(() => null), close: vi.fn() })),
       choicesWorkerClient: {
         load: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
       },
@@ -66,10 +68,8 @@ describe("ChoicesService", () => {
   it("saves choices, workflow, and emits update only when values change", () => {
     const runtime: ChoicesRuntime = {
       store: createStore(),
-      eventBus: { emit: vi.fn(), listen: vi.fn() },
+    eventBus: { emit: vi.fn() },
       events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
-      dialogHost: document.createElement("section"),
-      createDialogFrame: vi.fn(() => ({ open: vi.fn(() => null), close: vi.fn() })),
       choicesWorkerClient: {
         load: vi.fn(),
       },

@@ -5,6 +5,10 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    choicesOpen: false,
+    provisionRequest: null,
+    selectionResetVersion: 0,
+    sessionRequest: null,
     isSessionInProcess: false,
     uploadingStepStatus: false,
     documentSelected: false,
@@ -35,8 +39,6 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
 function createRuntime(seed: Partial<StoreValues> = {}) {
   const onJobEvent = vi.fn();
   const runtime: SelectRuntime = {
-    alert: { format: vi.fn(() => "formatted fallback") },
-    messages: { ERR_ACT: { code: "ERR_ACT", args: { action: "action" } } },
     eventBus: {
       emit: vi.fn(),
       emitAsync: vi.fn(async () => undefined),
@@ -47,7 +49,6 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     },
     onJobEvent,
     store: createStore(seed),
-    intervalMs: 250,
   };
 
   return { onJobEvent, runtime };

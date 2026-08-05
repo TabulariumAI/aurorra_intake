@@ -41,17 +41,11 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
     showSettings() {
       runtime.eventBus.emit(runtime.events.showChoices);
     },
-    getProgressIntervalMs() {
-      return runtime.intervalMs;
-    },
     createTiffFile(blob) {
       return new File([blob], "document.tif", { type: "image/tiff" });
     },
     getErrorMessage(error, fallback) {
-      const formattedFallback = fallback || runtime.alert.format(runtime.messages.ERR_ACT, {
-        [runtime.messages.ERR_ACT.args.action]: "processing request",
-      });
-      return getSelectErrorMessage(error, formattedFallback);
+      return getSelectErrorMessage(error, fallback);
     },
   };
 }

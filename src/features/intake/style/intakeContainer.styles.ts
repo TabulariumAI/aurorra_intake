@@ -1,30 +1,17 @@
 import type { CSSProperties } from "react";
 
-const shellLayoutGapRem = 0.75;
-const shellMainPanelMinRem = 42;
-const shellMainPanelMaxRem = 56;
-
 export const intakeContainerStyles = {
   shell: {
     display: "flex",
     flexDirection: "column",
-    margin: "0",
-    flex: `0 0 clamp(${shellMainPanelMinRem}rem, 46vw, ${shellMainPanelMaxRem}rem)`,
-    width: "auto",
-    maxWidth: "none",
-    minWidth: `${shellMainPanelMinRem}rem`,
+    flex: "1 1 auto",
+    width: "100%",
     height: "100%",
     minHeight: "0",
     overflow: "hidden",
-    verticalAlign: "top",
     textAlign: "center",
     boxSizing: "border-box",
     position: "relative",
-    padding: "1.55rem",
-    borderRadius: "0",
-    boxShadow: "none",
-    borderStyle: "none",
-    backgroundColor: "transparent",
   },
   header: {
     flex: "0 0 auto",

@@ -1,6 +1,4 @@
 import { CSSProperties } from "react";
-import { createRoot, Root } from "react-dom/client";
-import { flushSync } from "react-dom";
 import { ConfButton } from "aurorra-ui";
 import type { ProvisionReviewOptions } from "../type/provision.types";
 
@@ -12,7 +10,6 @@ const hostStyle: CSSProperties = {
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  padding: "1rem 1.8rem 1.5rem 1.8rem",
   boxSizing: "border-box",
 };
 
@@ -68,7 +65,7 @@ function DescriptionText({ description, accepted }: { description: string; accep
   );
 }
 
-function ProvisionReviewPanel({
+export function ProvisionReview({
   description,
   accepted,
   document,
@@ -103,47 +100,9 @@ function ProvisionReviewPanel({
             variant="secondary"
             requireConfirmation={false}
             onConfirm={onCancel}
-            armedColor="#069494"
           />
         </div>
       </div>
     </section>
   );
-}
-
-export class ProvisionReview {
-  #root: Root;
-  #disposed = false;
-
-  constructor(container: HTMLElement, options: ProvisionReviewOptions) {
-    if (!(container instanceof HTMLElement)) {
-      throw new TypeError("ProvisionReview requires an HTMLElement container.");
-    }
-
-    container.replaceChildren();
-    this.#root = createRoot(container);
-    this.render(options);
-  }
-
-  render(options: ProvisionReviewOptions) {
-    if (this.#disposed) {
-      return;
-    }
-
-    flushSync(() => {
-      this.#root.render(<ProvisionReviewPanel {...options} />);
-    });
-  }
-
-  dispose() {
-    if (this.#disposed) {
-      return;
-    }
-
-    this.#disposed = true;
-    const root = this.#root;
-    window.setTimeout(() => {
-      root.unmount();
-    }, 0);
-  }
 }

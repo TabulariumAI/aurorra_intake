@@ -6,6 +6,10 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    choicesOpen: false,
+    provisionRequest: null,
+    selectionResetVersion: 0,
+    sessionRequest: null,
     isSessionInProcess: false,
     uploadingStepStatus: false,
     documentSelected: false,
@@ -61,7 +65,9 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     store: createStore(seed),
     intake: {
       actions: shell,
-      provisionHost: document.createElement("section"),
+      showReview: vi.fn((options) => {
+        reviewOptions = options;
+      }),
     },
     onJobEvent,
     onCanceled: vi.fn(),
@@ -73,10 +79,6 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       })),
       provisionData: vi.fn(),
     },
-    createReview: vi.fn((_container, options) => {
-      reviewOptions = options;
-      return { dispose: vi.fn() };
-    }),
   };
 
   return { onJobEvent, runtime, reviewOptions: () => reviewOptions, shell };
@@ -85,14 +87,14 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
 describe("ProvisionService", () => {
   it("screens the document, stores page count, and renders review", async () => {
     const { onJobEvent, runtime, reviewOptions, shell } = createRuntime();
-    const service = createProvisionService(runtime, { setState: vi.fn() });
+    const service = createProvisionService(runtime);
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 
     await service.process(file);
 
     expect(runtime.provisionWorkerClient.provision).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf");
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 4);
-    expect(runtime.createReview).toHaveBeenCalledWith(runtime.intake.provisionHost, expect.objectContaining({
+    expect(runtime.intake.showReview).toHaveBeenCalledWith(expect.objectContaining({
       description: "Document accepted",
       accepted: true,
       document: file,
@@ -104,7 +106,7 @@ describe("ProvisionService", () => {
 
   it("continues from review by rerouting to indexing", async () => {
     const { runtime, reviewOptions, shell } = createRuntime();
-    const service = createProvisionService(runtime, { setState: vi.fn() });
+    const service = createProvisionService(runtime);
 
     await service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }));
     await reviewOptions()?.onContinue("session-1.pdf");
@@ -118,7 +120,7 @@ describe("ProvisionService", () => {
 
   it("cancels review by starting a new session", async () => {
     const { runtime, reviewOptions, shell } = createRuntime();
-    const service = createProvisionService(runtime, { setState: vi.fn() });
+    const service = createProvisionService(runtime);
 
     await service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }));
     reviewOptions()?.onCancel();
@@ -131,9 +133,9 @@ describe("ProvisionService", () => {
   it("throws and alerts when the provision response is invalid", async () => {
     const { runtime } = createRuntime();
     runtime.provisionWorkerClient.provision = vi.fn(async () => ({ pageNum: "bad" }));
-    const service = createProvisionService(runtime, { setState: vi.fn() });
+    const service = createProvisionService(runtime);
 
-    await expect(service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }))).rejects.toThrow("Invalid provision response");
+    await expect(service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }))).resolves.toBeUndefined();
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.showAlert,
       { message: "Invalid provision response" },
