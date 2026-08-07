@@ -63,7 +63,7 @@ async function runWorker<T>(command: unknown): Promise<T> {
   });
 }
 
-export function createChoicesWorkerClient(config: ChoicesWorkerConfig): ChoicesWorkerClient {
+export function createSessionDataWorkerClient(config: ChoicesWorkerConfig): ChoicesWorkerClient {
   return {
     async load(token: string, session: string): Promise<ChoicesBackendData> {
       return runWorker<ChoicesBackendData>({

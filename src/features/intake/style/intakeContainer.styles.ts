@@ -45,7 +45,7 @@ export const intakeContainerStyles = {
   slot: {
     flexDirection: "column",
     justifyContent: "flex-start",
-    alignItems: "stretch",
+    alignItems: "center",
     width: "100%",
     height: "100%",
     minHeight: "30rem",

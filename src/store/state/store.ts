@@ -12,14 +12,15 @@ export const SESSION_STATE_STORAGE_KEY = "aurorra-intake.session-state";
 export const LOCAL_STATE_STORAGE_KEY = "aurorra-intake.local-state";
 
 export type StoreActions = {
-  closeChoices(): void;
-  openChoices(): void;
+  closeSettings(): void;
+  openSettings(): void;
   requestProvision(document: string): void;
   requestSession(session: string): void;
   resetSelection(): void;
   setValue<Key extends StateKey>(name: Key, value: StoreValues[Key]): void;
   resetValue(name: StateKey): void;
   resetMemoryState(): void;
+  resetActiveSession(): void;
   resetSessionState(): void;
   resetLocalState(): void;
   resetAllState(): void;
@@ -32,7 +33,7 @@ type JsonStorage = typeof sessionJsonStorage;
 let requestId = 0;
 
 const DEFAULT_STATE: StoreValues = {
-  choicesOpen: false,
+  settingsOpen: false,
   isSessionInProcess: false,
   uploadingStepStatus: false,
   documentSelected: false,
@@ -46,6 +47,7 @@ const DEFAULT_STATE: StoreValues = {
   document: null,
   numOfPages: 1,
   indexChoices: null,
+  choicesBySession: {},
   selectionResetVersion: 0,
   sessionRequest: null,
   workflow: null,
@@ -134,8 +136,8 @@ function statePatch<Key extends StateKey>(name: Key, value: StoreValues[Key]): P
 
 export const useStore = create<StoreState>()((set, get) => ({
   ...getInitialValues(),
-  closeChoices: () => set({ choicesOpen: false }),
-  openChoices: () => set({ choicesOpen: true }),
+  closeSettings: () => set({ settingsOpen: false }),
+  openSettings: () => set({ settingsOpen: true }),
   requestProvision: (document) => set({ provisionRequest: { document, id: ++requestId } }),
   requestSession: (session) => set({ sessionRequest: { id: ++requestId, session } }),
   resetSelection: () => set((state) => ({ selectionResetVersion: state.selectionResetVersion + 1 })),
@@ -145,6 +147,14 @@ export const useStore = create<StoreState>()((set, get) => ({
   },
   resetValue: (name) => set(statePatch(name, cloneDefault(name))),
   resetMemoryState: () => set(defaultsFor(MEMORY_STATE_KEYS)),
+  resetActiveSession: () => set(defaultsFor([
+    "documentSelected",
+    "session",
+    "sasToken",
+    "baseUrl",
+    "document",
+    "numOfPages",
+  ])),
   resetSessionState: () => {
     set(defaultsFor(SESSION_STATE_KEYS));
     removePersistedStore(SESSION_STATE_STORAGE_KEY, sessionJsonStorage);

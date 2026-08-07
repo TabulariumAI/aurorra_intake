@@ -1,7 +1,18 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AurorraIntake, CHOICESTRUCTURE, ChoiceData, Choices, createStoreAdapter } from "./public-api";
+import {
+  AurorraIntake,
+  CHOICESTRUCTURE,
+  ChoiceData,
+  Choices,
+  createSessionDataWorkerClient,
+  createSessionWorkerClient,
+  createStoreAdapter,
+  dataLevel,
+  loadSessionData,
+  loadSession,
+} from "./public-api";
 
 const packageRoot = resolve(__dirname, "..");
 
@@ -34,6 +45,11 @@ describe("public-api", () => {
     expect(CHOICESTRUCTURE).toBeTypeOf("object");
     expect(ChoiceData).toBeTypeOf("function");
     expect(Choices).toBeTypeOf("function");
+    expect(createSessionDataWorkerClient).toBeTypeOf("function");
+    expect(createSessionWorkerClient).toBeTypeOf("function");
     expect(createStoreAdapter).toBeTypeOf("function");
+    expect(dataLevel).toBeTypeOf("function");
+    expect(loadSessionData).toBeTypeOf("function");
+    expect(loadSession).toBeTypeOf("function");
   });
 });

@@ -6,7 +6,7 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    choicesOpen: false,
+    settingsOpen: false,
     provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -22,6 +22,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     document: "session-1.pdf",
     numOfPages: 1,
     indexChoices: null,
+    choicesBySession: {},
     workflow: null,
     ...seed,
   };

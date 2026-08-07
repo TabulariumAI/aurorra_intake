@@ -3,6 +3,7 @@ import type { ProvisionDocument, ProvisionServiceActions } from "../../provision
 import type { SessionDocument, SessionServiceActions } from "../../session/type/session.types";
 import type { UploadDocument, UploadServiceActions } from "../../upload/type/upload.types";
 import type { StoreAdapter } from "../../../store/type/store.types";
+import type { DataExchange } from "aurorra-ui";
 
 export type IntakeRouteStage = "session" | "upload" | "provision" | "indexing" | "metadata";
 
@@ -21,14 +22,15 @@ export type IntakeRoutePayload = {
   jobId?: unknown;
 };
 
-export type IntakeCompletePayload = {
+export type IntakeSessionData = {
   baseUrl: unknown;
   document: unknown;
-  indexChoices: unknown;
   numOfPages: unknown;
   sasToken: unknown;
-  session: unknown;
-  workflow: unknown;
+};
+
+export type IntakeCompletePayload = DataExchange & {
+  data: IntakeSessionData;
 };
 
 type IntakeOrchestratorServices = {
@@ -47,14 +49,17 @@ type IntakeOrchestratorRuntime = {
 const ROUTE_STAGES = new Set<IntakeRouteStage>(["session", "upload", "provision", "indexing", "metadata"]);
 
 function getCompletePayload(store: StoreAdapter): IntakeCompletePayload {
+  const session = store.get("session");
   return {
-    baseUrl: store.get("baseUrl"),
-    document: store.get("document"),
-    indexChoices: store.get("indexChoices"),
-    numOfPages: store.get("numOfPages"),
-    sasToken: store.get("sasToken"),
-    session: store.get("session"),
-    workflow: store.get("workflow"),
+    batch: null,
+    data: {
+      baseUrl: store.get("baseUrl"),
+      document: store.get("document"),
+      numOfPages: store.get("numOfPages"),
+      sasToken: store.get("sasToken"),
+    },
+    group: null,
+    session: typeof session === "string" ? session : null,
   };
 }
 

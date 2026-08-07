@@ -42,6 +42,17 @@ describe("storeAdapter", () => {
     expect(window.localStorage.getItem(LOCAL_STATE_STORAGE_KEY)).toContain("runtime-token");
   });
 
+  it("retains choices by document session in browser session storage", () => {
+    const adapter = createStoreAdapter();
+    const choices = [{ level: 5, service: "Recognition" }];
+
+    adapter.set("choicesBySession", { "session-1": choices });
+    storeApi.getState().resetActiveSession();
+
+    expect(adapter.get("choicesBySession")).toEqual({ "session-1": choices });
+    expect(window.sessionStorage.getItem(SESSION_STATE_STORAGE_KEY)).toContain("session-1");
+  });
+
   it("clears persisted session and local state through reset methods", () => {
     const adapter = createStoreAdapter();
     adapter.set("session", "session-1");

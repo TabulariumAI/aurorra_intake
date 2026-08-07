@@ -1,7 +1,7 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Container } from "../component/Container";
-import type { ContainerProps, IntakeSettingsProps } from "../component/Container";
+import type { ContainerProps } from "../component/Container";
 import { storeApi } from "../../../store/state/store";
 
 type MockEventBus = {
@@ -12,7 +12,7 @@ let capturedEventBus: MockEventBus | null = null;
 const setSession = vi.fn();
 const processProvision = vi.fn();
 const workerMocks = vi.hoisted(() => ({
-  createChoicesWorkerClient: vi.fn(() => ({ load: vi.fn() })),
+  createSessionDataWorkerClient: vi.fn(() => ({ load: vi.fn() })),
   createSessionWorkerClient: vi.fn(() => ({
     newSession: vi.fn(),
     sessionData: vi.fn(),
@@ -21,15 +21,10 @@ const workerMocks = vi.hoisted(() => ({
   })),
 }));
 
-function renderSettings({ children, open }: IntakeSettingsProps) {
-  return open ? <section aria-label="Settings" role="dialog">{children}</section> : null;
-}
-
-function hostProps(): Pick<ContainerProps, "intervalMs" | "onLoaderChange" | "renderSettings"> {
+function hostProps(): Pick<ContainerProps, "intervalMs" | "onLoaderChange"> {
   return {
     intervalMs: 13000,
     onLoaderChange: vi.fn(),
-    renderSettings,
   };
 }
 
@@ -63,7 +58,7 @@ vi.mock("../../choices/service/ChoicesService", () => ({
 }));
 
 vi.mock("../../choices/worker/choicesWorkerClient", () => ({
-  createChoicesWorkerClient: workerMocks.createChoicesWorkerClient,
+  createSessionDataWorkerClient: workerMocks.createSessionDataWorkerClient,
 }));
 
 vi.mock("../../session/service/SessionService", () => ({
@@ -113,7 +108,7 @@ describe("Container", () => {
     storeApi.getState().resetAllState();
     setSession.mockReset();
     processProvision.mockReset();
-    workerMocks.createChoicesWorkerClient.mockClear();
+    workerMocks.createSessionDataWorkerClient.mockClear();
     workerMocks.createSessionWorkerClient.mockClear();
     capturedEventBus = null;
   });
@@ -122,7 +117,6 @@ describe("Container", () => {
     const loaded = {
       baseUrl: "https://storage.test",
       document: "session-1.pdf",
-      indexChoices: [],
       sasToken: "sas-1",
       session: "session-1",
     };
@@ -152,7 +146,7 @@ describe("Container", () => {
       expect(onReadyChange).toHaveBeenNthCalledWith(1, false);
       expect(onReadyChange).toHaveBeenLastCalledWith(true);
     });
-    expect(workerMocks.createChoicesWorkerClient).toHaveBeenCalledWith({
+    expect(workerMocks.createSessionDataWorkerClient).toHaveBeenCalledWith({
       apiBaseUrl: "https://user.example.com",
     });
     expect(workerMocks.createSessionWorkerClient).toHaveBeenCalledWith({
@@ -232,15 +226,13 @@ describe("Container", () => {
     expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
   });
 
-  it("provides settings state and content to the host renderer", () => {
-    const hostRender = vi.fn(renderSettings);
+  it("renders settings inside the intake container and closes to the prior panel", () => {
     render(
       <Container
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
         onReadyChange={vi.fn()}
-        renderSettings={hostRender}
       />,
     );
 
@@ -249,14 +241,17 @@ describe("Container", () => {
       capturedEventBus!.emit({ name: "showChoices" });
     });
 
-    expect(hostRender).toHaveBeenLastCalledWith(expect.objectContaining({
-      children: expect.anything(),
-      onClose: expect.any(Function),
-      onOpenChange: expect.any(Function),
-      open: true,
-    }));
-    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByTestId("title-panel")).toHaveTextContent("Settings");
+    expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
+    expect(screen.getByTestId("provision-panel")).toHaveStyle({ display: "none" });
+    expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
+    expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.getByTestId("select-panel")).not.toHaveStyle({ display: "none" });
+    expect(screen.getByTestId("settings-panel")).toHaveStyle({ display: "none" });
   });
 
   it("opens settings from the intake store action", () => {
@@ -270,10 +265,11 @@ describe("Container", () => {
     );
 
     act(() => {
-      storeApi.getState().openChoices();
+      storeApi.getState().openSettings();
     });
 
-    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 
   it("passes the intake selection reset version to the selection owner", () => {

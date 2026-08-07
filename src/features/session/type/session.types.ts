@@ -43,10 +43,6 @@ export type SessionWorkerConfig = {
   apiBaseUrl: string;
 };
 
-export type SessionChoicesData = {
-  items?: unknown[];
-} | unknown[] | null;
-
 export type SessionAlertMessage = {
   code: string;
   args?: Record<string, string>;
@@ -80,13 +76,13 @@ export type SessionRuntime = {
   store: StoreAdapter;
   onJobEvent?: JobEventCallback;
   sessionWorkerClient: SessionWorkerClient;
-  loadChoices(session: string): Promise<SessionChoicesData>;
 };
+
+export type SessionLoadRuntime = Pick<SessionRuntime, "onJobEvent" | "sessionWorkerClient" | "store">;
 
 export type SessionLoaded = {
   baseUrl: string;
   document: string;
-  indexChoices: unknown[] | null;
   sasToken: string;
   session: string;
 };

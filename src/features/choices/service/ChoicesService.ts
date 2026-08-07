@@ -2,11 +2,12 @@ import { ChoiceData, CHOICESTRUCTURE } from "./choicesData";
 import type {
   ChoiceValue,
   ChoicesBackendData,
+  SessionDataLoadRuntime,
   ChoicesRuntime,
   ChoicesSaveResult,
 } from "../type/choices.types";
 
-function getAuthToken(runtime: ChoicesRuntime): string {
+function getAuthToken(runtime: Pick<ChoicesRuntime, "store">): string {
   const userToken = runtime.store.get("userToken");
   return typeof userToken === "object" && userToken !== null
     ? String((userToken as { token?: unknown }).token ?? "")
@@ -23,6 +24,25 @@ export function normalizeBackendChoices(choices: ChoicesBackendData): unknown[] 
   return Array.isArray(choices.items) ? choices.items : [];
 }
 
+export async function loadSessionData(runtime: SessionDataLoadRuntime, session: string): Promise<unknown[] | null> {
+  const cached = runtime.store.get("choicesBySession");
+  if (Object.hasOwn(cached, session)) {
+    return cached[session] ?? null;
+  }
+  const jobId = crypto.randomUUID();
+  runtime.onJobEvent?.({ jobId, message: "Loading session choices", phase: "started", session });
+  try {
+    const choices = normalizeBackendChoices(await runtime.dataWorkerClient.load(getAuthToken(runtime), session));
+    runtime.store.set("choicesBySession", { ...cached, [session]: choices });
+    runtime.onJobEvent?.({ jobId, message: "Session choices loaded", phase: "completed", session });
+    return choices;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    runtime.onJobEvent?.({ error: message, jobId, message: "Session choices load failed", phase: "failed", session });
+    throw error;
+  }
+}
+
 function snapshot(value: unknown): string {
   return JSON.stringify(value);
 }
@@ -35,18 +55,7 @@ export class ChoicesService {
   }
 
   async load(session: string): Promise<unknown[] | null> {
-    const token = getAuthToken(this.#runtime);
-    const jobId = crypto.randomUUID();
-    this.#runtime.onJobEvent?.({ jobId, message: "Loading session choices", phase: "started", session });
-    try {
-      const choices = await this.#runtime.choicesWorkerClient.load(token, session);
-      this.#runtime.onJobEvent?.({ jobId, message: "Session choices loaded", phase: "completed", session });
-      return normalizeBackendChoices(choices);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.#runtime.onJobEvent?.({ error: message, jobId, message: "Session choices load failed", phase: "failed", session });
-      throw error;
-    }
+    return loadSessionData(this.#runtime, session);
   }
 
   save(choiceJson: ChoiceValue[], alwaysReview: boolean, studioModeEnabled: boolean): ChoicesSaveResult {

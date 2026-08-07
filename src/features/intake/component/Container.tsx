@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JobEventCallback } from "aurorra-ui";
 import { ChoiceForm } from "../../choices/component/ChoiceForm";
 import { createChoicesService } from "../../choices/service/ChoicesService";
 import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choicesData";
 import type { ChoiceStructure } from "../../choices/type/choices.types";
-import { createChoicesWorkerClient } from "../../choices/worker/choicesWorkerClient";
+import { createSessionDataWorkerClient } from "../../choices/worker/choicesWorkerClient";
 import { createIndexingService } from "../../indexing/service/IndexingService";
 import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
@@ -47,15 +47,7 @@ export type ContainerProps = {
   onLoaderChange(lines: readonly string[] | null): void;
   onReadyChange(ready: boolean): void;
   onSessionLoaded?: (session: SessionLoaded) => void;
-  renderSettings(props: IntakeSettingsProps): ReactNode;
   onStarted?: () => void;
-};
-
-export type IntakeSettingsProps = {
-  children: ReactNode;
-  onClose(): void;
-  onOpenChange(open: boolean): void;
-  open: boolean;
 };
 
 const events = {
@@ -81,7 +73,6 @@ export function Container({
   onLoaderChange,
   onReadyChange,
   onSessionLoaded,
-  renderSettings,
   onStarted,
 }: ContainerProps) {
   const intake = useIntakeShell();
@@ -95,9 +86,9 @@ export function Container({
   const indexingRef = useRef<IndexingServiceActions | null>(null);
   const provisionRequestRef = useRef<number | null>(null);
   const sessionRequestRef = useRef<number | null>(null);
-  const choicesOpen = useStore((state) => state.choicesOpen);
-  const closeChoices = useStore((state) => state.closeChoices);
-  const openChoices = useStore((state) => state.openChoices);
+  const settingsOpen = useStore((state) => state.settingsOpen);
+  const closeSettings = useStore((state) => state.closeSettings);
+  const openSettings = useStore((state) => state.openSettings);
   const provisionRequest = useStore((state) => state.provisionRequest);
   const selectionResetVersion = useStore((state) => state.selectionResetVersion);
   const sessionRequest = useStore((state) => state.sessionRequest);
@@ -136,7 +127,7 @@ export function Container({
         return;
       }
       if (event.name === events.showChoices.name) {
-        openChoices();
+        openSettings();
         return;
       }
       if (event.name === events.showAlert.name) {
@@ -193,7 +184,7 @@ export function Container({
       updateChoices: events.updateChoices,
       toggleLayout: events.toggleLayout,
     },
-    choicesWorkerClient: createChoicesWorkerClient({ apiBaseUrl: apiGatewayUrl }),
+    dataWorkerClient: createSessionDataWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     onJobEvent,
   }), [apiGatewayUrl, eventBus, onJobEvent, store]);
 
@@ -204,9 +195,6 @@ export function Container({
       showAlert: events.showAlert,
     },
     sessionWorkerClient: createSessionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-    loadChoices(session) {
-      return choicesService.load(session);
-    },
   }), [apiGatewayUrl, choicesService, commonRuntime]);
 
   const uploadService = useMemo(() => createUploadService({
@@ -300,34 +288,27 @@ export function Container({
   const initialAlwaysReview = Boolean(store.get("workflow"));
 
   return (
-    <>
-      <IntakeContainer
-        panel={state.container.panel}
-        title={state.container.title}
-        helper={state.container.helper}
-        selectPanelRef={setSelectHost}
-        select={selectContent}
-        provision={provisionReview ? <ProvisionReview {...provisionReview} /> : null}
-      />
-      {renderSettings({
-        children: (
-          <ChoiceForm
-            structure={CHOICESTRUCTURE}
-            initialChoices={initialChoices}
-            initialAlwaysReview={initialAlwaysReview}
-            initialStudioModeEnabled={initialStudioModeEnabled}
-            onSave={(payload) => {
-              choicesService.save(payload.choices, payload.alwaysReview, payload.studioModeEnabled);
-              closeChoices();
-            }}
-            onCancel={closeChoices}
-            onClose={closeChoices}
-          />
-        ),
-        onClose: closeChoices,
-        onOpenChange: (open) => setStoreValue("choicesOpen", open),
-        open: choicesOpen,
-      })}
-    </>
+    <IntakeContainer
+      panel={settingsOpen ? "settings" : state.container.panel}
+      title={settingsOpen ? "Settings" : state.container.title}
+      helper={settingsOpen ? "" : state.container.helper}
+      selectPanelRef={setSelectHost}
+      select={selectContent}
+      provision={provisionReview ? <ProvisionReview {...provisionReview} /> : null}
+      settings={(
+        <ChoiceForm
+          structure={CHOICESTRUCTURE}
+          initialChoices={initialChoices}
+          initialAlwaysReview={initialAlwaysReview}
+          initialStudioModeEnabled={initialStudioModeEnabled}
+          onSave={(payload) => {
+            choicesService.save(payload.choices, payload.alwaysReview, payload.studioModeEnabled);
+            closeSettings();
+          }}
+          onCancel={closeSettings}
+          onClose={closeSettings}
+        />
+      )}
+    />
   );
 }

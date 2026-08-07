@@ -172,6 +172,29 @@ export class ChoiceData {
   }
 }
 
+export function dataLevel(data: unknown, name: string): number {
+  try {
+    let parsed = parseChoices(data);
+    if (typeof parsed === "string") {
+      parsed = JSON.parse(parsed);
+    }
+    if (!Array.isArray(parsed)) {
+      return 0;
+    }
+    const match = parsed.find((choice) => choice?.service === name);
+    return match ? Number(match.level) : 0;
+  } catch (error) {
+    const candidate = error as { error?: unknown; details?: unknown; message?: unknown };
+    const message =
+      candidate?.error ||
+      candidate?.details ||
+      candidate?.message ||
+      "An error occurred. Please try again.";
+    console.error("Show choices error:", message);
+    return 0;
+  }
+}
+
 function parseChoices(choices: unknown): unknown {
   if (typeof choices !== "string") {
     return choices;
@@ -227,29 +250,6 @@ export class Choices {
       .map((item) => `Identifying ${item.label.replace("Indexing", "Indexes")}`);
   }
 
-  static getLevel(choices: unknown, name: string): number {
-    try {
-      let parsed = parseChoices(choices);
-      if (typeof parsed === "string") {
-        parsed = JSON.parse(parsed);
-      }
-      if (!Array.isArray(parsed)) {
-        return 0;
-      }
-      const match = parsed.find((choice) => choice?.service === name);
-      return match ? Number(match.level) : 0;
-    } catch (error) {
-      const candidate = error as { error?: unknown; details?: unknown; message?: unknown };
-      const message =
-        candidate?.error ||
-        candidate?.details ||
-        candidate?.message ||
-        "An error occurred. Please try again.";
-      console.error("Show choices error:", message);
-      return 0;
-    }
-  }
-
   static getActualPages(choices: unknown, pages: number): number {
     let parsed = choices;
     if (typeof parsed === "string") {
@@ -259,7 +259,7 @@ export class Choices {
         return 0;
       }
     }
-    const pagesLevel = Choices.getLevel(parsed, "Recognition");
+    const pagesLevel = dataLevel(parsed, "Recognition");
     let actualPages = pages;
     if (actualPages > 3 && pagesLevel > 2) {
       switch (pagesLevel) {

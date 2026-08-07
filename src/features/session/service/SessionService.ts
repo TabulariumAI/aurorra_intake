@@ -1,8 +1,8 @@
 import type {
   ErrorLike,
-  SessionChoicesData,
   SessionDocument,
   SessionExtension,
+  SessionLoadRuntime,
   SessionRuntime,
   SessionLoaded,
   SessionStartData,
@@ -33,34 +33,20 @@ export function validateSessionDocument(runtime: SessionRuntime, document: Sessi
   return ext;
 }
 
-function normalizeChoices(choices: SessionChoicesData): unknown[] | null {
-  if (choices == null) {
-    return null;
-  }
-  if (Array.isArray(choices)) {
-    return choices;
-  }
-  return Array.isArray(choices.items) ? choices.items : [];
-}
-
 function storeSession(
-  runtime: SessionRuntime,
+  runtime: Pick<SessionRuntime, "store">,
   session: string,
   sasToken: string,
   baseUrl: string,
   document: string,
-  choices: unknown[] | null = null,
 ) {
   runtime.store.set("session", session);
   runtime.store.set("sasToken", sasToken);
   runtime.store.set("baseUrl", baseUrl);
   runtime.store.set("document", document);
-  if (choices !== null) {
-    runtime.store.set("indexChoices", choices);
-  }
 }
 
-function getAuthToken(runtime: SessionRuntime): string {
+function getAuthToken(runtime: Pick<SessionRuntime, "store">): string {
   const userToken = runtime.store.get("userToken");
   return typeof userToken === "object" && userToken !== null
     ? String((userToken as { token?: unknown }).token ?? "")
@@ -115,34 +101,7 @@ export class SessionService implements SessionServiceActions {
   }
 
   async setSession(session: string): Promise<SessionLoaded> {
-    const runtime = this.#runtime;
-    const sessionWorkerClient = this.#sessionWorkerClient;
-    const token = getAuthToken(runtime);
-    if (!token) {
-      throw new Error("Missing auth token");
-    }
-
-    const choices = normalizeChoices(JSON.parse(JSON.stringify(await runtime.loadChoices(session))) as SessionChoicesData);
-    const jobId = crypto.randomUUID();
-    runtime.onJobEvent?.({ jobId, message: "Loading session data", phase: "started", session });
-    let data: SessionStartData;
-    try {
-      data = await sessionWorkerClient.sessionData(token, session);
-      runtime.onJobEvent?.({ jobId, message: "Session data loaded", phase: "completed", session });
-    } catch (error) {
-      const message = getErrorMessage(error, "Session data load failed.");
-      runtime.onJobEvent?.({ error: message, jobId, message: "Session data load failed", phase: "failed", session });
-      throw error;
-    }
-    const loaded = {
-      baseUrl: data.base_url,
-      document: `${data.session}.pdf`,
-      indexChoices: choices,
-      sasToken: data.sas_token,
-      session: data.session,
-    } satisfies SessionLoaded;
-    storeSession(runtime, loaded.session, loaded.sasToken, loaded.baseUrl, loaded.document, loaded.indexChoices);
-    return loaded;
+    return loadSession(this.#runtime, session);
   }
 
   clear() {
@@ -152,6 +111,34 @@ export class SessionService implements SessionServiceActions {
     runtime.store.reset("session");
     runtime.store.reset("numOfPages");
   }
+}
+
+export async function loadSession(runtime: SessionLoadRuntime, session: string): Promise<SessionLoaded> {
+  const sessionWorkerClient = runtime.sessionWorkerClient;
+  const token = getAuthToken(runtime);
+  if (!token) {
+    throw new Error("Missing auth token");
+  }
+
+  const jobId = crypto.randomUUID();
+  runtime.onJobEvent?.({ jobId, message: "Loading session data", phase: "started", session });
+  let data: SessionStartData;
+  try {
+    data = await sessionWorkerClient.sessionData(token, session);
+    runtime.onJobEvent?.({ jobId, message: "Session data loaded", phase: "completed", session });
+  } catch (error) {
+    const message = getErrorMessage(error, "Session data load failed.");
+    runtime.onJobEvent?.({ error: message, jobId, message: "Session data load failed", phase: "failed", session });
+    throw error;
+  }
+  const loaded = {
+    baseUrl: data.base_url,
+    document: `${data.session}.pdf`,
+    sasToken: data.sas_token,
+    session: data.session,
+  } satisfies SessionLoaded;
+  storeSession(runtime, loaded.session, loaded.sasToken, loaded.baseUrl, loaded.document);
+  return loaded;
 }
 
 export function createSessionService(runtime: SessionRuntime): SessionServiceActions {

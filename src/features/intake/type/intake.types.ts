@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from "react";
 
-export type IntakeContainerName = "select" | "provision";
+export type IntakeContainerName = "select" | "provision" | "settings";
 
 export type IntakeContainerState = {
   panel: IntakeContainerName;
@@ -17,5 +17,6 @@ export type IntakeContainerActions = {
 export type IntakeContainerProps = IntakeContainerState & {
   select: ReactNode;
   provision: ReactNode;
+  settings: ReactNode;
   selectPanelRef?: Ref<HTMLElement>;
 };

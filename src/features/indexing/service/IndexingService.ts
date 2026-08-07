@@ -94,6 +94,8 @@ class IndexingService implements IndexingServiceActions {
 
       const choices = normalizeChoices(runtime.store.get("indexChoices"), runtime);
       runtime.store.set("indexChoices", choices);
+      const choicesBySession = runtime.store.get("choicesBySession");
+      runtime.store.set("choicesBySession", { ...choicesBySession, [String(session)]: choices });
 
       const documentName = runtime.store.get("document");
       const pages = runtime.choices.getActualPages(

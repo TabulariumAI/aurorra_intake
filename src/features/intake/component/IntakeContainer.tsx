@@ -11,11 +11,13 @@ export function IntakeContainer({
   helper,
   select,
   provision,
+  settings,
   selectPanelRef,
 }: IntakeContainerProps) {
   const isHeaderVisible = Boolean(title) || Boolean(helper);
   const isSelectPanelVisible = panel === "select";
   const isProvisionPanelVisible = panel === "provision";
+  const isSettingsPanelVisible = panel === "settings";
 
   return (
     <div id="intake-container" data-testid="intake-container" style={intakeContainerStyles.shell}>
@@ -45,6 +47,13 @@ export function IntakeContainer({
         style={getIntakeSlotStyle(isProvisionPanelVisible)}
       >
         {provision}
+      </section>
+      <section
+        id="settings-panel"
+        data-testid="settings-panel"
+        style={{ ...getIntakeSlotStyle(isSettingsPanelVisible), overflow: "auto" }}
+      >
+        {settings}
       </section>
     </div>
   );

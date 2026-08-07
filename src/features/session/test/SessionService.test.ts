@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSessionService, validateSessionDocument } from "../service/SessionService";
+import { createSessionService, loadSession, validateSessionDocument } from "../service/SessionService";
 import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 import type { SessionRuntime } from "../type/session.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    choicesOpen: false,
+    settingsOpen: false,
     provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -22,6 +22,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     document: null,
     numOfPages: 1,
     indexChoices: null,
+    choicesBySession: {},
     workflow: null,
     ...seed,
   };
@@ -81,7 +82,6 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       setTags: vi.fn(),
       summary: vi.fn(),
     },
-    loadChoices: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
   };
 
   return { emit, onJobEvent, runtime, shell, store };
@@ -138,24 +138,36 @@ describe("SessionService", () => {
     });
   });
 
-  it("stores existing session data and normalized choices", async () => {
+  it("stores existing session data", async () => {
     const { onJobEvent, runtime, store } = createRuntime();
     const service = createSessionService(runtime);
 
     await expect(service.setSession("session-2")).resolves.toEqual({
       baseUrl: "https://storage-2.test",
       document: "session-2.pdf",
-      indexChoices: [{ service: "Recognition", level: 5 }],
       sasToken: "sas-2",
       session: "session-2",
     });
 
-    expect(runtime.loadChoices).toHaveBeenCalledWith("session-2");
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
-    expect(store.set).toHaveBeenCalledWith("indexChoices", [{ service: "Recognition", level: 5 }]);
     expect(store.set).toHaveBeenCalledWith("document", "session-2.pdf");
     expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
     expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
+  });
+
+  it("loads existing session data through the package API", async () => {
+    const { onJobEvent, runtime, store } = createRuntime();
+
+    await expect(loadSession(runtime, "session-2")).resolves.toEqual({
+      baseUrl: "https://storage-2.test",
+      document: "session-2.pdf",
+      sasToken: "sas-2",
+      session: "session-2",
+    });
+
+    expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
+    expect(store.set).toHaveBeenCalledWith("session", "session-2");
+    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
   });
 
   it("clears persisted session values", () => {

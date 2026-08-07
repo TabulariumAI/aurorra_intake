@@ -5,7 +5,7 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    choicesOpen: false,
+    settingsOpen: false,
     provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -21,6 +21,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     document: null,
     numOfPages: 1,
     indexChoices: null,
+    choicesBySession: {},
     workflow: null,
     ...seed,
   };
@@ -46,13 +47,13 @@ describe("ChoicesService", () => {
     expect(normalizeBackendChoices({})).toEqual([]);
   });
 
-  it("loads choices with runtime auth token", async () => {
+  it("loads and retains session choices with runtime auth token", async () => {
     const onJobEvent = vi.fn();
     const runtime: ChoicesRuntime = {
       store: createStore(),
     eventBus: { emit: vi.fn() },
       events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
-      choicesWorkerClient: {
+      dataWorkerClient: {
         load: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
       },
       onJobEvent,
@@ -60,7 +61,12 @@ describe("ChoicesService", () => {
     const service = createChoicesService(runtime);
 
     await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
-    expect(runtime.choicesWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
+    await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(1);
+    expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
+      "session-1": [{ service: "Recognition", level: 5 }],
+    });
     expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
     expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
   });
@@ -70,7 +76,7 @@ describe("ChoicesService", () => {
       store: createStore(),
     eventBus: { emit: vi.fn() },
       events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
-      choicesWorkerClient: {
+      dataWorkerClient: {
         load: vi.fn(),
       },
     };

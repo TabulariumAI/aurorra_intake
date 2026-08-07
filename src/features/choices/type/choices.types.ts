@@ -95,9 +95,11 @@ export type ChoicesRuntime = {
   store: StoreAdapter;
   eventBus: ChoicesEventBus;
   events: ChoicesEvents;
-  choicesWorkerClient: ChoicesWorkerClient;
+  dataWorkerClient: ChoicesWorkerClient;
   onJobEvent?: JobEventCallback;
 };
+
+export type SessionDataLoadRuntime = Pick<ChoicesRuntime, "dataWorkerClient" | "onJobEvent" | "store">;
 
 export type ChoicesSaveResult = {
   choices: ChoiceValue[];

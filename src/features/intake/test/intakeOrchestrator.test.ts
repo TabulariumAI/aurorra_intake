@@ -6,11 +6,9 @@ function createStore(seed: Record<string, unknown> = {}): StoreAdapter {
   const values = {
     baseUrl: "https://storage.test",
     document: "session-1.pdf",
-    indexChoices: [{ service: "Recognition", level: 5 }],
     numOfPages: 3,
     sasToken: "sas-1",
     session: "session-1",
-    workflow: true,
     ...seed,
   } as Record<string, unknown>;
 
@@ -102,27 +100,29 @@ describe("IntakeOrchestrator", () => {
     await orchestrator.route({ stage: "metadata" });
 
     expect(onComplete).toHaveBeenCalledWith({
-      baseUrl: "https://storage.test",
-      document: "session-1.pdf",
-      indexChoices: [{ service: "Recognition", level: 5 }],
-      numOfPages: 3,
-      sasToken: "sas-1",
+      batch: null,
+      data: {
+        baseUrl: "https://storage.test",
+        document: "session-1.pdf",
+        numOfPages: 3,
+        sasToken: "sas-1",
+      },
+      group: null,
       session: "session-1",
-      workflow: true,
     });
   });
 
-  it("emits metadata completion payload with the fresh workflow state", async () => {
+  it("emits null when metadata completion has no session", async () => {
     const onComplete = vi.fn();
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
       onComplete,
-      store: createStore({ workflow: null }),
+      store: createStore({ session: null }),
     });
 
     await orchestrator.route({ stage: "metadata" });
 
-    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ workflow: null }));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ session: null }));
   });
 
   it("rejects unknown route stages", async () => {

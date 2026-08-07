@@ -6,7 +6,7 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    choicesOpen: false,
+    settingsOpen: false,
     provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -22,6 +22,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     document: "session-1.pdf",
     numOfPages: 1,
     indexChoices: new ChoiceData(CHOICESTRUCTURE).generateDefaultJson(),
+    choicesBySession: {},
     workflow: null,
     ...seed,
   };
@@ -84,6 +85,9 @@ describe("IndexingService", () => {
     await service.process();
 
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", defaultChoices);
+    expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
+      "session-1": defaultChoices,
+    });
     expect(runtime.indexingWorkerClient.start).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf", defaultChoices);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
