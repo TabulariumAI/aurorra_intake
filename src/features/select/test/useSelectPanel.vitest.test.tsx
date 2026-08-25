@@ -22,8 +22,7 @@ beforeEach(() => {
 function createActions(): IntakeContainerActions {
   return {
     showSelect: vi.fn(),
-    showProvision: vi.fn(),
-    clearHeader: vi.fn(),
+    showProgress: vi.fn(),
   };
 }
 
@@ -37,7 +36,6 @@ function createService(documentSelected = true): SelectService {
     }),
     showSettings: vi.fn(),
     createTiffFile: vi.fn((blob) => new File([blob], "review.tiff", { type: "image/tiff" })),
-    getErrorMessage: vi.fn((_error, fallback) => fallback),
   };
 }
 
@@ -177,7 +175,6 @@ describe("useSelectPanel", () => {
     expect(result.current.viewer.visible).toBe(false);
     expect(service.setDocumentSelected).toHaveBeenCalledWith(false);
     expect(actions.showSelect).toHaveBeenLastCalledWith(
-      "Select Document",
       "Drag and drop a PDF or multi-page TIFF, or select a file to begin.",
     );
   });
@@ -290,7 +287,6 @@ describe("useSelectPanel", () => {
     expect(viewer.close).not.toHaveBeenCalled();
     expect(deleteStoredViewerSession).not.toHaveBeenCalled();
     expect(actions.showSelect).toHaveBeenLastCalledWith(
-      "Select Document",
       "Drag and drop a PDF or multi-page TIFF, or select a file to begin.",
     );
 
@@ -342,11 +338,9 @@ describe("useSelectPanel", () => {
     }));
 
     await waitFor(() => {
-      expect(result.current.uploadStatus).toEqual({ kind: "error", message: "Unable to clear selected document." });
+      expect(result.current.uploadStatus).toEqual({ kind: "error", message: "IndexedDB delete failed" });
     });
-    expect(service.getErrorMessage).toHaveBeenCalledWith(expect.any(Error), "Unable to clear selected document.");
     expect(actions.showSelect).toHaveBeenCalledWith(
-      "Select Document",
       "Drag and drop a PDF or multi-page TIFF, or select a file to begin.",
     );
   });

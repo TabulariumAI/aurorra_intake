@@ -4,7 +4,6 @@ export type StoreValues = {
   uploadingStepStatus: boolean;
   documentSelected: boolean;
   provisionStepStatus: boolean;
-  provisionRequest: IntakeProvisionRequest | null;
   indexingStepStatus: boolean;
   userToken: unknown;
   session: unknown;
@@ -19,7 +18,6 @@ export type StoreValues = {
   workflow: unknown;
 };
 
-export type IntakeProvisionRequest = { document: string; id: number };
 export type IntakeSessionRequest = { id: number; session: string };
 
 export type StateKey = keyof StoreValues;
@@ -29,7 +27,6 @@ export const MEMORY_STATE_KEYS = [
   "isSessionInProcess",
   "uploadingStepStatus",
   "provisionStepStatus",
-  "provisionRequest",
   "indexingStepStatus",
   "selectionResetVersion",
   "sessionRequest",

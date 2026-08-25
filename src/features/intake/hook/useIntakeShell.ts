@@ -4,7 +4,6 @@ import type { IntakeShell, IntakeShellState } from "../type/intakeShell.types";
 
 const initialContainerState: IntakeContainerState = {
   panel: "select",
-  title: "",
   helper: "",
 };
 
@@ -15,46 +14,31 @@ const initialState: IntakeShellState = {
 export function useIntakeShell(): IntakeShell {
   const [state, setState] = useState<IntakeShellState>(initialState);
 
-  const showSelect = useCallback((title: string, helper: string) => {
+  const showSelect = useCallback((helper: string) => {
     setState((current) => ({
       ...current,
       container: {
         panel: "select",
-        title,
         helper,
       },
     }));
   }, []);
 
-  const showProvision = useCallback((title: string, helper: string) => {
+  const showProgress = useCallback(() => {
     setState((current) => ({
       ...current,
       container: {
-        panel: "provision",
-        title,
-        helper,
-      },
-    }));
-  }, []);
-
-  const clearHeader = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      container: {
-        ...current.container,
-        title: "",
-        helper: "",
+        panel: "progress",
+        helper: "Follow each step as it completes.",
       },
     }));
   }, []);
 
   const actions = useMemo(() => ({
     showSelect,
-    showProvision,
-    clearHeader,
+    showProgress,
   }), [
-    clearHeader,
-    showProvision,
+    showProgress,
     showSelect,
   ]);
 

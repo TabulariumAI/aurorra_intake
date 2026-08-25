@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { validateSelectFile } from "../service/selectFileHelper";
+import { getSelectErrorMessage } from "../service/selectService";
 import { clearViewerSession } from "../service/viewerSessionService";
 import type {
   ErrorLike,
@@ -13,12 +14,10 @@ import type {
 import type { ViewerApi } from "../type/selectViewer.types";
 
 const SELECT_COPY = {
-  title: "Select Document",
   helper: "Drag and drop a PDF or multi-page TIFF, or select a file to begin.",
 };
 
 const REVIEW_COPY = {
-  title: "Review Document",
   helper: "Review the document thumbnails. Add pages if needed, then start processing or cancel to choose another document.",
 };
 
@@ -172,12 +171,12 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     service.setDocumentSelected(false);
     disposeLens();
     setLoading(false);
-    actions.showSelect(SELECT_COPY.title, SELECT_COPY.helper);
+    actions.showSelect(SELECT_COPY.helper);
     setMode("select");
   }, [actions, disposeLens, resetReviewState, service]);
 
   const mountViewer = useCallback(() => {
-    actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
+    actions.showSelect(REVIEW_COPY.helper);
     void lensRef.current?.showThumbnails();
     setMode("review");
   }, [actions]);
@@ -188,7 +187,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setViewerState(null);
     setViewerStatus("loadingPage");
     setStarting(false);
-    actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
+    actions.showSelect(REVIEW_COPY.helper);
     setLoading(true);
 
     const loadId = loadIdRef.current + 1;
@@ -243,13 +242,13 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setLoading(false);
     resetReviewState();
     setUploadStatus({ kind: "idle" });
-    actions.showSelect(SELECT_COPY.title, SELECT_COPY.helper);
+    actions.showSelect(SELECT_COPY.helper);
     setMode("select");
     setInitialized(true);
     try {
       await clearLens();
     } catch (error) {
-      const message = service.getErrorMessage(error, "Unable to clear selected document.");
+      const message = getSelectErrorMessage(error, "Unable to clear selected document.");
       console.error("Selection reset error:", message);
       showFailureMessage(message);
     }
@@ -271,7 +270,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setStarting(false);
     setUploadStatus({ kind: "idle" });
     setMode("review");
-    actions.showSelect(REVIEW_COPY.title, REVIEW_COPY.helper);
+    actions.showSelect(REVIEW_COPY.helper);
     disposeLens();
     setLoading(true);
 
@@ -287,7 +286,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       setMode("review");
     } catch (error) {
       if (loadId !== loadIdRef.current) return;
-      const message = service.getErrorMessage(error, "An error occurred while analyzing document.");
+      const message = getSelectErrorMessage(error, "An error occurred while analyzing document.");
       console.error("Selection analysis error:", message);
       showFailureMessage(message);
       service.setDocumentSelected(false);
@@ -321,7 +320,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       await service.start(getPageCount(viewerState), getFile);
     } catch (error) {
       showFailureMessage(error instanceof Error ? error.message : String(error));
-      console.error("Step1:", service.getErrorMessage(error, "An error occurred while processing the document."));
+      console.error("Step1:", getSelectErrorMessage(error, "An error occurred while processing the document."));
       startingRef.current = false;
       setStarting(false);
     }

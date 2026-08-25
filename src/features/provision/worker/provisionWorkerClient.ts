@@ -68,8 +68,5 @@ export function createProvisionWorkerClient(config: ProvisionWorkerConfig): Prov
     async provision(token, session, document) {
       return runWorker({ type: "provision", token, apiBaseUrl, session, document });
     },
-    async provisionData(token, session) {
-      return runWorker({ type: "provisionData", token, apiBaseUrl, session });
-    },
   };
 }

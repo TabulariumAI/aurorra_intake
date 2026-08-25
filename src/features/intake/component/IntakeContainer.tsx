@@ -1,38 +1,19 @@
-import {
-  getIntakeHeaderStyle,
-  getIntakeSlotStyle,
-  intakeContainerStyles,
-} from "../style/intakeContainer.styles";
+import { getIntakeSlotStyle, intakeContainerStyles } from "../style/intakeContainer.styles";
 import type { IntakeContainerProps } from "../type/intake.types";
 
 export function IntakeContainer({
   panel,
-  title,
-  helper,
   select,
-  provision,
+  progress,
   settings,
   selectPanelRef,
 }: IntakeContainerProps) {
-  const isHeaderVisible = Boolean(title) || Boolean(helper);
   const isSelectPanelVisible = panel === "select";
-  const isProvisionPanelVisible = panel === "provision";
+  const isProgressPanelVisible = panel === "progress";
   const isSettingsPanelVisible = panel === "settings";
 
   return (
     <div id="intake-container" data-testid="intake-container" style={intakeContainerStyles.shell}>
-      <header
-        id="header-panel"
-        data-testid="header-panel"
-        style={getIntakeHeaderStyle(isHeaderVisible)}
-      >
-        <h1 id="title-panel" data-testid="title-panel" style={intakeContainerStyles.title}>
-          {title}
-        </h1>
-        <p id="helper-panel" data-testid="helper-panel" style={intakeContainerStyles.helper}>
-          {helper}
-        </p>
-      </header>
       <section
         id="select-panel"
         ref={selectPanelRef}
@@ -42,11 +23,11 @@ export function IntakeContainer({
         {select}
       </section>
       <section
-        id="provision-panel"
-        data-testid="provision-panel"
-        style={getIntakeSlotStyle(isProvisionPanelVisible)}
+        id="progress-panel"
+        data-testid="progress-panel"
+        style={getIntakeSlotStyle(isProgressPanelVisible)}
       >
-        {provision}
+        {progress}
       </section>
       <section
         id="settings-panel"

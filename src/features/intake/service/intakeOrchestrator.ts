@@ -1,5 +1,5 @@
 import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
-import type { ProvisionDocument, ProvisionServiceActions } from "../../provision/type/provision.types";
+import type { ProvisionServiceActions } from "../../provision/type/provision.types";
 import type { SessionDocument, SessionServiceActions } from "../../session/type/session.types";
 import type { UploadDocument, UploadServiceActions } from "../../upload/type/upload.types";
 import type { StoreAdapter } from "../../../store/type/store.types";
@@ -104,9 +104,8 @@ export class IntakeOrchestrator {
     }
 
     if (stage === "provision") {
-      if (!file) throw new Error("Document is missing.");
       if (!services.provision) throw new Error("Provision service is not ready.");
-      await services.provision.process(file as ProvisionDocument);
+      await services.provision.process();
       return;
     }
 

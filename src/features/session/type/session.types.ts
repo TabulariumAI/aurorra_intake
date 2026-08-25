@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { JobEventCallback } from "aurorra-ui";
+import type { ProgressActions } from "../../progressview/type/progress.types";
 
 export type SessionDocument = File | { name: string; type: string } | null;
 
@@ -52,7 +52,6 @@ export type SessionAlertMessages = Record<string, SessionAlertMessage> & {
   DOC_START_NO_DOCUMENT: SessionAlertMessage;
   INV_FILE_FMT: SessionAlertMessage;
   TIFF_NOT_VALID: SessionAlertMessage;
-  ERR_ACT: { code: string; args: { action: string } };
 };
 
 export type SessionAlert = {
@@ -61,7 +60,6 @@ export type SessionAlert = {
 
 export type SessionEvents = {
   reRoute: { detail: { stage: string; file: string } };
-  showAlert: unknown;
 };
 
 export type SessionEventBus = {
@@ -73,12 +71,12 @@ export type SessionRuntime = {
   messages: SessionAlertMessages;
   eventBus: SessionEventBus;
   events: SessionEvents;
+  progress: ProgressActions;
   store: StoreAdapter;
-  onJobEvent?: JobEventCallback;
   sessionWorkerClient: SessionWorkerClient;
 };
 
-export type SessionLoadRuntime = Pick<SessionRuntime, "onJobEvent" | "sessionWorkerClient" | "store">;
+export type SessionLoadRuntime = Pick<SessionRuntime, "sessionWorkerClient" | "store">;
 
 export type SessionLoaded = {
   baseUrl: string;
@@ -90,7 +88,6 @@ export type SessionLoaded = {
 export type SessionServiceActions = {
   process(document: SessionDocument, jobId: string): Promise<void>;
   setSession(session: string): Promise<SessionLoaded>;
-  clear(): void;
 };
 
 export type ErrorLike = {

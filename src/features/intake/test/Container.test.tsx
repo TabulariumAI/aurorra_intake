@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Container } from "../component/Container";
 import type { ContainerProps } from "../component/Container";
@@ -9,8 +10,8 @@ type MockEventBus = {
 };
 
 let capturedEventBus: MockEventBus | null = null;
+let capturedProgress: ((event: { error?: string; jobId: string; message: string; phase: "started" | "completed" | "failed" }) => void) | null = null;
 const setSession = vi.fn();
-const processProvision = vi.fn();
 const workerMocks = vi.hoisted(() => ({
   createSessionDataWorkerClient: vi.fn(() => ({ load: vi.fn() })),
   createSessionWorkerClient: vi.fn(() => ({
@@ -21,15 +22,32 @@ const workerMocks = vi.hoisted(() => ({
   })),
 }));
 
-function hostProps(): Pick<ContainerProps, "intervalMs" | "onLoaderChange"> {
+function wrap(name: string) {
+  return ({ children, helper }: { children: ReactNode; helper: string }) => (
+    <section data-testid={`${name}-host`}>
+      {helper ? <p>{helper}</p> : null}
+      {children}
+    </section>
+  );
+}
+
+function hostProps(): Pick<ContainerProps, "intervalMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect"> {
   return {
     intervalMs: 13000,
     onLoaderChange: vi.fn(),
+    renderChoices: wrap("choices"),
+    renderPreview: wrap("preview"),
+    renderProgress: wrap("progress"),
+    renderSelect: wrap("select"),
   };
 }
 
-function captureEventBus(runtime: { eventBus: MockEventBus }) {
+function captureEventBus(runtime: {
+  eventBus: MockEventBus;
+  progress?: { receive(event: { error?: string; jobId: string; message: string; phase: "started" | "completed" | "failed" }): void };
+}) {
   capturedEventBus = runtime.eventBus;
+  if (runtime.progress) capturedProgress = runtime.progress.receive;
 }
 
 vi.mock("../service/intakeOrchestrator", () => ({
@@ -86,7 +104,7 @@ vi.mock("../../upload/service/UploadService", () => ({
 vi.mock("../../provision/service/ProvisionService", () => ({
   createProvisionService: vi.fn((runtime: { eventBus: MockEventBus }) => {
     captureEventBus(runtime);
-    return { process: processProvision, clear: vi.fn() } as const;
+    return { process: vi.fn(), clear: vi.fn() } as const;
   }),
 }));
 
@@ -98,19 +116,23 @@ vi.mock("../../indexing/service/IndexingService", () => ({
 }));
 
 vi.mock("../../select/component/SelectPanel", () => ({
-  SelectPanel: ({ selectionResetVersion }: { selectionResetVersion?: number }) => (
-    <div data-testid="select-panel-mock" data-selection-reset-version={selectionResetVersion} />
-  ),
+  SelectPanel: ({ renderSelect, selectionResetVersion }: {
+    renderSelect: (props: { children: ReactNode; helper: string }) => ReactNode;
+    selectionResetVersion?: number;
+  }) => renderSelect({
+    children: <div data-testid="select-panel-mock" data-selection-reset-version={selectionResetVersion} />,
+    helper: "Select helper",
+  }),
 }));
 
 describe("Container", () => {
   beforeEach(() => {
     storeApi.getState().resetAllState();
     setSession.mockReset();
-    processProvision.mockReset();
     workerMocks.createSessionDataWorkerClient.mockClear();
     workerMocks.createSessionWorkerClient.mockClear();
     capturedEventBus = null;
+    capturedProgress = null;
   });
 
   it("handles typed host requests and reports the loaded session", async () => {
@@ -121,11 +143,8 @@ describe("Container", () => {
       session: "session-1",
     };
     setSession.mockResolvedValueOnce(loaded);
-    processProvision.mockResolvedValueOnce(undefined);
     const onSessionLoaded = vi.fn();
-    const onLayoutChange = vi.fn();
     const onReadyChange = vi.fn();
-    storeApi.getState().requestProvision("session-1.pdf");
     storeApi.getState().requestSession("session-1");
 
     const { rerender } = render(
@@ -133,7 +152,6 @@ describe("Container", () => {
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
-        onLayoutChange={onLayoutChange}
         onReadyChange={onReadyChange}
         onSessionLoaded={onSessionLoaded}
       />,
@@ -141,7 +159,6 @@ describe("Container", () => {
 
     await waitFor(() => {
       expect(setSession).toHaveBeenCalledWith("session-1");
-      expect(processProvision).toHaveBeenCalledWith("session-1.pdf");
       expect(onSessionLoaded).toHaveBeenCalledWith(loaded);
       expect(onReadyChange).toHaveBeenNthCalledWith(1, false);
       expect(onReadyChange).toHaveBeenLastCalledWith(true);
@@ -153,24 +170,17 @@ describe("Container", () => {
       apiBaseUrl: "https://user.example.com",
     });
 
-    act(() => {
-      capturedEventBus!.emit({ name: "toggleLayout" }, { studioModeEnabled: true });
-    });
-    expect(onLayoutChange).toHaveBeenCalledWith(true);
-
     rerender(
       <Container
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
-        onLayoutChange={onLayoutChange}
         onReadyChange={onReadyChange}
         onSessionLoaded={onSessionLoaded}
       />,
     );
 
     expect(setSession).toHaveBeenCalledTimes(1);
-    expect(processProvision).toHaveBeenCalledTimes(1);
   });
 
   it("restores its received token when a cleared runtime requests a session", async () => {
@@ -201,29 +211,83 @@ describe("Container", () => {
     expect(storeApi.getState().userToken).toEqual({ token: "token" });
   });
 
-  it("bubbles showAlert into onFailure and onAlert without rendering an error panel", () => {
-    const onFailure = vi.fn();
-    const onAlert = vi.fn();
-
+  it("returns to Select after a failed progress job", () => {
+    const onCanceled = vi.fn();
     render(
       <Container
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
-        onFailure={onFailure}
-        onAlert={onAlert}
+        onCanceled={onCanceled}
         onReadyChange={vi.fn()}
       />,
     );
 
-    expect(capturedEventBus).not.toBeNull();
     act(() => {
-      capturedEventBus!.emit({ name: "showAlert" }, { message: "Intake failed." });
+      capturedEventBus!.emit({ name: "reRoute" }, {
+        file: new File(["pdf"], "source.pdf", { type: "application/pdf" }),
+        jobId: "session-1",
+        stage: "session",
+      });
+      capturedProgress!({ jobId: "session-1", message: "Creating a session", phase: "started" });
+      capturedProgress!({ error: "Session API failed.", jobId: "session-1", message: "Creating a session", phase: "failed" });
     });
 
-    expect(onFailure).toHaveBeenCalledWith("Intake failed.");
-    expect(onAlert).toHaveBeenCalledWith("Intake failed.");
-    expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel and Restart" }));
+
+    expect(screen.getByTestId("progress-panel")).toHaveStyle({ display: "none" });
+    expect(screen.getByTestId("select-panel")).not.toHaveStyle({ display: "none" });
+    expect(onCanceled).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows progress when the confirmed selection routes to session creation", () => {
+    render(
+      <Container
+        {...hostProps()}
+        authToken="token"
+        apiGatewayUrl="https://user.example.com"
+        onReadyChange={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      capturedEventBus!.emit({ name: "reRoute" }, {
+        file: new File(["pdf"], "source.pdf", { type: "application/pdf" }),
+        jobId: "session-1",
+        stage: "session",
+      });
+    });
+
+    expect(screen.getByTestId("progress-panel")).not.toHaveStyle({ display: "none" });
+    expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
+    expect(screen.getByTestId("progress-host")).toHaveTextContent("Follow each step as it completes.");
+    expect(within(screen.getByTestId("select-host")).queryByText("Follow each step as it completes.")).not.toBeInTheDocument();
+  });
+
+  it("keeps provision updates in the progress panel", () => {
+    render(
+      <Container
+        {...hostProps()}
+        authToken="token"
+        apiGatewayUrl="https://user.example.com"
+        onReadyChange={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      capturedEventBus!.emit({ name: "reRoute" }, {
+        file: new File(["pdf"], "source.pdf", { type: "application/pdf" }),
+        jobId: "session-1",
+        stage: "session",
+      });
+      capturedProgress!({ jobId: "session-1", message: "Creating a session", phase: "started" });
+      capturedProgress!({ jobId: "screening", message: "Screening complete", phase: "started" });
+      capturedProgress!({ jobId: "screening", message: "Screening complete", phase: "completed" });
+    });
+
+    expect(screen.getByTestId("progress-panel")).not.toHaveStyle({ display: "none" });
+    expect(screen.queryByTestId("provision-panel")).not.toBeInTheDocument();
+    expect(screen.getByText("Screening complete")).toBeVisible();
   });
 
   it("renders settings inside the intake container and closes to the prior panel", () => {
@@ -241,9 +305,8 @@ describe("Container", () => {
       capturedEventBus!.emit({ name: "showChoices" });
     });
 
-    expect(screen.getByTestId("title-panel")).toHaveTextContent("Settings");
+    expect(screen.getByTestId("choices-host")).toBeVisible();
     expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
-    expect(screen.getByTestId("provision-panel")).toHaveStyle({ display: "none" });
     expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
     expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();

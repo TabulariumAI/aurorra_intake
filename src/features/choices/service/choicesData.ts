@@ -203,53 +203,6 @@ function parseChoices(choices: unknown): unknown {
 }
 
 export class Choices {
-  static getIdentifyingIndexes(choices: unknown, choiceStructure: ChoiceStructure): string[] | 0 {
-    let parsed = choices;
-    if (typeof parsed === "string") {
-      try {
-        parsed = JSON.parse(parsed);
-      } catch {
-        return 0;
-      }
-    }
-    if (!parsed || !Array.isArray(parsed)) return [];
-
-    const indexing = choiceStructure.choices.find((choice) => choice.name === "Indexing");
-    if (!indexing || !Array.isArray(indexing.items)) return [];
-    let processes = [
-      "Analyzing Page",
-      "Identifying Indexes",
-    ];
-
-    const enhancements = choiceStructure.choices.find((choice) => choice.name === "Enhancements");
-    if (enhancements && Array.isArray(enhancements.items)) {
-      processes = processes.concat("Validating Indexes");
-      processes = processes.concat("Enriching Indexes");
-    }
-
-    return processes;
-  }
-
-  static getIdEnh(choices: unknown, choiceStructure: ChoiceStructure): string[] {
-    if (!choices || !Array.isArray(choices)) return [];
-    const levels: Record<string, number> = {};
-    for (const choice of choices) {
-      if (
-        choice &&
-        typeof choice === "object" &&
-        typeof (choice as ChoiceValue).service === "string" &&
-        typeof (choice as ChoiceValue).level === "number"
-      ) {
-        levels[(choice as ChoiceValue).service] = (choice as ChoiceValue).level;
-      }
-    }
-    const enhancements = choiceStructure.choices.find((choice) => choice.name === "Enhancements");
-    if (!enhancements || !Array.isArray(enhancements.items)) return [];
-    return enhancements.items
-      .filter((item) => levels[item.name] > 1)
-      .map((item) => `Identifying ${item.label.replace("Indexing", "Indexes")}`);
-  }
-
   static getActualPages(choices: unknown, pages: number): number {
     let parsed = choices;
     if (typeof parsed === "string") {
@@ -260,21 +213,20 @@ export class Choices {
       }
     }
     const pagesLevel = dataLevel(parsed, "Recognition");
-    let actualPages = pages;
-    if (actualPages > 3 && pagesLevel > 2) {
-      switch (pagesLevel) {
-        case 3:
-          if (actualPages > 8) actualPages = 8;
-          break;
-        case 4:
-          if (actualPages > 13) actualPages = 13;
-          break;
-        case 5:
-          if (actualPages > 18) actualPages = 18;
-          break;
-      }
+    switch (pagesLevel) {
+      case 1:
+        return Math.min(pages, 1);
+      case 2:
+        return Math.min(pages, 3);
+      case 3:
+        return Math.min(pages, 8);
+      case 4:
+        return Math.min(pages, 13);
+      case 5:
+        return Math.min(pages, 20);
+      default:
+        return pages;
     }
-    return actualPages;
   }
 
   static #normalizeBoolean(value: unknown, defaultValue = true): boolean {

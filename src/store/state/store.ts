@@ -14,7 +14,6 @@ export const LOCAL_STATE_STORAGE_KEY = "aurorra-intake.local-state";
 export type StoreActions = {
   closeSettings(): void;
   openSettings(): void;
-  requestProvision(document: string): void;
   requestSession(session: string): void;
   resetSelection(): void;
   setValue<Key extends StateKey>(name: Key, value: StoreValues[Key]): void;
@@ -38,7 +37,6 @@ const DEFAULT_STATE: StoreValues = {
   uploadingStepStatus: false,
   documentSelected: false,
   provisionStepStatus: false,
-  provisionRequest: null,
   indexingStepStatus: false,
   userToken: null,
   session: null,
@@ -53,16 +51,8 @@ const DEFAULT_STATE: StoreValues = {
   workflow: null,
 };
 
-function isValidValue(name: StateKey, value: unknown): boolean {
-  return value !== undefined;
-}
-
 function cloneDefault<Key extends StateKey>(name: Key): StoreValues[Key] {
-  const value = DEFAULT_STATE[name];
-  if (typeof structuredClone === "function") {
-    return structuredClone(value);
-  }
-  return JSON.parse(JSON.stringify(value)) as StoreValues[Key];
+  return structuredClone(DEFAULT_STATE[name]);
 }
 
 function defaultsFor(names: readonly StateKey[]): Partial<StoreValues> {
@@ -138,11 +128,10 @@ export const useStore = create<StoreState>()((set, get) => ({
   ...getInitialValues(),
   closeSettings: () => set({ settingsOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
-  requestProvision: (document) => set({ provisionRequest: { document, id: ++requestId } }),
   requestSession: (session) => set({ sessionRequest: { id: ++requestId, session } }),
   resetSelection: () => set((state) => ({ selectionResetVersion: state.selectionResetVersion + 1 })),
   setValue: (name, value) => {
-    if (!isValidValue(name, value)) return;
+    if (value === undefined) return;
     set(statePatch(name, value));
   },
   resetValue: (name) => set(statePatch(name, cloneDefault(name))),

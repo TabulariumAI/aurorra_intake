@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { JobEventCallback } from "aurorra-ui";
+import type { ProgressActions } from "../../progressview/type/progress.types";
 
 export type UploadDocument = File | {
   name: string;
@@ -43,7 +43,6 @@ export type UploadWorkerClient = {
 
 export type UploadServiceActions = {
   process(document: UploadDocument): Promise<void>;
-  clear(): void;
 };
 
 export type UploadRuntime = {
@@ -56,18 +55,11 @@ export type UploadRuntime = {
     UPLOAD_DOCNAME_MISSING: unknown;
     SESSION_MISSING: unknown;
     DOCUMENT_MISSING: unknown;
-    ERR_ACT: {
-      args: {
-        action: string;
-      };
-    };
   };
   eventBus: {
     emit(eventConfig: unknown, payload?: unknown): void;
   };
   events: {
-    showAlert: unknown;
-    newSession: unknown;
     reRoute: {
       detail: {
         stage: string;
@@ -75,7 +67,7 @@ export type UploadRuntime = {
       };
     };
   };
+  progress: ProgressActions;
   store: StoreAdapter;
-  onJobEvent?: JobEventCallback;
   uploadWorkerClient: UploadWorkerClient;
 };

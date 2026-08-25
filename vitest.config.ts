@@ -8,12 +8,11 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      "@radix-ui/react-popover": path.resolve(rootDir, "node_modules/@radix-ui/react-popover"),
       "aurorra-ui": path.resolve(rootDir, "../aurorra_ui/src/public-api.ts"),
       react: path.resolve(rootDir, "node_modules/react"),
       "react-dom": path.resolve(rootDir, "node_modules/react-dom"),
     },
-    dedupe: ["@radix-ui/react-popover", "react", "react-dom"],
+    dedupe: ["react", "react-dom"],
     preserveSymlinks: true,
   },
   plugins: [react()],

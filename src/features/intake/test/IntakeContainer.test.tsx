@@ -3,20 +3,17 @@ import { describe, expect, it } from "vitest";
 import { IntakeContainer } from "../component/IntakeContainer";
 
 describe("IntakeContainer", () => {
-  it("renders select, provision, and settings slots with visibility controlled by panel state", () => {
+  it("renders select, progress, and settings slots with visibility controlled by panel state", () => {
     const { rerender } = render(
       <IntakeContainer
-        panel="provision"
-        title="Review"
-        helper="Check the document"
+        panel="progress"
         select={<div>Select form</div>}
-        provision={<div>Provision review</div>}
+        progress={<div>Progress timeline</div>}
         settings={<div>Settings form</div>}
       />,
     );
 
-    expect(screen.getByTestId("title-panel")).toHaveTextContent("Review");
-    expect(screen.getByTestId("helper-panel")).toHaveTextContent("Check the document");
+    expect(screen.queryByTestId("header-panel")).not.toBeInTheDocument();
     const container = screen.getByTestId("intake-container");
     expect(container).toHaveStyle({ height: "100%", minHeight: "0" });
     expect(container.style.backgroundColor).toBe("");
@@ -26,24 +23,32 @@ describe("IntakeContainer", () => {
     expect(container.style.margin).toBe("");
     expect(container.style.padding).toBe("");
     expect(screen.getByTestId("select-panel")).toHaveStyle({ alignItems: "center", display: "none" });
-    expect(screen.getByTestId("provision-panel")).toHaveStyle({ alignItems: "center", display: "flex" });
+    expect(screen.getByTestId("progress-panel")).toHaveStyle({ alignItems: "center", display: "flex" });
     expect(screen.getByTestId("settings-panel")).toHaveStyle({ alignItems: "center", display: "none" });
     expect(screen.queryByTestId("error-panel")).not.toBeInTheDocument();
 
     rerender(
       <IntakeContainer
-        panel="settings"
-        title="Settings"
-        helper=""
+        panel="progress"
         select={<div>Select form</div>}
-        provision={<div>Provision review</div>}
+        progress={<div>Progress timeline</div>}
         settings={<div>Settings form</div>}
       />,
     );
 
-    expect(screen.getByTestId("title-panel")).toHaveTextContent("Settings");
     expect(screen.getByTestId("select-panel")).toHaveStyle({ alignItems: "center", display: "none" });
-    expect(screen.getByTestId("provision-panel")).toHaveStyle({ alignItems: "center", display: "none" });
+    expect(screen.getByTestId("progress-panel")).toHaveStyle({ alignItems: "center", display: "flex" });
+    expect(screen.getByText("Progress timeline")).toBeVisible();
+
+    rerender(
+      <IntakeContainer
+        panel="settings"
+        select={<div>Select form</div>}
+        progress={<div>Progress timeline</div>}
+        settings={<div>Settings form</div>}
+      />,
+    );
+
     expect(screen.getByTestId("settings-panel")).toHaveStyle({ alignItems: "center", display: "flex", overflow: "auto" });
     expect(screen.getByText("Settings form")).toBeVisible();
   });

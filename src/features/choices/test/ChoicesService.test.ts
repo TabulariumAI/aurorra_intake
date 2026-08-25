@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createChoicesService, normalizeBackendChoices } from "../service/ChoicesService";
+import { createChoicesService, loadSessionData, normalizeBackendChoices } from "../service/ChoicesService";
 import type { ChoicesRuntime } from "../type/choices.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
     settingsOpen: false,
-    provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -39,43 +38,101 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
 
 describe("ChoicesService", () => {
   it("normalizes backend choice payloads", () => {
-    const items = [{ service: "Recognition", level: 5 }];
+    const normalized = normalizeBackendChoices({
+      items: [
+        { service: "Recognition", level: "Level3" },
+        { service: "EndorsementIndexing", level: "Level1" },
+        { service: "MonetaryInfoIndexing", level: 0 },
+      ],
+    });
 
     expect(normalizeBackendChoices(null)).toBeNull();
-    expect(normalizeBackendChoices(items)).toBe(items);
-    expect(normalizeBackendChoices({ items })).toEqual(items);
-    expect(normalizeBackendChoices({})).toEqual([]);
+    expect(normalized).toHaveLength(21);
+    expect(normalized).toContainEqual({ service: "Recognition", level: 3 });
+    expect(normalized).toContainEqual({ service: "EndorsementIndexing", level: 1 });
+    expect(normalized).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
+    expect(normalized).toContainEqual({ service: "RecitalIndexing", level: 1 });
+    expect(normalized?.every((choice) => typeof choice.level === "number")).toBe(true);
   });
 
   it("loads and retains session choices with runtime auth token", async () => {
-    const onJobEvent = vi.fn();
     const runtime: ChoicesRuntime = {
       store: createStore(),
-    eventBus: { emit: vi.fn() },
-      events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
+      eventBus: { emit: vi.fn() },
+      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
       dataWorkerClient: {
-        load: vi.fn(async () => ({ items: [{ service: "Recognition", level: 5 }] })),
+        load: vi.fn(async () => ({ items: [{ service: "Recognition", level: "Level4" }] })),
       },
-      onJobEvent,
     };
-    const service = createChoicesService(runtime);
-
-    await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
-    await expect(service.load("session-1")).resolves.toEqual([{ service: "Recognition", level: 5 }]);
+    const loaded = await loadSessionData(runtime, "session-1");
+    await expect(loadSessionData(runtime, "session-1")).resolves.toEqual(loaded);
+    expect(loaded).toHaveLength(21);
+    expect(loaded).toContainEqual({ service: "Recognition", level: 4 });
+    expect(loaded).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
     expect(runtime.dataWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
     expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(1);
     expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
-      "session-1": [{ service: "Recognition", level: 5 }],
+      "session-1": loaded,
     });
-    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
-    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
+  });
+
+  it("keeps cached choices with their session", async () => {
+    const runtime: ChoicesRuntime = {
+      store: createStore(),
+      eventBus: { emit: vi.fn() },
+      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
+      dataWorkerClient: {
+        load: vi.fn(async (_token: string, session: string) => ({
+          items: [{ service: "Recognition", level: session === "session-a" ? "Level2" : "Level4" }],
+        })),
+      },
+    };
+    const sessionA = await loadSessionData(runtime, "session-a");
+    const sessionB = await loadSessionData(runtime, "session-b");
+    await expect(loadSessionData(runtime, "session-a")).resolves.toEqual(sessionA);
+
+    expect(sessionA).toContainEqual({ service: "Recognition", level: 2 });
+    expect(sessionB).toContainEqual({ service: "Recognition", level: 4 });
+
+    expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(1, "token-1", "session-a");
+    expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(2, "token-1", "session-b");
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(2);
+    expect(runtime.store.set).toHaveBeenLastCalledWith("choicesBySession", {
+      "session-a": sessionA,
+      "session-b": sessionB,
+    });
+  });
+
+  it("normalizes stored session choices before providing them", async () => {
+    const runtime: ChoicesRuntime = {
+      store: createStore({
+        choicesBySession: {
+          "session-1": [
+            { service: "Recognition", level: "Level2" },
+            { service: "TransactionIndexing", level: 0 },
+          ],
+        },
+      }),
+      eventBus: { emit: vi.fn() },
+      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
+      dataWorkerClient: { load: vi.fn() },
+    };
+
+    const choices = await loadSessionData(runtime, "session-1");
+
+    expect(choices).toHaveLength(21);
+    expect(choices).toContainEqual({ service: "Recognition", level: 2 });
+    expect(choices).toContainEqual({ service: "TransactionIndexing", level: 0 });
+    expect(choices).toContainEqual({ service: "EndorsementIndexing", level: 1 });
+    expect(runtime.dataWorkerClient.load).not.toHaveBeenCalled();
+    expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", { "session-1": choices });
   });
 
   it("saves choices, workflow, and emits update only when values change", () => {
     const runtime: ChoicesRuntime = {
       store: createStore(),
-    eventBus: { emit: vi.fn() },
-      events: { showChoices: { name: "showChoices" }, toggleLayout: { name: "toggleLayout" }, updateChoices: { name: "updateChoices" } },
+      eventBus: { emit: vi.fn() },
+      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
       dataWorkerClient: {
         load: vi.fn(),
       },
@@ -83,22 +140,14 @@ describe("ChoicesService", () => {
     const service = createChoicesService(runtime);
     const choices = [{ service: "Recognition", level: 4 }];
 
-    expect(service.save(choices, true, false)).toEqual({
+    expect(service.save(choices, true)).toEqual({
       choices,
       alwaysReview: true,
-      studioModeEnabled: false,
       changed: true,
     });
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", choices);
     expect(runtime.store.set).toHaveBeenCalledWith("workflow", true);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.updateChoices);
-    return new Promise<void>((resolve) => {
-      queueMicrotask(() => {
-        expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.toggleLayout, {
-          studioModeEnabled: false,
-        });
-        resolve();
-      });
-    });
+    expect(runtime.eventBus.emit).toHaveBeenCalledTimes(1);
   });
 });

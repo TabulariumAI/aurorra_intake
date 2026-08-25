@@ -23,10 +23,18 @@ describe("choicesData", () => {
     expect(data.normalizeChoiceValues("{bad json")).toContainEqual({ service: "Recognition", level: 5 });
   });
 
-  it("caps actual pages according to recognition level", () => {
-    expect(Choices.getActualPages([{ service: "Recognition", level: 3 }], 20)).toBe(8);
-    expect(Choices.getActualPages([{ service: "Recognition", level: 4 }], 20)).toBe(13);
-    expect(Choices.getActualPages([{ service: "Recognition", level: 5 }], 20)).toBe(18);
-    expect(Choices.getActualPages([{ service: "Recognition", level: 6 }], 20)).toBe(20);
+  it.each([
+    [1, 100, 1],
+    [2, 100, 3],
+    [3, 100, 8],
+    [4, 100, 13],
+    [5, 100, 20],
+    [6, 100, 100],
+    [2, 2, 2],
+    [3, 2, 2],
+    [4, 2, 2],
+    [5, 2, 2],
+  ])("limits level %i to %i page(s) for a %i-page document", (level, pages, expected) => {
+    expect(Choices.getActualPages([{ service: "Recognition", level }], pages)).toBe(expected);
   });
 });

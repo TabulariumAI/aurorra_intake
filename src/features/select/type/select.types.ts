@@ -58,7 +58,6 @@ export type SelectService = {
   start(pageCount: number, getDocument: () => Promise<File | null>): Promise<void>;
   showSettings(): void;
   createTiffFile(blob: Blob): File;
-  getErrorMessage(error: unknown, fallback: string): string;
 };
 
 export type UseSelectPanelOptions = {

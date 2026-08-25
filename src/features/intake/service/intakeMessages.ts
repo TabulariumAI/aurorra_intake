@@ -13,7 +13,6 @@ export type IntakeAlertMessages = Record<string, IntakeAlertMessage> & {
   DOCUMENT_MISSING: IntakeAlertMessage;
   SESSION_MISSING: IntakeAlertMessage;
   SESSION_REQ_INFO: IntakeAlertMessage;
-  REPORT_WAIT: IntakeAlertMessage;
   ERR_ACT: { code: string; args: { action: string } };
 };
 
@@ -27,7 +26,6 @@ export const intakeMessages: IntakeAlertMessages = {
   DOCUMENT_MISSING: { code: "Document is missing." },
   SESSION_MISSING: { code: "Session is missing." },
   SESSION_REQ_INFO: { code: "Session information is required." },
-  REPORT_WAIT: { code: "Document processing is still running. Please try again." },
   ERR_ACT: {
     code: "An error occurred while {action}.",
     args: { action: "action" },

@@ -1,5 +1,4 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { JobEventCallback } from "aurorra-ui";
 
 export type ChoiceOption = {
   level: string;
@@ -88,7 +87,6 @@ export type ChoicesEventBus = {
 export type ChoicesEvents = {
   showChoices: unknown;
   updateChoices: { name?: string } | unknown;
-  toggleLayout: unknown;
 };
 
 export type ChoicesRuntime = {
@@ -96,38 +94,33 @@ export type ChoicesRuntime = {
   eventBus: ChoicesEventBus;
   events: ChoicesEvents;
   dataWorkerClient: ChoicesWorkerClient;
-  onJobEvent?: JobEventCallback;
 };
 
-export type SessionDataLoadRuntime = Pick<ChoicesRuntime, "dataWorkerClient" | "onJobEvent" | "store">;
+export type SessionDataLoadRuntime = Pick<ChoicesRuntime, "dataWorkerClient" | "store">;
 
 export type ChoicesSaveResult = {
   choices: ChoiceValue[];
   alwaysReview: boolean;
-  studioModeEnabled: boolean;
   changed: boolean;
 };
 
 export type ChoiceFormViewOptions = {
   disabledGroups?: string[];
-  studioModeDisabled?: boolean;
-  studioModeEnabled?: boolean;
 };
 
 export type ChoiceFormSubmitPayload = {
   choices: ChoiceValue[];
   alwaysReview: boolean;
-  studioModeEnabled: boolean;
 };
 
 export type ChoiceFormProps = {
   structure: ChoiceStructure;
   initialChoices: unknown;
   initialAlwaysReview: boolean;
-  initialStudioModeEnabled: boolean;
   disabledGroups?: string[];
-  studioModeDisabled?: boolean;
   onSave(payload: ChoiceFormSubmitPayload): void;
   onCancel(): void;
   onClose(): void;
 };
+
+export type ChoicesPanelProps = ChoiceFormProps;

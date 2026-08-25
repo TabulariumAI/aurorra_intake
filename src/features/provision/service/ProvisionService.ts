@@ -1,7 +1,5 @@
 import type {
-  ProvisionDocument,
   ProvisionRuntime,
-  ProvisionReviewOptions,
   ProvisionResult,
   ProvisionServiceActions,
 } from "../type/provision.types";
@@ -57,39 +55,7 @@ export class ProvisionService {
     this.#provisionWorkerClient = runtime.provisionWorkerClient;
   }
 
-  #dismissReview() {
-    this.#runtime.intake.showReview(null);
-  }
-
-  async #renderReview(description: unknown, accepted: unknown, document: ProvisionDocument | string): Promise<void> {
-    const runtime = this.#runtime;
-    const actions = runtime.intake.actions;
-    actions.showProvision("", "");
-    this.#dismissReview();
-
-    const reviewOptions: ProvisionReviewOptions = {
-      description: String(description),
-      accepted: Boolean(accepted),
-      document,
-      onContinue: async () => {
-        this.#dismissReview();
-        actions.showSelect("", "");
-        runtime.eventBus.emit(runtime.events.reRoute, {
-          [runtime.events.reRoute.detail.stage]: "indexing",
-        });
-      },
-      onCancel: () => {
-        this.#dismissReview();
-        actions.showSelect("", "");
-        runtime.onCanceled?.();
-        runtime.eventBus.emit(runtime.events.newSession, undefined);
-      },
-    };
-
-    runtime.intake.showReview(reviewOptions);
-  }
-
-  async process(document: ProvisionDocument | string) {
+  async process() {
     const runtime = this.#runtime;
 
     if (runtime.store.get("provisionStepStatus") === true) {
@@ -97,11 +63,10 @@ export class ProvisionService {
     }
 
     runtime.store.set("provisionStepStatus", true);
+    const jobId = crypto.randomUUID();
+    runtime.progress.receive({ jobId, message: "Reviewing your document", phase: "started" });
 
     try {
-
-      /*Step1: validation */
-
       const token = getAuthToken(runtime);
       if (!token) {
         throw new Error("Missing auth token");
@@ -119,45 +84,56 @@ export class ProvisionService {
           runtime.messages.DOCUMENT_MISSING));
       }
 
-      const reviewedDocument = document ?? documentName;
-      const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ jobId, message: "Screening document", phase: "started", session: String(session) });
-      let response: unknown;
-      try {
-        response = await this.#provisionWorkerClient.provision(
-          token,
-          String(session),
-          String(documentName),
-        );
-        runtime.onJobEvent?.({ jobId, message: "Document screened", phase: "completed", session: String(session) });
-      } catch (error) {
-        const message = getErrorMessage(error, "Document screening failed.");
-        runtime.onJobEvent?.({ error: message, jobId, message: "Document screening failed", phase: "failed", session: String(session) });
-        throw error;
-      }
+      const response = await this.#provisionWorkerClient.provision(
+        token,
+        String(session),
+        String(documentName),
+      );
       const result = normalizeProvisionResponse(response);
 
       runtime.store.set("numOfPages", result.pageNum);
-      await this.#renderReview(result.description, result.accepted, reviewedDocument as ProvisionDocument | string);
-
+      runtime.progress.receive({ jobId, message: "Reviewing your document", phase: "completed" });
+      const screeningJobId = crypto.randomUUID();
+      runtime.progress.receive({ jobId: screeningJobId, message: "Screening complete", phase: "started" });
+      runtime.progress.receive({
+        detail: {
+          actions: [
+            {
+              label: "Continue",
+              onConfirm: () => {
+                runtime.progress.receive({ jobId: screeningJobId, message: "Screening complete", phase: "completed" });
+                runtime.progress.receive({ jobId: crypto.randomUUID(), message: "Confirmation received", phase: "started" });
+                runtime.eventBus.emit(runtime.events.reRoute, {
+                  [runtime.events.reRoute.detail.stage]: "indexing",
+                });
+              },
+              requireConfirmation: false,
+              variant: "primary",
+            },
+            {
+              label: "Cancel and Restart",
+              onConfirm: runtime.restart,
+              requireConfirmation: true,
+              variant: "secondary",
+            },
+          ],
+          description: String(result.description),
+          summary: result.accepted
+            ? "A comprehensive analysis of this document will now be performed to classify and extract all required information."
+            : "We can still process it; if no matching data is found, the result will simply be empty.",
+        },
+        jobId: screeningJobId,
+        message: "Screening complete",
+        phase: "completed",
+      });
     } catch (error) {
-      const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
-        [runtime.messages.ERR_ACT.args.action]: "processing request",
-      });
-      const message = getErrorMessage(error, fallback);
-      runtime.eventBus.emit(runtime.events.showAlert, {
-        message,
-      });
+      const message = getErrorMessage(error, "Document screening failed.");
+      runtime.progress.receive({ error: message, jobId, message: "Reviewing your document", phase: "failed" });
     } finally {
       runtime.store.set("provisionStepStatus", false);
     }
   }
 
-  clear() {
-    this.#dismissReview();
-    this.#runtime.intake.actions.showSelect("", "");
-    this.#runtime.store.set("provisionStepStatus", false);
-  }
 }
 
 export function createProvisionService(runtime: ProvisionRuntime): ProvisionServiceActions {

@@ -8,7 +8,6 @@
     "moduleResolution": "Bundler",
     "noEmit": true,
     "paths": {
-      "@document-pwa/progress-message-bar": ["../document_web/src/app/shell/component/ProgressMessageBar.tsx"],
       "aurorra-ui": ["../aurorra_ui/src/public-api.ts"],
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],

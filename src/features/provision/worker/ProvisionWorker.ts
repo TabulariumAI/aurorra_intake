@@ -21,17 +21,16 @@ export class ProvisionWorker {
       };
     }
 
-    const method = command.type === "provision" ? "POST" : "GET";
     const { url, body } = this.buildRequest(command);
     const headers = {
       Authorization: `Bearer ${command.token}`,
-      ...(body !== null ? { "Content-Type": "application/json" } : {}),
+      "Content-Type": "application/json",
     };
 
     let response: Response;
     try {
       response = await fetch(url, {
-        method,
+        method: "POST",
         headers,
         body,
       });
@@ -91,21 +90,12 @@ export class ProvisionWorker {
     };
   }
 
-  buildRequest(command: ProvisionWorkerCommand): { url: string; body: string | null } {
-    const API_BASE_URL = command.apiBaseUrl.replace(/\/+$/, "");
-    const sessionApiBaseUrl = `${API_BASE_URL}/v1/session`;
-    switch (command.type) {
-      case "provision":
-        return {
-          url: `${sessionApiBaseUrl}/${encodeURIComponent(command.session)}/provision`,
-          body: JSON.stringify({ doc_name: command.document }),
-        };
-      case "provisionData":
-        return {
-          url: `${sessionApiBaseUrl}/${encodeURIComponent(command.session)}/provision/data`,
-          body: null,
-        };
-    }
+  buildRequest(command: ProvisionWorkerCommand): { url: string; body: string } {
+    const apiBaseUrl = command.apiBaseUrl.replace(/\/+$/, "");
+    return {
+      url: `${apiBaseUrl}/v1/session/${encodeURIComponent(command.session)}/provision`,
+      body: JSON.stringify({ doc_name: command.document }),
+    };
   }
 }
 

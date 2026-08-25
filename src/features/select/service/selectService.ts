@@ -20,7 +20,8 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
     },
     async start(pageCount, getDocument) {
       const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ jobId, message: "Creating a new session", phase: "started", session: null });
+      runtime.progress.reset();
+      runtime.progress.receive({ jobId, message: "Creating a session", phase: "started" });
       try {
         runtime.store.set("numOfPages", pageCount);
         const document = await getDocument();
@@ -34,7 +35,7 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
         });
       } catch (error) {
         const message = getSelectErrorMessage(error, "Session creation failed.");
-        runtime.onJobEvent?.({ error: message, jobId, message: "Session creation failed", phase: "failed", session: null });
+        runtime.progress.receive({ error: message, jobId, message: "Creating a session", phase: "failed" });
         throw error;
       }
     },
@@ -43,9 +44,6 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
     },
     createTiffFile(blob) {
       return new File([blob], "document.tif", { type: "image/tiff" });
-    },
-    getErrorMessage(error, fallback) {
-      return getSelectErrorMessage(error, fallback);
     },
   };
 }

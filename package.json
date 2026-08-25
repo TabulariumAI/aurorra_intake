@@ -20,7 +20,6 @@
     "lint:boundary": "node scripts/check-boundary.cjs"
   },
   "dependencies": {
-    "@radix-ui/react-popover": "^1.1.16",
     "@tabulariumai/aurora-lens": "^0.2.1",
     "aurorra-ui": "file:../aurorra_ui",
     "react": "^19.2.7",

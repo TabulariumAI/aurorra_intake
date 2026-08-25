@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createProvisionService } from "../service/ProvisionService";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
-import type { ProvisionReviewOptions, ProvisionRuntime } from "../type/provision.types";
+import type { ProvisionRuntime } from "../type/provision.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
     settingsOpen: false,
-    provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -38,108 +36,128 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   } as unknown as StoreAdapter;
 }
 
-function createShell(): IntakeShellActions {
-  return {
-    showSelect: vi.fn(),
-    showProvision: vi.fn(),
-    clearHeader: vi.fn(),
-  };
-}
-
 function createRuntime(seed: Partial<StoreValues> = {}) {
-  const shell = createShell();
-  const onJobEvent = vi.fn();
-  let reviewOptions: ProvisionReviewOptions | null = null;
+  const receive = vi.fn();
+  const restart = vi.fn();
   const runtime: ProvisionRuntime = {
     alert: { format: vi.fn((message) => `formatted:${String(message)}`) },
     messages: {
       SESSION_MISSING: "session missing",
       DOCUMENT_MISSING: "document missing",
-      ERR_ACT: { args: { action: "action" } },
     },
     eventBus: { emit: vi.fn() },
     events: {
-      showAlert: { name: "showAlert" },
-      newSession: { name: "newSession" },
       reRoute: { detail: { stage: "stage" } },
     },
     store: createStore(seed),
-    intake: {
-      actions: shell,
-      showReview: vi.fn((options) => {
-        reviewOptions = options;
-      }),
-    },
-    onJobEvent,
-    onCanceled: vi.fn(),
+    progress: { receive, reset: vi.fn() },
+    restart,
     provisionWorkerClient: {
       provision: vi.fn(async () => ({
         page_num: "4",
         description: "Document accepted",
         accepted: true,
       })),
-      provisionData: vi.fn(),
     },
   };
 
-  return { onJobEvent, runtime, reviewOptions: () => reviewOptions, shell };
+  return { receive, restart, runtime };
 }
 
 describe("ProvisionService", () => {
-  it("screens the document, stores page count, and renders review", async () => {
-    const { onJobEvent, runtime, reviewOptions, shell } = createRuntime();
-    const service = createProvisionService(runtime);
-    const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
+  it("exposes only the used process operation", () => {
+    const { runtime } = createRuntime();
 
-    await service.process(file);
+    expect(Object.getOwnPropertyNames(Object.getPrototypeOf(createProvisionService(runtime)))).toEqual([
+      "constructor",
+      "process",
+    ]);
+  });
+
+  it("screens the document and adds the confirmation details to progress", async () => {
+    const { receive, runtime } = createRuntime();
+    const service = createProvisionService(runtime);
+
+    await service.process();
 
     expect(runtime.provisionWorkerClient.provision).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf");
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 4);
-    expect(runtime.intake.showReview).toHaveBeenCalledWith(expect.objectContaining({
-      description: "Document accepted",
-      accepted: true,
-      document: file,
-    }));
-    expect(shell.showProvision).toHaveBeenCalledWith("", "");
-    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
-    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
+    expect(receive.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed", "started", "completed"]);
+    expect(receive.mock.calls.map(([event]) => event.message)).toEqual([
+      "Reviewing your document",
+      "Reviewing your document",
+      "Screening complete",
+      "Screening complete",
+    ]);
+    expect(receive.mock.calls[0][0].jobId).toBe(receive.mock.calls[1][0].jobId);
+    expect(receive.mock.calls[3][0]).toMatchObject({
+      detail: {
+        description: "Document accepted",
+        summary: "A comprehensive analysis of this document will now be performed to classify and extract all required information.",
+      },
+      message: "Screening complete",
+      phase: "completed",
+    });
+    expect(receive.mock.calls[3][0].detail.actions.map((action: { label: string }) => action.label)).toEqual([
+      "Continue",
+      "Cancel and Restart",
+    ]);
   });
 
-  it("continues from review by rerouting to indexing", async () => {
-    const { runtime, reviewOptions, shell } = createRuntime();
+  it("records confirmation before rerouting to indexing", async () => {
+    const { receive, runtime } = createRuntime();
     const service = createProvisionService(runtime);
 
-    await service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }));
-    await reviewOptions()?.onContinue("session-1.pdf");
+    await service.process();
+    await receive.mock.calls[3][0].detail.actions[0].onConfirm();
 
-    expect(shell.showSelect).toHaveBeenCalledWith("", "");
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "indexing" },
     );
+    expect(receive.mock.calls.slice(-2).map(([event]) => [event.message, event.phase, event.detail])).toEqual([
+      ["Screening complete", "completed", undefined],
+      ["Confirmation received", "started", undefined],
+    ]);
   });
 
-  it("cancels review by starting a new session", async () => {
-    const { runtime, reviewOptions, shell } = createRuntime();
+  it("cancels screening by starting a new session", async () => {
+    const { receive, restart, runtime } = createRuntime();
     const service = createProvisionService(runtime);
 
-    await service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }));
-    reviewOptions()?.onCancel();
+    await service.process();
+    receive.mock.calls[3][0].detail.actions[1].onConfirm();
 
-    expect(shell.showSelect).toHaveBeenCalledWith("", "");
-    expect(runtime.onCanceled).toHaveBeenCalledTimes(1);
-    expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.newSession, undefined);
+    expect(restart).toHaveBeenCalledTimes(1);
   });
 
-  it("throws and alerts when the provision response is invalid", async () => {
-    const { runtime } = createRuntime();
+  it("keeps an invalid provision response in the progress timeline", async () => {
+    const { receive, runtime } = createRuntime();
     runtime.provisionWorkerClient.provision = vi.fn(async () => ({ pageNum: "bad" }));
     const service = createProvisionService(runtime);
 
-    await expect(service.process(new File(["pdf"], "source.pdf", { type: "application/pdf" }))).resolves.toBeUndefined();
-    expect(runtime.eventBus.emit).toHaveBeenCalledWith(
-      runtime.events.showAlert,
-      { message: "Invalid provision response" },
-    );
+    await expect(service.process()).resolves.toBeUndefined();
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
+      error: "Invalid provision response",
+      message: "Reviewing your document",
+      phase: "failed",
+    }));
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the review message when screening fails", async () => {
+    const { receive, runtime } = createRuntime();
+    runtime.provisionWorkerClient.provision = vi.fn(async () => {
+      throw { error: "Screening unavailable" };
+    });
+    const service = createProvisionService(runtime);
+
+    await service.process();
+
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
+      error: "Screening unavailable",
+      message: "Reviewing your document",
+      phase: "failed",
+    }));
   });
 });

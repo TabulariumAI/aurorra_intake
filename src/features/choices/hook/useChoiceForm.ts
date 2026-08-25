@@ -9,7 +9,6 @@ type ChoiceFormState = {
   intents: Record<string, Intent>;
   checked: Record<string, boolean>;
   alwaysReview: boolean;
-  studioModeEnabled: boolean;
   dirty: boolean;
 };
 
@@ -17,7 +16,6 @@ type ChoiceFormController = ChoiceFormState & {
   setRadioLevel(choiceName: string, level: number): void;
   setCheckboxIntent(serviceId: string, checked: boolean): void;
   setAlwaysReview(checked: boolean): void;
-  setStudioModeEnabled(checked: boolean): void;
   reset(): void;
   submit(): ChoiceFormSubmitPayload;
 };
@@ -101,7 +99,6 @@ function buildInitialState(
   structure: ChoiceStructure,
   choicesJson: unknown,
   alwaysReview: boolean,
-  studioModeEnabled: boolean,
 ): ChoiceFormState {
   const data = new ChoiceData(structure);
   const items = getItems(structure);
@@ -113,9 +110,9 @@ function buildInitialState(
   }
 
   if (isUsableChoices(choicesJson)) {
-    const selected = new Set(choicesJson.map((entry) => entry.service).filter(Boolean));
+    const levels = new Map(choicesJson.map((entry) => [entry.service, data.getNumericValue(entry.level)]));
     for (const item of items) {
-      intents[item.name] = !item.system && selected.has(item.name) ? 1 : 0;
+      intents[item.name] = !item.system && data.getNumericValue(levels.get(item.name)) > 0 ? 1 : 0;
     }
     for (const entry of choicesJson) {
       const choice = structure.choices.find((candidate) => candidate.name === entry.service);
@@ -139,7 +136,6 @@ function buildInitialState(
     intents,
     checked: recomputeChecked(structure, intents),
     alwaysReview: !!alwaysReview,
-    studioModeEnabled: !!studioModeEnabled,
     dirty: false,
   };
 }
@@ -186,9 +182,8 @@ export function useChoiceForm(
   structure: ChoiceStructure,
   initialChoices: unknown,
   initialAlwaysReview: boolean,
-  initialStudioModeEnabled: boolean,
 ): ChoiceFormController {
-  const createInitial = () => buildInitialState(structure, initialChoices, initialAlwaysReview, initialStudioModeEnabled);
+  const createInitial = () => buildInitialState(structure, initialChoices, initialAlwaysReview);
   const [state, setState] = useState<ChoiceFormState>(createInitial);
 
   return {
@@ -224,13 +219,6 @@ export function useChoiceForm(
         dirty: true,
       }));
     },
-    setStudioModeEnabled(checked) {
-      setState((current) => ({
-        ...current,
-        studioModeEnabled: checked,
-        dirty: true,
-      }));
-    },
     reset() {
       setState(createInitial());
     },
@@ -238,7 +226,6 @@ export function useChoiceForm(
       return {
         choices: extractChoices(structure, state),
         alwaysReview: state.alwaysReview,
-        studioModeEnabled: state.studioModeEnabled,
       };
     },
   };

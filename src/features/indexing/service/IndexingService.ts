@@ -10,17 +10,31 @@ type ErrorLike = {
   message?: unknown;
 };
 
+const PAGE_SERVICES = [
+  "ConfidentialIndexing",
+  "TransactionIndexing",
+  "EndorsementIndexing",
+  "PartyClauseIndexing",
+  "RecitalIndexing",
+  "ExhibitIndexing",
+  "MonetaryInfoIndexing",
+  "AcknowledgmentIndexing",
+  "CourtIndexing",
+  "VitalIndexing",
+] as const;
+
+const ENRICHMENT_STEPS = [
+  ["LegalEnrichment", "Enriching legal descriptions"],
+  ["PartyEnrichment", "Enriching party information"],
+  ["Validation", "Validating document data"],
+] as const;
+
 function resolveMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
-  const message = candidate?.error;
-  if (typeof message === "string") {
-    return message;
-  }
-  if (typeof candidate?.details === "string") {
-    return candidate.details;
-  }
-  if (typeof candidate?.message === "string") {
-    return candidate.message;
+  for (const message of [candidate?.error, candidate?.details, candidate?.message]) {
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
   }
 
   return fallback;
@@ -30,7 +44,8 @@ function getErrorMessage(error: unknown, fallbackAction: string, runtime: Indexi
   const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
     [runtime.messages.ERR_ACT.args.action]: fallbackAction,
   });
-  return resolveMessage(error, fallback);
+  const message = resolveMessage(error, fallback);
+  return message === fallback ? fallback : `${fallback} ${message}`;
 }
 
 function resolveStatusResponse(value: unknown): IndexingStatusResponse {
@@ -69,13 +84,6 @@ class IndexingService implements IndexingServiceActions {
     this.#runtime = runtime;
   }
 
-  #pageInterval(pages: number, intervalValue: number) {
-    if (pages < 3) return intervalValue + (150 * pages);
-    if (pages < 5) return intervalValue + (100 * pages);
-    if (pages < 10) return intervalValue + (50 * pages);
-    return intervalValue + (25 * pages);
-  }
-
   async process() {
     const runtime = this.#runtime;
     if (runtime.store.get("indexingStepStatus") === true) {
@@ -84,7 +92,9 @@ class IndexingService implements IndexingServiceActions {
 
     runtime.store.set("indexingStepStatus", true);
     let isComplete = false;
-    let cycleInterval = runtime.baseIntervalMs;
+    let lastJobId = crypto.randomUUID();
+    let lastMessage = "Identifying pages";
+    runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
 
     try {
       const session = runtime.store.get("session");
@@ -96,6 +106,14 @@ class IndexingService implements IndexingServiceActions {
       runtime.store.set("indexChoices", choices);
       const choicesBySession = runtime.store.get("choicesBySession");
       runtime.store.set("choicesBySession", { ...choicesBySession, [String(session)]: choices });
+      const levels = new Map<string, number>();
+      for (const choice of choices) {
+        if (typeof choice !== "object" || choice === null) continue;
+        const { level, service } = choice as { level?: unknown; service?: unknown };
+        if (typeof service === "string" && typeof level === "number") {
+          levels.set(service, level);
+        }
+      }
 
       const documentName = runtime.store.get("document");
       const pages = runtime.choices.getActualPages(
@@ -103,72 +121,92 @@ class IndexingService implements IndexingServiceActions {
         runtime.store.get("numOfPages"),
       );
       const sessionId = String(session);
-      const statusJobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ jobId: statusJobId, message: "Processing document", phase: "started", session: sessionId });
-      try {
+      const pageSegments = PAGE_SERVICES.filter((service) => (levels.get(service) ?? 0) > 0).length;
+      const pageIntervalMs = runtime.baseIntervalMs + 50 * pageSegments;
+      await delay(runtime.baseIntervalMs);
+      isComplete = await this.checkStatus(sessionId);
+
+      if (!isComplete) {
+        lastJobId = crypto.randomUUID();
+        lastMessage = "Refining document";
+        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        await this.start(sessionId, documentName, choices);
+        await delay(runtime.baseIntervalMs);
         isComplete = await this.checkStatus(sessionId);
-        if (!isComplete) {
-          await delay(cycleInterval);
-        }
-
-        isComplete = await this.checkStatus(sessionId);
-        if (!isComplete) {
-          await this.start(sessionId, documentName, choices);
-          cycleInterval = this.#pageInterval(pages, cycleInterval) * 3;
-          await delay(cycleInterval);
-          isComplete = await this.checkStatus(sessionId);
-        }
-
-        if (!isComplete) {
-          const indexStatuses = runtime.choices.getIdentifyingIndexes(choices, runtime.choiceStructure);
-          for (let page = 1; page <= pages; page++) {
-            cycleInterval = runtime.baseIntervalMs * indexStatuses.length;
-            await delay(cycleInterval);
-            isComplete = await this.checkStatus(sessionId);
-            if (isComplete) {
-              break;
-            }
-          }
-        }
-
-        if (!isComplete) {
-          const enrichmentStatuses = runtime.choices.getIdEnh(choices, runtime.choiceStructure);
-          cycleInterval = runtime.baseIntervalMs * enrichmentStatuses.length;
-          await delay(cycleInterval);
-          isComplete = await this.checkStatus(sessionId);
-        }
-
-        if (!isComplete) {
-          let attempts = 0;
-          cycleInterval = runtime.baseIntervalMs * 2;
-          await delay(cycleInterval);
-          while (!isComplete && attempts < 27) {
-            isComplete = await this.checkStatus(sessionId);
-            if (isComplete) {
-              break;
-            }
-            attempts += 1;
-            await delay(cycleInterval);
-          }
-        }
-
-        if (!isComplete) {
-          throw new Error(runtime.alert.format(runtime.messages.REPORT_WAIT));
-        }
-        runtime.onJobEvent?.({ jobId: statusJobId, message: "Document processed", phase: "completed", session: sessionId });
-      } catch (error) {
-        const message = getErrorMessage(error, "document processing", runtime);
-        runtime.onJobEvent?.({ error: message, jobId: statusJobId, message: "Document processing failed", phase: "failed", session: sessionId });
-        throw error;
       }
 
+      if (!isComplete) {
+        lastJobId = crypto.randomUUID();
+        lastMessage = "Recognizing document";
+        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        await delay(runtime.baseIntervalMs);
+        isComplete = await this.checkStatus(sessionId);
+      }
+
+      if (!isComplete) {
+        for (let page = 1; page <= pages; page++) {
+          lastJobId = crypto.randomUUID();
+          lastMessage = `Processing page ${page} of ${pages}`;
+          runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+          await delay(pageIntervalMs);
+          isComplete = await this.checkStatus(sessionId);
+          if (isComplete) {
+            break;
+          }
+        }
+      }
+
+      for (const [service, message] of ENRICHMENT_STEPS) {
+        if (isComplete || (levels.get(service) ?? 0) <= 0) continue;
+        lastJobId = crypto.randomUUID();
+        lastMessage = message;
+        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        await delay(runtime.baseIntervalMs);
+        isComplete = await this.checkStatus(sessionId);
+      }
+
+      if (!isComplete) {
+        lastJobId = crypto.randomUUID();
+        lastMessage = "Analyzing Index Quality";
+        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        await delay(runtime.baseIntervalMs);
+      }
+
+      if (!isComplete) {
+        lastJobId = crypto.randomUUID();
+        lastMessage = "Retrieving processed data...";
+        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        let attempts = 0;
+        while (!isComplete && attempts < 11) {
+          await delay(runtime.baseIntervalMs);
+          isComplete = await this.checkStatus(sessionId);
+          attempts += 1;
+        }
+      }
+
+      if (!isComplete) {
+        runtime.progress.receive({
+          jobId: crypto.randomUUID(),
+          message: "Processing is taking longer than expected.",
+          phase: "info",
+          actions: [{
+            label: "View metadata",
+            onConfirm: () => {
+              runtime.eventBus.emit(runtime.events.reRoute, {
+                [runtime.events.reRoute.detail.stage]: "metadata",
+              });
+            },
+            requireConfirmation: false,
+            variant: "primary",
+          }],
+        });
+        return;
+      }
+      runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "completed" });
     } catch (error) {
-      const message = getErrorMessage(error, "processing request", runtime);
-      runtime.eventBus.emit(runtime.events.showAlert, { message });
-      console.error("Step4:", message);
-
+      const message = getErrorMessage(error, "document processing", runtime);
+      runtime.progress.receive({ error: message, jobId: lastJobId, message: lastMessage, phase: "failed" });
     } finally {
-
       runtime.store.set("indexingStepStatus", false);
       if (isComplete) {
         runtime.eventBus.emit(runtime.events.reRoute, {
@@ -189,16 +227,7 @@ class IndexingService implements IndexingServiceActions {
     if (!Array.isArray(choices)) {
       throw new Error("Index choices are not available.");
     }
-    const jobId = crypto.randomUUID();
-    runtime.onJobEvent?.({ jobId, message: "Starting document indexing", phase: "started", session });
-    try {
-      await runtime.indexingWorkerClient.start(token, session, documentName, choices);
-      runtime.onJobEvent?.({ jobId, message: "Document indexing started", phase: "completed", session });
-    } catch (error) {
-      const message = resolveMessage(error, "Document indexing start failed.");
-      runtime.onJobEvent?.({ error: message, jobId, message: "Document indexing start failed", phase: "failed", session });
-      throw error;
-    }
+    await runtime.indexingWorkerClient.start(token, session, documentName, choices);
   }
 
   async checkStatus(session: string) {
@@ -222,8 +251,7 @@ class IndexingService implements IndexingServiceActions {
       const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
         [runtime.messages.ERR_ACT.args.action]: "document processing",
       });
-      const message = resolveMessage(error, fallback);
-      throw new Error(`${fallback} ${message}`, { cause: error });
+      throw new Error(resolveMessage(error, fallback), { cause: error });
     }
   }
 }

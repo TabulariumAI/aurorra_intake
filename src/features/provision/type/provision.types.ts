@@ -1,11 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
-import type { JobEventCallback } from "aurorra-ui";
-
-export type ProvisionDocument = File | {
-  name: string;
-  size: number;
-};
+import type { ProgressActions } from "../../progressview/type/progress.types";
 
 export type ProvisionResult = {
   pageNum: number;
@@ -13,17 +7,13 @@ export type ProvisionResult = {
   accepted: unknown;
 };
 
-export type ProvisionReviewOptions = {
-  description: string;
-  accepted: boolean;
-  document: ProvisionDocument | string;
-  onContinue: (document: ProvisionDocument | string) => Promise<void>;
-  onCancel: () => void;
+export type ProvisionWorkerCommand = {
+  type: "provision";
+  token: string;
+  apiBaseUrl: string;
+  session: string;
+  document: string;
 };
-
-export type ProvisionWorkerCommand =
-  | { type: "provision"; token: string; apiBaseUrl: string; session: string; document: string }
-  | { type: "provisionData"; token: string; apiBaseUrl: string; session: string };
 
 export type ProvisionWorkerSuccess<T> = {
   ok: true;
@@ -42,7 +32,6 @@ export type ProvisionWorkerResult<T> = ProvisionWorkerSuccess<T> | ProvisionWork
 
 export type ProvisionWorkerClient = {
   provision(token: string, session: string, document: string): Promise<unknown>;
-  provisionData(token: string, session: string): Promise<unknown>;
 };
 
 export type ProvisionWorkerConfig = {
@@ -56,18 +45,11 @@ export type ProvisionRuntime = {
   messages: {
     SESSION_MISSING: unknown;
     DOCUMENT_MISSING: unknown;
-    ERR_ACT: {
-      args: {
-        action: string;
-      };
-    };
   };
   eventBus: {
     emit(eventConfig: unknown, payload?: unknown): void;
   };
   events: {
-    showAlert: unknown;
-    newSession: unknown;
     reRoute: {
       detail: {
         stage: string;
@@ -75,16 +57,11 @@ export type ProvisionRuntime = {
     };
   };
   store: StoreAdapter;
-  intake: {
-    actions: IntakeShellActions;
-    showReview(options: ProvisionReviewOptions | null): void;
-  };
-  onJobEvent?: JobEventCallback;
-  onCanceled?: () => void;
+  progress: ProgressActions;
+  restart(): void;
   provisionWorkerClient: ProvisionWorkerClient;
 };
 
 export type ProvisionServiceActions = {
-  process(document: ProvisionDocument | string): Promise<void>;
-  clear(): void;
+  process(): Promise<void>;
 };

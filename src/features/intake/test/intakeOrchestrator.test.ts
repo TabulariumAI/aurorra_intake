@@ -37,16 +37,16 @@ describe("IntakeOrchestrator", () => {
 
     await orchestrator.route({ stage: "session", file, jobId: "job-1" });
     await orchestrator.route({ stage: "upload", file });
-    await orchestrator.route({ stage: "provision", file });
+    await orchestrator.route({ stage: "provision" });
     await orchestrator.route({ stage: "indexing" });
 
     expect(services.session.process).toHaveBeenCalledWith(file, "job-1");
     expect(services.upload.process).toHaveBeenCalledWith(file);
-    expect(services.provision.process).toHaveBeenCalledWith(file);
+    expect(services.provision.process).toHaveBeenCalledTimes(1);
     expect(services.indexing.process).toHaveBeenCalledTimes(1);
   });
 
-  it("requires a document for document-bound route stages", async () => {
+  it("requires a document for session and upload stages", async () => {
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
       store: createStore(),
@@ -54,7 +54,6 @@ describe("IntakeOrchestrator", () => {
 
     await expect(orchestrator.route({ stage: "session" })).rejects.toThrow("Document is missing.");
     await expect(orchestrator.route({ stage: "upload" })).rejects.toThrow("Document is missing.");
-    await expect(orchestrator.route({ stage: "provision" })).rejects.toThrow("Document is missing.");
   });
 
   it("requires the session job id", async () => {
@@ -85,7 +84,7 @@ describe("IntakeOrchestrator", () => {
 
     await expect(orchestrator.route({ stage: "session", file, jobId: "job-1" })).rejects.toThrow("Session service is not ready.");
     await expect(orchestrator.route({ stage: "upload", file })).rejects.toThrow("Upload service is not ready.");
-    await expect(orchestrator.route({ stage: "provision", file })).rejects.toThrow("Provision service is not ready.");
+    await expect(orchestrator.route({ stage: "provision" })).rejects.toThrow("Provision service is not ready.");
     await expect(orchestrator.route({ stage: "indexing" })).rejects.toThrow("Indexing service is not ready.");
   });
 

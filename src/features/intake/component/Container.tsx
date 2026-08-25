@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { JobEventCallback } from "aurorra-ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChoiceForm } from "../../choices/component/ChoiceForm";
 import { createChoicesService } from "../../choices/service/ChoicesService";
 import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choicesData";
@@ -8,9 +7,8 @@ import { createSessionDataWorkerClient } from "../../choices/worker/choicesWorke
 import { createIndexingService } from "../../indexing/service/IndexingService";
 import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
-import { ProvisionReview } from "../../provision/component/ProvisionReview";
 import { createProvisionService } from "../../provision/service/ProvisionService";
-import type { ProvisionReviewOptions, ProvisionServiceActions } from "../../provision/type/provision.types";
+import type { ProvisionServiceActions } from "../../provision/type/provision.types";
 import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
 import { SelectPanel } from "../../select/component/SelectPanel";
 import { createSelectService } from "../../select/service/selectService";
@@ -27,6 +25,9 @@ import { useIntakeShell } from "../hook/useIntakeShell";
 import { intakeAlert, intakeMessages } from "../service/intakeMessages";
 import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
 import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "../service/intakeOrchestrator";
+import type { IntakeItemRenderer } from "../type/intake.types";
+import { ProgressView } from "../../progressview/component/ProgressView";
+import { useProgress } from "../../progressview/hook/useProgress";
 
 type EventConfig = {
   name: string;
@@ -37,63 +38,65 @@ export type ContainerProps = {
   authToken: string | null;
   apiGatewayUrl: string;
   intervalMs: number;
-  initialStudioModeEnabled?: boolean;
   onAlert?: (message: string) => void;
   onCanceled?: () => void;
   onComplete?: (payload: IntakeCompletePayload) => void;
   onFailure?: (message: string) => void;
-  onJobEvent?: JobEventCallback;
-  onLayoutChange?: (studioModeEnabled: boolean) => void;
   onLoaderChange(lines: readonly string[] | null): void;
   onReadyChange(ready: boolean): void;
+  renderChoices: IntakeItemRenderer;
+  renderPreview: IntakeItemRenderer;
+  renderProgress: IntakeItemRenderer;
+  renderSelect: IntakeItemRenderer;
   onSessionLoaded?: (session: SessionLoaded) => void;
   onStarted?: () => void;
 };
 
 const events = {
   reRoute: { name: "reRoute", detail: { stage: "stage", file: "file", jobId: "jobId" } },
-  showAlert: { name: "showAlert" },
-  newSession: { name: "newSession" },
   showChoices: { name: "showChoices" },
   updateChoices: { name: "updateChoices" },
-  toggleLayout: { name: "toggleLayout" },
 } satisfies Record<string, EventConfig> & { reRoute: IntakeRouteEvent };
 
 export function Container({
   authToken,
   apiGatewayUrl,
   intervalMs,
-  initialStudioModeEnabled = false,
   onAlert,
   onCanceled,
   onComplete,
   onFailure,
-  onJobEvent,
-  onLayoutChange,
   onLoaderChange,
   onReadyChange,
+  renderChoices,
+  renderPreview,
+  renderProgress,
+  renderSelect,
   onSessionLoaded,
   onStarted,
 }: ContainerProps) {
-  const intake = useIntakeShell();
-  const { actions, state } = intake;
+  const { actions, state } = useIntakeShell();
+  const progress = useProgress();
+  const progressActions = useMemo(() => ({ receive: progress.receive, reset: progress.reset }), [progress.receive, progress.reset]);
   const [selectHost, setSelectHost] = useState<HTMLElement | null>(null);
   const [selectReady, setSelectReady] = useState(true);
-  const [provisionReview, setProvisionReview] = useState<ProvisionReviewOptions | null>(null);
   const sessionRef = useRef<SessionServiceActions | null>(null);
   const uploadRef = useRef<UploadServiceActions | null>(null);
   const provisionRef = useRef<ProvisionServiceActions | null>(null);
   const indexingRef = useRef<IndexingServiceActions | null>(null);
-  const provisionRequestRef = useRef<number | null>(null);
   const sessionRequestRef = useRef<number | null>(null);
   const settingsOpen = useStore((state) => state.settingsOpen);
   const closeSettings = useStore((state) => state.closeSettings);
   const openSettings = useStore((state) => state.openSettings);
-  const provisionRequest = useStore((state) => state.provisionRequest);
   const selectionResetVersion = useStore((state) => state.selectionResetVersion);
   const sessionRequest = useStore((state) => state.sessionRequest);
   const setStoreValue = useStore((state) => state.setValue);
   const store = useMemo(() => createStoreAdapter(), []);
+  const restart = useCallback(() => {
+    progress.reset();
+    actions.showSelect("");
+    onCanceled?.();
+  }, [actions, onCanceled, progress.reset]);
 
   useEffect(() => {
     onReadyChange(selectHost !== null && selectReady);
@@ -121,6 +124,7 @@ export function Container({
       const event = eventConfig as EventConfig;
       if (event.name === events.reRoute.name) {
         if (payload?.stage === "session") {
+          actions.showProgress();
           onStarted?.();
         }
         void orchestrator.route(payload as IntakeRoutePayload);
@@ -130,26 +134,12 @@ export function Container({
         openSettings();
         return;
       }
-      if (event.name === events.showAlert.name) {
-        const message = typeof payload?.message === "string" ? payload.message : "Intake failed.";
-        onFailure?.(message);
-        onAlert?.(message);
-        return;
-      }
-      if (event.name === events.toggleLayout.name) {
-        if (typeof payload?.studioModeEnabled === "boolean") {
-          onLayoutChange?.(payload.studioModeEnabled);
-        }
-        return;
-      }
-      if (event.name === events.newSession.name) {
-        actions.showSelect("", "");
-      }
     },
     async emitAsync(eventConfig: unknown, payload?: Record<string, unknown>) {
       const event = eventConfig as EventConfig;
       if (event.name === events.reRoute.name) {
         if (payload?.stage === "session") {
+          actions.showProgress();
           onStarted?.();
         }
         await orchestrator.route(payload as IntakeRoutePayload);
@@ -157,16 +147,15 @@ export function Container({
       }
       this.emit(eventConfig, payload);
     },
-  }), [actions, onAlert, onFailure, onLayoutChange, onStarted, orchestrator]);
+  }), [actions, onStarted, orchestrator]);
 
   const commonRuntime = useMemo(() => ({
     alert: intakeAlert,
     messages: intakeMessages,
     eventBus,
-    onCanceled,
-    onJobEvent,
+    progress: progressActions,
     store,
-  }), [eventBus, onCanceled, onJobEvent, store]);
+  }), [eventBus, progressActions, store]);
 
   const selectService = useMemo(() => createSelectService({
     ...commonRuntime,
@@ -182,26 +171,21 @@ export function Container({
     events: {
       showChoices: events.showChoices,
       updateChoices: events.updateChoices,
-      toggleLayout: events.toggleLayout,
     },
     dataWorkerClient: createSessionDataWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-    onJobEvent,
-  }), [apiGatewayUrl, eventBus, onJobEvent, store]);
+  }), [apiGatewayUrl, eventBus, store]);
 
   const sessionService = useMemo(() => createSessionService({
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
-      showAlert: events.showAlert,
     },
     sessionWorkerClient: createSessionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [apiGatewayUrl, choicesService, commonRuntime]);
+  }), [apiGatewayUrl, commonRuntime]);
 
   const uploadService = useMemo(() => createUploadService({
     ...commonRuntime,
     events: {
-      showAlert: events.showAlert,
-      newSession: events.newSession,
       reRoute: events.reRoute,
     },
     uploadWorkerClient: createUploadWorkerClient(),
@@ -210,32 +194,19 @@ export function Container({
   const provisionService = useMemo(() => createProvisionService({
     ...commonRuntime,
     events: {
-      showAlert: events.showAlert,
-      newSession: events.newSession,
       reRoute: events.reRoute,
     },
-    intake: {
-      actions,
-      showReview: setProvisionReview,
-    },
+    restart,
     provisionWorkerClient: createProvisionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [actions, apiGatewayUrl, commonRuntime]);
+  }), [apiGatewayUrl, commonRuntime, restart]);
 
   const indexingService = useMemo(() => createIndexingService({
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
-      showAlert: events.showAlert,
     },
     choices: {
       getActualPages: Choices.getActualPages,
-      getIdentifyingIndexes(choices, structure) {
-        const indexes = Choices.getIdentifyingIndexes(choices, structure as ChoiceStructure);
-        return Array.isArray(indexes) ? indexes : [];
-      },
-      getIdEnh(choices, structure) {
-        return Choices.getIdEnh(choices, structure as ChoiceStructure);
-      },
       normalizeChoices(choices, structure) {
         return new ChoiceData(structure as ChoiceStructure).normalizeChoiceValues(choices);
       },
@@ -256,13 +227,6 @@ export function Container({
   }, [indexingService, provisionService, sessionService, uploadService]);
 
   useEffect(() => {
-    if (!provisionRequest || provisionRequest.id === provisionRequestRef.current) return;
-    provisionRequestRef.current = provisionRequest.id;
-    setStoreValue("provisionRequest", null);
-    void provisionService.process(provisionRequest.document);
-  }, [provisionRequest, provisionService, setStoreValue]);
-
-  useEffect(() => {
     if (!sessionRequest || sessionRequest.id === sessionRequestRef.current) return;
     sessionRequestRef.current = sessionRequest.id;
     setStoreValue("sessionRequest", null);
@@ -274,12 +238,16 @@ export function Container({
     });
   }, [authToken, onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService, setStoreValue]);
 
+  const panel = settingsOpen ? "settings" : state.container.panel;
   const selectContent = selectHost ? (
     <SelectPanel
       dropTarget={selectHost}
       actions={actions}
       onLoaderChange={onLoaderChange}
       onReadyChange={setSelectReady}
+      helper={panel === "select" ? state.container.helper : ""}
+      renderPreview={renderPreview}
+      renderSelect={renderSelect}
       service={selectService}
       selectionResetVersion={selectionResetVersion}
     />
@@ -289,26 +257,29 @@ export function Container({
 
   return (
     <IntakeContainer
-      panel={settingsOpen ? "settings" : state.container.panel}
-      title={settingsOpen ? "Settings" : state.container.title}
-      helper={settingsOpen ? "" : state.container.helper}
+      panel={panel}
       selectPanelRef={setSelectHost}
       select={selectContent}
-      provision={provisionReview ? <ProvisionReview {...provisionReview} /> : null}
-      settings={(
+      progress={renderProgress({
+        children: <ProgressView jobs={progress.jobs} onBack={restart} />,
+        helper: panel === "progress" ? state.container.helper : "",
+      })}
+      settings={renderChoices({
+        children: (
         <ChoiceForm
           structure={CHOICESTRUCTURE}
           initialChoices={initialChoices}
           initialAlwaysReview={initialAlwaysReview}
-          initialStudioModeEnabled={initialStudioModeEnabled}
           onSave={(payload) => {
-            choicesService.save(payload.choices, payload.alwaysReview, payload.studioModeEnabled);
+            choicesService.save(payload.choices, payload.alwaysReview);
             closeSettings();
           }}
           onCancel={closeSettings}
           onClose={closeSettings}
         />
-      )}
+        ),
+        helper: "",
+      })}
     />
   );
 }

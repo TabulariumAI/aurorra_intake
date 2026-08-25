@@ -1,22 +1,27 @@
 import type { ReactNode, Ref } from "react";
 
-export type IntakeContainerName = "select" | "provision" | "settings";
+export type IntakeContainerName = "select" | "progress" | "settings";
 
 export type IntakeContainerState = {
   panel: IntakeContainerName;
-  title: string;
   helper: string;
 };
 
 export type IntakeContainerActions = {
-  showSelect(title: string, helper: string): void;
-  showProvision(title: string, helper: string): void;
-  clearHeader(): void;
+  showSelect(helper: string): void;
+  showProgress(): void;
 };
 
-export type IntakeContainerProps = IntakeContainerState & {
+export type IntakeItemProps = {
+  children: ReactNode;
+  helper: string;
+};
+
+export type IntakeItemRenderer = (props: IntakeItemProps) => ReactNode;
+
+export type IntakeContainerProps = Pick<IntakeContainerState, "panel"> & {
   select: ReactNode;
-  provision: ReactNode;
+  progress: ReactNode;
   settings: ReactNode;
   selectPanelRef?: Ref<HTMLElement>;
 };

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 export const selectFormStyles = {
   host: {
-    width: "100%",
+    width: "min(42rem, 100%)",
     height: "100%",
     minHeight: "0",
     display: "flex",
@@ -15,6 +15,7 @@ export const selectFormStyles = {
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
+    gap: "1.25rem",
     boxSizing: "border-box",
   },
   dropZone: {
@@ -23,10 +24,10 @@ export const selectFormStyles = {
     alignItems: "center",
     justifyContent: "center",
     flex: "1 1 auto",
-    minHeight: "0",
+    minHeight: "18rem",
     width: "100%",
     margin: "0",
-    padding: "2.25rem",
+    padding: "clamp(1.5rem, 5vw, 2.5rem)",
     boxSizing: "border-box",
   },
   center: {
@@ -36,7 +37,7 @@ export const selectFormStyles = {
     gap: "0.85rem",
     width: "100%",
     maxWidth: "34rem",
-    color: "var(--text-color-light)",
+    color: "var(--title-ink)",
   },
   docIcon: {
     display: "inline-flex",
@@ -47,7 +48,7 @@ export const selectFormStyles = {
   },
   title: {
     margin: "0",
-    color: "var(--text-color-light)",
+    color: "var(--title-ink)",
     fontSize: "1.08rem",
     fontWeight: "700",
     lineHeight: "1.3",
@@ -55,7 +56,7 @@ export const selectFormStyles = {
   },
   separator: {
     margin: "0",
-    color: "var(--text-color-light)",
+    color: "var(--body-ink)",
     fontSize: "0.92rem",
     opacity: 0.74,
     lineHeight: "1.3",
@@ -63,7 +64,7 @@ export const selectFormStyles = {
   },
   info: {
     margin: "0",
-    color: "var(--text-color-light)",
+    color: "var(--body-ink)",
     fontSize: "0.88rem",
     opacity: 0.72,
     lineHeight: "1.45",
@@ -78,8 +79,8 @@ export const selectFormStyles = {
     gap: "1rem",
     width: "100%",
     margin: "0",
-    padding: "1.05rem 1.35rem",
-    color: "var(--text-color-light)",
+    padding: "0 0 0.25rem",
+    color: "var(--title-ink)",
     textAlign: "left",
     boxSizing: "border-box",
   },
@@ -96,7 +97,7 @@ export const selectFormStyles = {
     gap: "0.3rem",
   },
   safetyTitle: {
-    color: "var(--text-color-light)",
+    color: "var(--body-ink)",
     fontSize: "0.96rem",
     fontWeight: "700",
     lineHeight: "1.25",
@@ -175,7 +176,7 @@ export const selectPanelStyles = {
     marginTop: "1.25rem",
     minHeight: "5.25rem",
     padding: "1rem 0 1.1rem 0",
-    borderTop: "1px solid ButtonBorder",
+    borderTop: "1px solid var(--border-card)",
     boxSizing: "border-box",
   },
   actions: {
@@ -185,10 +186,3 @@ export const selectPanelStyles = {
     width: "100%",
   },
 } satisfies Record<string, CSSProperties>;
-
-export function getSelectReviewHostStyle(isReviewMode: boolean): CSSProperties {
-  return {
-    ...selectPanelStyles.reviewHost,
-    display: isReviewMode ? "block" : "none",
-  };
-}

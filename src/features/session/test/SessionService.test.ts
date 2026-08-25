@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSessionService, loadSession, validateSessionDocument } from "../service/SessionService";
-import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 import type { SessionRuntime } from "../type/session.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
     settingsOpen: false,
-    provisionRequest: null,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -40,34 +38,23 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   } as unknown as StoreAdapter;
 }
 
-function createShell(): IntakeShellActions {
-  return {
-    showSelect: vi.fn(),
-    showProvision: vi.fn(),
-    clearHeader: vi.fn(),
-  };
-}
-
 function createRuntime(seed: Partial<StoreValues> = {}) {
   const store = createStore(seed);
   const emit = vi.fn();
-  const shell = createShell();
-  const onJobEvent = vi.fn();
+  const receive = vi.fn();
   const runtime: SessionRuntime = {
     alert: { format: vi.fn((message) => `formatted:${message.code}`) },
     messages: {
       DOC_START_NO_DOCUMENT: { code: "DOC_START_NO_DOCUMENT" },
       INV_FILE_FMT: { code: "INV_FILE_FMT" },
       TIFF_NOT_VALID: { code: "TIFF_NOT_VALID" },
-      ERR_ACT: { code: "ERR_ACT", args: { action: "action" } },
     },
     eventBus: { emit },
     events: {
       reRoute: { detail: { stage: "stage", file: "file" } },
-      showAlert: { name: "showAlert" },
     },
     store,
-    onJobEvent,
+    progress: { receive, reset: vi.fn() },
     sessionWorkerClient: {
       newSession: vi.fn(async () => ({
         session: "session-1",
@@ -84,10 +71,20 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     },
   };
 
-  return { emit, onJobEvent, runtime, shell, store };
+  return { emit, receive, runtime, store };
 }
 
 describe("SessionService", () => {
+  it("exposes only the used session operations", () => {
+    const { runtime } = createRuntime();
+
+    expect(Object.getOwnPropertyNames(Object.getPrototypeOf(createSessionService(runtime)))).toEqual([
+      "constructor",
+      "process",
+      "setSession",
+    ]);
+  });
+
   it("validates supported PDF and TIFF documents", () => {
     const { runtime } = createRuntime();
 
@@ -98,7 +95,7 @@ describe("SessionService", () => {
   });
 
   it("creates a session, stores runtime values, and reroutes to upload", async () => {
-    const { emit, onJobEvent, runtime, store } = createRuntime();
+    const { emit, receive, runtime, store } = createRuntime();
     const service = createSessionService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
 
@@ -109,11 +106,10 @@ describe("SessionService", () => {
     expect(store.set).toHaveBeenCalledWith("sasToken", "sas-1");
     expect(store.set).toHaveBeenCalledWith("baseUrl", "https://storage.test");
     expect(store.set).toHaveBeenCalledWith("document", "session-1.pdf");
-    expect(onJobEvent).toHaveBeenCalledWith({
+    expect(receive).toHaveBeenCalledWith({
       jobId: "job-1",
-      message: "Session created",
+      message: "Creating a session",
       phase: "completed",
-      session: "session-1",
     });
     expect(emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
@@ -122,24 +118,24 @@ describe("SessionService", () => {
   });
 
   it("fails the supplied session job when session creation fails", async () => {
-    const { onJobEvent, runtime } = createRuntime();
+    const { emit, receive, runtime } = createRuntime();
     const service = createSessionService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
     vi.mocked(runtime.sessionWorkerClient.newSession).mockRejectedValueOnce(new Error("Session API failed."));
 
     await service.process(file, "job-2");
 
-    expect(onJobEvent).toHaveBeenCalledWith({
+    expect(receive).toHaveBeenCalledWith({
       error: "Session API failed.",
       jobId: "job-2",
-      message: "Session creation failed",
+      message: "Creating a session",
       phase: "failed",
-      session: null,
     });
+    expect(emit).not.toHaveBeenCalled();
   });
 
   it("stores existing session data", async () => {
-    const { onJobEvent, runtime, store } = createRuntime();
+    const { receive, runtime, store } = createRuntime();
     const service = createSessionService(runtime);
 
     await expect(service.setSession("session-2")).resolves.toEqual({
@@ -151,12 +147,11 @@ describe("SessionService", () => {
 
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
     expect(store.set).toHaveBeenCalledWith("document", "session-2.pdf");
-    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
-    expect(onJobEvent.mock.calls[0][0].jobId).toBe(onJobEvent.mock.calls[1][0].jobId);
+    expect(receive).not.toHaveBeenCalled();
   });
 
   it("loads existing session data through the package API", async () => {
-    const { onJobEvent, runtime, store } = createRuntime();
+    const { runtime, store } = createRuntime();
 
     await expect(loadSession(runtime, "session-2")).resolves.toEqual({
       baseUrl: "https://storage-2.test",
@@ -167,18 +162,6 @@ describe("SessionService", () => {
 
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
     expect(store.set).toHaveBeenCalledWith("session", "session-2");
-    expect(onJobEvent.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed"]);
   });
 
-  it("clears persisted session values", () => {
-    const { runtime, store } = createRuntime();
-    const service = createSessionService(runtime);
-
-    service.clear();
-
-    expect(store.reset).toHaveBeenCalledWith("baseUrl");
-    expect(store.reset).toHaveBeenCalledWith("sasToken");
-    expect(store.reset).toHaveBeenCalledWith("session");
-    expect(store.reset).toHaveBeenCalledWith("numOfPages");
-  });
 });

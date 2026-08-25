@@ -67,6 +67,8 @@ export class UploadService implements UploadServiceActions {
     }
 
     runtime.store.set("uploadingStepStatus", true);
+    const jobId = crypto.randomUUID();
+    runtime.progress.receive({ jobId, message: "Uploading your document", phase: "started" });
 
     try {
       if (!document) {
@@ -74,44 +76,32 @@ export class UploadService implements UploadServiceActions {
       }
 
       const context = resolveUploadContext(runtime);
-      const jobId = crypto.randomUUID();
-      runtime.onJobEvent?.({ jobId, message: "Uploading document", phase: "started", session: context.session });
-      try {
-        await this.#uploadWorkerClient.upload({
-          sasToken: context.sasToken,
-          baseUrl: context.baseUrl,
-          file: document,
-          path: context.docName,
-        });
-        runtime.onJobEvent?.({ jobId, message: "Document uploaded", phase: "completed", session: context.session });
-      } catch (error) {
-        const message = getErrorMessage(error, "Document upload failed.");
-        runtime.onJobEvent?.({ error: message, jobId, message: "Document upload failed", phase: "failed", session: context.session });
-        throw error;
-      }
+      await this.#uploadWorkerClient.upload({
+        sasToken: context.sasToken,
+        baseUrl: context.baseUrl,
+        file: document,
+        path: context.docName,
+      });
+      runtime.progress.receive({ jobId, message: "Uploading your document", phase: "completed" });
 
-      runtime.eventBus.emit(runtime.events.reRoute, {
-        [runtime.events.reRoute.detail.stage]: "provision",
-        [runtime.events.reRoute.detail.file]: document,
-      });
+      if (runtime.store.get("workflow") === true) {
+        runtime.eventBus.emit(runtime.events.reRoute, {
+          [runtime.events.reRoute.detail.stage]: "provision",
+          [runtime.events.reRoute.detail.file]: document,
+        });
+      } else {
+        runtime.eventBus.emit(runtime.events.reRoute, {
+          [runtime.events.reRoute.detail.stage]: "indexing",
+        });
+      }
     } catch (error) {
-      const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
-        [runtime.messages.ERR_ACT.args.action]: "processing request",
-      });
-      const message = getErrorMessage(error, fallback);
-      runtime.eventBus.emit(runtime.events.showAlert, {
-        message,
-        onClose: () => runtime.eventBus.emit(runtime.events.newSession, {}),
-      });
+      const message = getErrorMessage(error, "Document upload failed.");
+      runtime.progress.receive({ error: message, jobId, message: "Uploading your document", phase: "failed" });
     } finally {
       runtime.store.set("uploadingStepStatus", false);
     }
   }
 
-  clear() {
-    const runtime = this.#runtime;
-    runtime.store.set("uploadingStepStatus", false);
-  }
 }
 
 export function createUploadService(runtime: UploadRuntime): UploadServiceActions {

@@ -1,5 +1,5 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { JobEventCallback } from "aurorra-ui";
+import type { ProgressActions } from "../../progressview/type/progress.types";
 
 export type IndexingWorkerCommand =
   | {
@@ -60,7 +60,6 @@ export type IndexingRuntime = {
   };
   messages: {
     ERR_ACT: { args: { action: string } };
-    REPORT_WAIT: unknown;
     SESSION_REQ_INFO: unknown;
   };
   eventBus: {
@@ -68,18 +67,15 @@ export type IndexingRuntime = {
   };
   events: {
     reRoute: { detail: { stage: string } };
-    showAlert: unknown;
   };
   store: StoreAdapter;
   choices: {
     getActualPages(choices: unknown, pages: unknown): number;
-    getIdentifyingIndexes(choices: unknown, structure: unknown): string[];
-    getIdEnh(choices: unknown, structure: unknown): string[];
     normalizeChoices(choices: unknown, structure: unknown): unknown[];
   };
   choiceStructure: unknown;
   baseIntervalMs: number;
   indexingWorkerClient: IndexingWorkerClient;
-  onJobEvent?: JobEventCallback;
+  progress: ProgressActions;
   getAuthToken(): string;
 };

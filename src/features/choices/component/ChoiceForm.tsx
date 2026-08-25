@@ -20,25 +20,14 @@ export function ChoiceForm({
   structure,
   initialChoices,
   initialAlwaysReview,
-  initialStudioModeEnabled,
   disabledGroups = [],
-  studioModeDisabled = false,
   onSave,
   onCancel,
   onClose,
 }: ChoiceFormProps) {
-  const form = useChoiceForm(structure, initialChoices, initialAlwaysReview, initialStudioModeEnabled);
+  const form = useChoiceForm(structure, initialChoices, initialAlwaysReview);
   const data = new ChoiceData(structure);
   const disabledGroupSet = new Set(disabledGroups.filter((name) => typeof name === "string" && name.trim()));
-
-  const handleSave = () => {
-    onSave(form.submit());
-  };
-
-  const handleCancel = () => {
-    form.reset();
-    onCancel();
-  };
 
   return (
     <div style={choiceFormStyles.container}>
@@ -125,16 +114,6 @@ export function ChoiceForm({
             />{" "}
             <span>Review Before Index</span>
           </label>
-          <label style={choiceFormStyles.label}>
-            <input
-              type="checkbox"
-              name="studioMode"
-              checked={form.studioModeEnabled}
-              disabled={studioModeDisabled}
-              onChange={(event) => form.setStudioModeEnabled(event.currentTarget.checked)}
-            />{" "}
-            <span>Studio Mode</span>
-          </label>
         </fieldset>
       </form>
       <div style={choiceFormStyles.footer}>
@@ -152,13 +131,16 @@ export function ChoiceForm({
               label="Save"
               variant="primary"
               requireConfirmation={false}
-              onConfirm={handleSave}
+              onConfirm={() => onSave(form.submit())}
             />
             <ConfButton
               label="Cancel"
               variant="secondary"
               requireConfirmation={false}
-              onConfirm={handleCancel}
+              onConfirm={() => {
+                form.reset();
+                onCancel();
+              }}
             />
           </>
         ) : null}
