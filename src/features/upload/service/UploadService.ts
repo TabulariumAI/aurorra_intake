@@ -5,6 +5,8 @@ import type {
   UploadServiceActions,
   UploadWorkerClient,
 } from "../type/upload.types";
+import { workflowValue } from "../../choices/service/choicesData";
+import type { WorkflowSettings } from "../../choices/type/choices.types";
 
 type ErrorLike = {
   error?: unknown;
@@ -84,7 +86,8 @@ export class UploadService implements UploadServiceActions {
       });
       runtime.progress.receive({ jobId, message: "Uploading your document", phase: "completed" });
 
-      if (runtime.store.get("workflow") === true) {
+      const shouldReview = workflowValue(runtime.store.get("workflow") as WorkflowSettings, "Review");
+      if (shouldReview) {
         runtime.eventBus.emit(runtime.events.reRoute, {
           [runtime.events.reRoute.detail.stage]: "provision",
           [runtime.events.reRoute.detail.file]: document,

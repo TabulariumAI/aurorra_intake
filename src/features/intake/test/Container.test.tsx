@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import type { IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Container } from "../component/Container";
 import type { ContainerProps } from "../component/Container";
@@ -23,8 +23,8 @@ const workerMocks = vi.hoisted(() => ({
 }));
 
 function wrap(name: string) {
-  return ({ children, helper }: { children: ReactNode; helper: string }) => (
-    <section data-testid={`${name}-host`}>
+  return ({ active, children, helper }: IntakeItemProps) => (
+    <section data-testid={`${name}-host`} data-active={active}>
       {helper ? <p>{helper}</p> : null}
       {children}
     </section>
@@ -116,10 +116,12 @@ vi.mock("../../indexing/service/IndexingService", () => ({
 }));
 
 vi.mock("../../select/component/SelectPanel", () => ({
-  SelectPanel: ({ renderSelect, selectionResetVersion }: {
-    renderSelect: (props: { children: ReactNode; helper: string }) => ReactNode;
+  SelectPanel: ({ active, renderSelect, selectionResetVersion }: {
+    active: boolean;
+    renderSelect: IntakeItemRenderer;
     selectionResetVersion?: number;
   }) => renderSelect({
+    active,
     children: <div data-testid="select-panel-mock" data-selection-reset-version={selectionResetVersion} />,
     helper: "Select helper",
   }),
@@ -353,4 +355,31 @@ describe("Container", () => {
 
     expect(screen.getByTestId("select-panel-mock")).toHaveAttribute("data-selection-reset-version", "1");
   });
+});
+
+
+it("reports only the active renderer through settings, progress, and restart", () => {
+  storeApi.getState().resetAllState();
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} />);
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
+  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
+  expect(screen.getByTestId("choices-host")).toHaveAttribute("data-active", "false");
+  act(() => storeApi.getState().openSettings());
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "false");
+  expect(screen.getByTestId("choices-host")).toHaveAttribute("data-active", "true");
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
+  act(() => {
+    capturedEventBus!.emit({ name: "reRoute" }, { stage: "session", jobId: "session-1" });
+    capturedProgress!({ jobId: "session-1", message: "Creating a session", phase: "failed", error: "Failed" });
+  });
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "false");
+  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "true");
+  act(() => storeApi.getState().openSettings());
+  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "true");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel and Restart" }));
+  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
 });

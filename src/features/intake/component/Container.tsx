@@ -241,6 +241,7 @@ export function Container({
   const panel = settingsOpen ? "settings" : state.container.panel;
   const selectContent = selectHost ? (
     <SelectPanel
+      active={panel === "select"}
       dropTarget={selectHost}
       actions={actions}
       onLoaderChange={onLoaderChange}
@@ -253,7 +254,7 @@ export function Container({
     />
   ) : null;
   const initialChoices = store.get("indexChoices");
-  const initialAlwaysReview = Boolean(store.get("workflow"));
+  const initialWorkflow = store.get("workflow");
 
   return (
     <IntakeContainer
@@ -261,17 +262,20 @@ export function Container({
       selectPanelRef={setSelectHost}
       select={selectContent}
       progress={renderProgress({
+        active: panel === "progress",
         children: <ProgressView jobs={progress.jobs} onBack={restart} />,
         helper: panel === "progress" ? state.container.helper : "",
       })}
       settings={renderChoices({
+        active: panel === "settings",
         children: (
         <ChoiceForm
           structure={CHOICESTRUCTURE}
           initialChoices={initialChoices}
-          initialAlwaysReview={initialAlwaysReview}
+          initialWorkflow={initialWorkflow}
+          choicesEditable
           onSave={(payload) => {
-            choicesService.save(payload.choices, payload.alwaysReview);
+            choicesService.save(payload.choices, payload.workflow);
             closeSettings();
           }}
           onCancel={closeSettings}

@@ -5,7 +5,9 @@ import type {
   SessionDataLoadRuntime,
   ChoicesRuntime,
   ChoicesSaveResult,
+  WorkflowSettings,
 } from "../type/choices.types";
+import { normalizeWorkflowSettings } from "./choicesData";
 
 function getAuthToken(runtime: Pick<ChoicesRuntime, "store">): string {
   const userToken = runtime.store.get("userToken");
@@ -40,16 +42,17 @@ export class ChoicesService {
     this.#runtime = runtime;
   }
 
-  save(choiceJson: ChoiceValue[], alwaysReview: boolean): ChoicesSaveResult {
+  save(choiceJson: ChoiceValue[], workflow: WorkflowSettings): ChoicesSaveResult {
     const runtime = this.#runtime;
     const previousChoices = JSON.stringify(runtime.store.get("indexChoices"));
-    const previousWorkflow = runtime.store.get("workflow");
+    const previousWorkflow = JSON.stringify(runtime.store.get("workflow"));
+    const normalizedWorkflow = normalizeWorkflowSettings(workflow);
 
-    runtime.store.set("workflow", alwaysReview);
+    runtime.store.set("workflow", normalizedWorkflow);
     runtime.store.set("indexChoices", choiceJson);
     const changed =
       JSON.stringify(runtime.store.get("indexChoices")) !== previousChoices ||
-      runtime.store.get("workflow") !== previousWorkflow;
+      JSON.stringify(runtime.store.get("workflow")) !== previousWorkflow;
 
     if (changed) {
       runtime.eventBus.emit(runtime.events.updateChoices);
@@ -57,7 +60,7 @@ export class ChoicesService {
 
     return {
       choices: choiceJson,
-      alwaysReview,
+      workflow: normalizedWorkflow,
       changed,
     };
   }

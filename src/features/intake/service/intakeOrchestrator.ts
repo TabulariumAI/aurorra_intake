@@ -3,7 +3,7 @@ import type { ProvisionServiceActions } from "../../provision/type/provision.typ
 import type { SessionDocument, SessionServiceActions } from "../../session/type/session.types";
 import type { UploadDocument, UploadServiceActions } from "../../upload/type/upload.types";
 import type { StoreAdapter } from "../../../store/type/store.types";
-import type { DataExchange } from "aurorra-ui";
+import type { DataExchange } from "aurora-core";
 
 export type IntakeRouteStage = "session" | "upload" | "provision" | "indexing" | "metadata";
 

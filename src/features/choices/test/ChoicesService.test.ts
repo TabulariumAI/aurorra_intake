@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChoicesService, loadSessionData, normalizeBackendChoices } from "../service/ChoicesService";
-import type { ChoicesRuntime } from "../type/choices.types";
+import { DEFAULT_WORKFLOW_SETTINGS } from "../service/choicesData";
+import type { ChoicesRuntime, WorkflowSettings } from "../type/choices.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
@@ -21,7 +22,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     numOfPages: 1,
     indexChoices: null,
     choicesBySession: {},
-    workflow: null,
+    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 
@@ -47,7 +48,7 @@ describe("ChoicesService", () => {
     });
 
     expect(normalizeBackendChoices(null)).toBeNull();
-    expect(normalized).toHaveLength(21);
+    expect(normalized).toHaveLength(17);
     expect(normalized).toContainEqual({ service: "Recognition", level: 3 });
     expect(normalized).toContainEqual({ service: "EndorsementIndexing", level: 1 });
     expect(normalized).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
@@ -66,7 +67,7 @@ describe("ChoicesService", () => {
     };
     const loaded = await loadSessionData(runtime, "session-1");
     await expect(loadSessionData(runtime, "session-1")).resolves.toEqual(loaded);
-    expect(loaded).toHaveLength(21);
+    expect(loaded).toHaveLength(17);
     expect(loaded).toContainEqual({ service: "Recognition", level: 4 });
     expect(loaded).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
     expect(runtime.dataWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
@@ -120,7 +121,7 @@ describe("ChoicesService", () => {
 
     const choices = await loadSessionData(runtime, "session-1");
 
-    expect(choices).toHaveLength(21);
+    expect(choices).toHaveLength(17);
     expect(choices).toContainEqual({ service: "Recognition", level: 2 });
     expect(choices).toContainEqual({ service: "TransactionIndexing", level: 0 });
     expect(choices).toContainEqual({ service: "EndorsementIndexing", level: 1 });
@@ -140,13 +141,21 @@ describe("ChoicesService", () => {
     const service = createChoicesService(runtime);
     const choices = [{ service: "Recognition", level: 4 }];
 
-    expect(service.save(choices, true)).toEqual({
+    const workflow: WorkflowSettings = [
+      { name: "Review", label: "Review Before Index", value: false },
+      { name: "Redact", label: "Redact document", value: true },
+      { name: "Manifest", label: "Generate manifest", value: true },
+      { name: "Record", label: "Endorse document", value: true },
+      { name: "Abstract", label: "Analyze the document", value: true },
+    ];
+
+    expect(service.save(choices, workflow)).toEqual({
       choices,
-      alwaysReview: true,
+      workflow,
       changed: true,
     });
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", choices);
-    expect(runtime.store.set).toHaveBeenCalledWith("workflow", true);
+    expect(runtime.store.set).toHaveBeenCalledWith("workflow", workflow);
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.updateChoices);
     expect(runtime.eventBus.emit).toHaveBeenCalledTimes(1);
   });

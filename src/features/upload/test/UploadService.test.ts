@@ -2,6 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { createUploadService, resolveUploadContext } from "../service/UploadService";
 import type { UploadRuntime } from "../type/upload.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
+import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
+
+function withReview(workflowValue: boolean): typeof DEFAULT_WORKFLOW_SETTINGS {
+  return DEFAULT_WORKFLOW_SETTINGS.map((setting) => (
+    setting.name === "Review" ? { ...setting, value: workflowValue } : setting
+  ));
+}
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
@@ -21,7 +28,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     numOfPages: 1,
     indexChoices: null,
     choicesBySession: {},
-    workflow: null,
+    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 
@@ -83,7 +90,7 @@ describe("UploadService", () => {
   });
 
   it("uploads the selected document and reroutes to provision when workflow is true", async () => {
-    const { receive, runtime } = createRuntime({ session: "session-1", workflow: true });
+    const { receive, runtime } = createRuntime({ session: "session-1", workflow: withReview(true) });
     const service = createUploadService(runtime);
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 
@@ -107,8 +114,8 @@ describe("UploadService", () => {
     );
   });
 
-  it.each([false, null])("bypasses provision when workflow is %s", async (workflow) => {
-    const { runtime } = createRuntime({ session: "session-1", workflow });
+  it.each([false])("bypasses provision when Review workflow is %s", async (workflow) => {
+    const { runtime } = createRuntime({ session: "session-1", workflow: withReview(workflow) });
     const service = createUploadService(runtime);
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 

@@ -5,6 +5,7 @@ import type { IntakeItemRenderer } from "../../intake/type/intake.types";
 import { SelectPanelView } from "./SelectPanelView";
 
 type SelectPanelInternalProps = SelectPanelProps & {
+  active: boolean;
   onLoaderChange(lines: readonly string[] | null): void;
   onReadyChange(ready: boolean): void;
   helper: string;
@@ -14,6 +15,7 @@ type SelectPanelInternalProps = SelectPanelProps & {
 };
 
 export function SelectPanel({
+  active,
   dropTarget,
   actions,
   onLoaderChange,
@@ -40,6 +42,7 @@ export function SelectPanel({
 
   return (
     <SelectPanelView
+      active={active}
       dropTarget={dropTarget}
       helper={helper}
       renderPreview={renderPreview}

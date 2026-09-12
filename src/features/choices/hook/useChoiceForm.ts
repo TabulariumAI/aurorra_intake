@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { DEFAULT_WORKFLOW_SETTINGS, workflowValue } from "../service/choicesData";
+import type {
+  ChoiceFormSubmitPayload,
+  ChoiceStructure,
+  ChoiceValue,
+  WorkflowSettingName,
+  WorkflowSettings,
+} from "../type/choices.types";
 import { ChoiceData } from "../service/choicesData";
-import type { ChoiceFormSubmitPayload, ChoiceStructure, ChoiceValue } from "../type/choices.types";
+import { useState } from "react";
 
 type Intent = 0 | 1;
 
@@ -8,14 +15,14 @@ type ChoiceFormState = {
   radioLevels: Record<string, number>;
   intents: Record<string, Intent>;
   checked: Record<string, boolean>;
-  alwaysReview: boolean;
+  workflow: Record<WorkflowSettingName, boolean>;
   dirty: boolean;
 };
 
 type ChoiceFormController = ChoiceFormState & {
   setRadioLevel(choiceName: string, level: number): void;
   setCheckboxIntent(serviceId: string, checked: boolean): void;
-  setAlwaysReview(checked: boolean): void;
+  setWorkflowValue(name: WorkflowSettingName, checked: boolean): void;
   reset(): void;
   submit(): ChoiceFormSubmitPayload;
 };
@@ -95,60 +102,67 @@ function isUsableChoices(value: unknown): value is ChoiceValue[] {
   return Array.isArray(value) && value.length > 0 && value.some((entry) => entry && typeof entry.service === "string");
 }
 
+function workflowToState(settings: WorkflowSettings): Record<WorkflowSettingName, boolean> {
+  return DEFAULT_WORKFLOW_SETTINGS.reduce((next, setting) => {
+    next[setting.name] = workflowValue(settings, setting.name);
+    return next;
+  }, {} as Record<WorkflowSettingName, boolean>);
+}
+
 function buildInitialState(
   structure: ChoiceStructure,
   choicesJson: unknown,
-  alwaysReview: boolean,
+  initialWorkflow: WorkflowSettings,
 ): ChoiceFormState {
   const data = new ChoiceData(structure);
   const items = getItems(structure);
   const intents: Record<string, Intent> = {};
   const radioLevels: Record<string, number> = {};
-
   for (const item of items) {
     intents[item.name] = 0;
   }
 
-  if (isUsableChoices(choicesJson)) {
-    const levels = new Map(choicesJson.map((entry) => [entry.service, data.getNumericValue(entry.level)]));
-    for (const item of items) {
-      intents[item.name] = !item.system && data.getNumericValue(levels.get(item.name)) > 0 ? 1 : 0;
-    }
-    for (const entry of choicesJson) {
-      const choice = structure.choices.find((candidate) => candidate.name === entry.service);
-      if (choice?.options) {
-        radioLevels[choice.name] = data.getNumericValue(entry.level);
+  const choiceValues = data.normalizeChoiceValues(choicesJson) as ChoiceValue[];
+  for (const item of items) {
+    intents[item.name] = !item.system && choiceValues.some((entry) => entry.service === item.name && entry.level > 0) ? 1 : 0;
+  }
+  for (const item of structure.choices) {
+    if (item.options) {
+      const match = choiceValues.find((entry) => entry.service === item.name);
+      if (match) {
+        radioLevels[item.name] = match.level;
+      } else if (item.default != null) {
+        radioLevels[item.name] = parseInt(String(item.default), 10);
       }
+    } else if (item.default !== undefined) {
+      intents[item.name] = item.default ? 1 : intents[item.name];
     }
-  } else {
+  }
+  for (const choice of choiceValues) {
+    if (!choice?.service) continue;
     for (const item of items) {
-      intents[item.name] = !item.system && item.default ? 1 : 0;
-    }
-    for (const choice of structure.choices) {
-      if (choice.options) {
-        radioLevels[choice.name] = data.getNumericValue(choice.default ?? "None");
+      if (item.name === choice.service) {
+        radioLevels[choice.service] = choice.level;
       }
     }
   }
-
   return {
     radioLevels,
     intents,
     checked: recomputeChecked(structure, intents),
-    alwaysReview: !!alwaysReview,
+    workflow: workflowToState(initialWorkflow),
     dirty: false,
   };
 }
 
 function extractChoices(structure: ChoiceStructure, state: ChoiceFormState): ChoiceValue[] {
-  const data = new ChoiceData(structure);
   const result: ChoiceValue[] = [];
 
   for (const choice of structure.choices) {
     if (choice.options) {
       result.push({
         service: choice.name,
-        level: data.getNumericValue(state.radioLevels[choice.name] ?? 0),
+        level: state.radioLevels[choice.name] ?? 0,
       });
     } else if (choice.items) {
       for (const item of choice.items) {
@@ -167,6 +181,13 @@ function extractChoices(structure: ChoiceStructure, state: ChoiceFormState): Cho
   return result;
 }
 
+function extractWorkflow(state: ChoiceFormState): WorkflowSettings {
+  return DEFAULT_WORKFLOW_SETTINGS.map((setting) => ({
+    ...setting,
+    value: state.workflow[setting.name] ?? setting.value,
+  }));
+}
+
 export function getChoiceItemSum(structure: ChoiceStructure, serviceId: string, state: Pick<ChoiceFormState, "checked" | "intents">): number {
   const item = getItems(structure).find((candidate) => candidate.name === serviceId);
   const own = item?.system ? 0 : state.intents[serviceId] ?? 0;
@@ -181,9 +202,9 @@ export function getChoiceItemDependants(structure: ChoiceStructure, serviceId: s
 export function useChoiceForm(
   structure: ChoiceStructure,
   initialChoices: unknown,
-  initialAlwaysReview: boolean,
+  initialWorkflow: WorkflowSettings,
 ): ChoiceFormController {
-  const createInitial = () => buildInitialState(structure, initialChoices, initialAlwaysReview);
+  const createInitial = () => buildInitialState(structure, initialChoices, initialWorkflow);
   const [state, setState] = useState<ChoiceFormState>(createInitial);
 
   return {
@@ -212,10 +233,13 @@ export function useChoiceForm(
         };
       });
     },
-    setAlwaysReview(checked) {
+    setWorkflowValue(name, checked) {
       setState((current) => ({
         ...current,
-        alwaysReview: checked,
+        workflow: {
+          ...current.workflow,
+          [name]: checked,
+        },
         dirty: true,
       }));
     },
@@ -225,7 +249,7 @@ export function useChoiceForm(
     submit() {
       return {
         choices: extractChoices(structure, state),
-        alwaysReview: state.alwaysReview,
+        workflow: extractWorkflow(state),
       };
     },
   };

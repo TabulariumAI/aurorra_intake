@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSessionService, loadSession, validateSessionDocument } from "../service/SessionService";
 import type { SessionRuntime } from "../type/session.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
+import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
@@ -21,7 +22,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     numOfPages: 1,
     indexChoices: null,
     choicesBySession: {},
-    workflow: null,
+    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 

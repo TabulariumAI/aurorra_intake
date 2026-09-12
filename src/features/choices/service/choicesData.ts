@@ -1,4 +1,76 @@
-import type { ChoiceResult, ChoiceStructure, ChoiceValue } from "../type/choices.types";
+import type {
+  ChoiceResult,
+  ChoiceStructure,
+  ChoiceValue,
+  WorkflowSetting,
+  WorkflowSettingName,
+  WorkflowSettings,
+} from "../type/choices.types";
+
+export const DEFAULT_WORKFLOW_SETTINGS: WorkflowSettings = [
+  { name: "Review", label: "Review Before Index", value: false },
+  { name: "Redact", label: "Redact document", value: true },
+  { name: "Manifest", label: "Generate manifest", value: true },
+  { name: "Record", label: "Endorse document", value: true },
+  { name: "Abstract", label: "Analyze document", value: true },
+];
+
+const WORKFLOW_SETTING_NAMES = new Set(["Review", "Redact", "Manifest", "Record", "Abstract"] as WorkflowSettingName[]);
+const WORKFLOW_MANDATORY_SETTINGS: ReadonlySet<string> = new Set(["Redact", "Manifest", "Record", "Abstract"]);
+
+function parseBooleanValue(value: unknown, defaultValue: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (value == null) return defaultValue;
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  return defaultValue;
+}
+
+export function normalizeWorkflowSettings(value: unknown): WorkflowSettings {
+  if (!Array.isArray(value)) {
+    return structuredClone(DEFAULT_WORKFLOW_SETTINGS);
+  }
+
+  const valueByName = new Map<WorkflowSettingName, boolean>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const setting = item as WorkflowSetting;
+    if (!WORKFLOW_SETTING_NAMES.has(setting.name)) continue;
+    valueByName.set(setting.name, parseBooleanValue(setting.value, DEFAULT_WORKFLOW_SETTINGS.find((candidate) => candidate.name === setting.name)?.value ?? false));
+  }
+
+  return DEFAULT_WORKFLOW_SETTINGS.map((setting) => ({
+    ...setting,
+    value: valueByName.has(setting.name) ? valueByName.get(setting.name) ?? setting.value : setting.value,
+  }));
+}
+
+export function workflowValue(settings: WorkflowSettings | null | undefined, name: WorkflowSettingName): boolean {
+  const normalized = normalizeWorkflowSettings(settings);
+  return normalized.find((entry) => entry.name === name)?.value ?? false;
+}
+
+export function createIndexingPayload(choiceValues: unknown): ChoiceValue[] {
+  const normalized = new ChoiceData(CHOICESTRUCTURE).normalizeChoiceValues(choiceValues);
+  const systemChoices = CHOICESTRUCTURE.choices
+    .flatMap((choice) => choice.items ?? [])
+    .filter((item) => item.system)
+    .map((item) => ({ service: item.name, level: 0 }));
+  const filtered = normalized.filter((entry) => (
+    !WORKFLOW_MANDATORY_SETTINGS.has(entry.service) &&
+    !systemChoices.some((choice) => choice.service === entry.service)
+  ));
+  return [
+    ...filtered,
+    ...systemChoices,
+    { service: "Redact", level: 0 },
+    { service: "Manifest", level: 0 },
+    { service: "Record", level: 0 },
+    { service: "Abstract", level: 0 },
+  ];
+}
 
 export const CHOICESTRUCTURE: ChoiceStructure = {
   choices: [
@@ -45,10 +117,6 @@ export const CHOICESTRUCTURE: ChoiceStructure = {
       name: "Processing",
       items: [
         { name: "Validation", label: "Validation & Correction", dependency: "", default: true },
-        { name: "Redact", label: "Redacted Document", dependency: "ConfidentialIndexing:1", default: false },
-        { name: "Manifest", label: "Generate Manifest", dependency: "", default: true },
-        { name: "Record", label: "Endorse the Document", dependency: "FeeComputation:1", default: false },
-        { name: "Abstract", label: "Title Analysis", dependency: "ChainEnrichment:1, HistoryEnrichment:1", default: false },
       ],
     },
   ],
@@ -82,30 +150,6 @@ export class ChoiceData {
     });
 
     return result;
-  }
-
-  #buildWorkflowDefaults() {
-    const workflow =
-      this.jsonStructure &&
-      typeof this.jsonStructure === "object" &&
-      this.jsonStructure.workflow &&
-      typeof this.jsonStructure.workflow === "object"
-        ? this.jsonStructure.workflow
-        : null;
-
-    let alwaysReview = false;
-    let autoRefine = false;
-
-    if (workflow) {
-      if (typeof workflow.alwaysReview === "boolean") {
-        alwaysReview = workflow.alwaysReview;
-      }
-      if (typeof workflow.autoRefine === "boolean") {
-        autoRefine = workflow.autoRefine;
-      }
-    }
-
-    return { alwaysReview, autoRefine };
   }
 
   generateDefaultJson(): ChoiceValue[] {
@@ -157,6 +201,7 @@ export class ChoiceData {
         const service = (choice as { service?: unknown }).service;
         const level = (choice as { level?: unknown }).level;
         if (typeof service !== "string" || !service.trim()) continue;
+        if (!byService.has(service)) continue;
         const numericLevel = typeof level === "number" ? level : this.getNumericValue(level);
         byService.set(service, Number.isFinite(numericLevel) ? numericLevel : 0);
       }
@@ -167,7 +212,7 @@ export class ChoiceData {
 
   generateDefaultResult(): ChoiceResult {
     const choices = this.generateDefaultJson();
-    const workflow = this.#buildWorkflowDefaults();
+    const workflow = normalizeWorkflowSettings(null);
     return { choices, workflow };
   }
 }
@@ -226,25 +271,6 @@ export class Choices {
         return Math.min(pages, 20);
       default:
         return pages;
-    }
-  }
-
-  static #normalizeBoolean(value: unknown, defaultValue = true): boolean {
-    if (value === undefined || value === null) return defaultValue;
-    if (typeof value === "boolean") return value;
-    if (typeof value === "number") return value !== 0;
-    const normalized = String(value).trim().toLowerCase();
-    if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "y") return true;
-    if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "n") return false;
-    return defaultValue;
-  }
-
-  static getdWorkflow(choices: unknown = null): boolean {
-    try {
-      const parsed = JSON.parse(String(choices));
-      return this.#normalizeBoolean(parsed, true);
-    } catch {
-      return this.#normalizeBoolean(choices, true);
     }
   }
 }

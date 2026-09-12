@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { DEFAULT_WORKFLOW_SETTINGS, normalizeWorkflowSettings } from "../../features/choices/service/choicesData";
 import { localJsonStorage, sessionJsonStorage } from "../adapter/storageAdapters";
 import {
   LOCAL_STATE_KEYS,
@@ -48,10 +49,13 @@ const DEFAULT_STATE: StoreValues = {
   choicesBySession: {},
   selectionResetVersion: 0,
   sessionRequest: null,
-  workflow: null,
+  workflow: structuredClone(DEFAULT_WORKFLOW_SETTINGS),
 };
 
 function cloneDefault<Key extends StateKey>(name: Key): StoreValues[Key] {
+  if (name === "workflow") {
+    return structuredClone(DEFAULT_WORKFLOW_SETTINGS) as StoreValues[Key];
+  }
   return structuredClone(DEFAULT_STATE[name]);
 }
 
@@ -113,10 +117,14 @@ function writePersistedValues(
 }
 
 function getInitialValues(): StoreValues {
-  return {
+  const initialValues = {
     ...DEFAULT_STATE,
     ...readPersistedValues(SESSION_STATE_STORAGE_KEY, sessionJsonStorage),
     ...readPersistedValues(LOCAL_STATE_STORAGE_KEY, localJsonStorage),
+  };
+  return {
+    ...initialValues,
+    workflow: normalizeWorkflowSettings(initialValues.workflow),
   };
 }
 
@@ -132,6 +140,10 @@ export const useStore = create<StoreState>()((set, get) => ({
   resetSelection: () => set((state) => ({ selectionResetVersion: state.selectionResetVersion + 1 })),
   setValue: (name, value) => {
     if (value === undefined) return;
+    if (name === "workflow") {
+      set(statePatch("workflow", normalizeWorkflowSettings(value)));
+      return;
+    }
     set(statePatch(name, value));
   },
   resetValue: (name) => set(statePatch(name, cloneDefault(name))),

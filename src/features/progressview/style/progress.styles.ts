@@ -111,14 +111,6 @@ export const progressStyles = {
     borderRadius: "999rem",
     boxSizing: "border-box",
   },
-  finalIcon: {
-    backgroundColor: "#F0F6FA",
-    border: "1px solid #1B7FA6",
-    color: "#1B7FA6",
-  },
-  finalMessage: {
-    backgroundColor: "rgba(27, 127, 166, 0.05)",
-  },
   message: {
     display: "grid",
     minWidth: "0",
@@ -154,13 +146,16 @@ export const progressStyles = {
     fontWeight: 400,
     lineHeight: "1.55",
   },
-  detailActions: {
+  actions: {
     display: "flex",
     flexWrap: "wrap",
     gap: "0.75rem",
     alignItems: "center",
     justifyContent: "center",
     marginTop: "0.15rem",
+  },
+  detailActions: {
+    marginTop: "0.77rem",
   },
   error: {
     color: "#b42318",

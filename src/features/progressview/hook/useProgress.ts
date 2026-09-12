@@ -1,24 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
-import type { ProgressActions, ProgressEvent, ProgressJob } from "../type/progress.types";
-
-export type ProgressState = ProgressActions & {
-  jobs: readonly ProgressJob[];
-};
+import type { ProgressJob, ProgressState } from "../type/progress.types";
 
 export function useProgress(): ProgressState {
   const [jobs, setJobs] = useState<readonly ProgressJob[]>([]);
 
-  const receive = useCallback((event: ProgressEvent) => {
+  const receive = useCallback((event: ProgressJob) => {
     setJobs((current) => {
       const jobIndex = current.findIndex((job) => job.jobId === event.jobId);
-      if (jobIndex >= 0) {
-        return current.map((job, index) => index === jobIndex ? { ...job, ...event } : job);
-      }
-
-      return [
-        ...current.map<ProgressJob>((job) => job.phase === "started" ? { ...job, phase: "completed" } : job),
-        event,
-      ];
+      const next = [...current];
+      if (jobIndex < 0) next.push(event);
+      else next[jobIndex] = { ...current[jobIndex], ...event };
+      return next;
     });
   }, []);
 

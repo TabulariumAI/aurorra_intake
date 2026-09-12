@@ -43,6 +43,7 @@ const renderPreview: IntakeItemRenderer = ({ children }) => (
 function view(select: UseSelectPanelResult) {
   return (
     <SelectPanelView
+      active={true}
       dropTarget={document.createElement("section")}
       helper={select.mode === "review" ? "Review helper" : "Select helper"}
       renderPreview={renderPreview}
@@ -83,7 +84,7 @@ describe("SelectPanelView", () => {
     expect(button).toHaveAttribute("data-armed", "false");
   });
 
-  it("uses the standard aurorra-ui confirmation state before starting", () => {
+  it("uses the standard aurora-core confirmation state before starting", () => {
     const { select, start } = createSelect(false);
 
     render(view(select));
@@ -105,4 +106,22 @@ describe("SelectPanelView", () => {
     expect(screen.getByTestId("preview-host")).toHaveTextContent("Review Document");
     expect(screen.queryByTestId("select-host")).not.toBeInTheDocument();
   });
+});
+
+
+it.each(["select", "review"] as const)("reports activation changes for %s without switching renderers", (mode) => {
+  const { select } = createSelect(false);
+  select.mode = mode;
+  const renderSelect = vi.fn(() => <span>Select</span>);
+  const renderPreview = vi.fn(() => <span>Review</span>);
+  const props = { dropTarget: document.createElement("section"), helper: "Helper", renderSelect, renderPreview, select };
+  const { rerender } = render(<SelectPanelView {...props} active={true} />);
+  const renderer = mode === "select" ? renderSelect : renderPreview;
+  const inactive = mode === "select" ? renderPreview : renderSelect;
+  expect(renderer).toHaveBeenLastCalledWith(expect.objectContaining({ active: true, helper: "Helper" }));
+  rerender(<SelectPanelView {...props} active={false} />);
+  expect(renderer).toHaveBeenLastCalledWith(expect.objectContaining({ active: false }));
+  rerender(<SelectPanelView {...props} active={true} />);
+  expect(renderer).toHaveBeenLastCalledWith(expect.objectContaining({ active: true }));
+  expect(inactive).not.toHaveBeenCalled();
 });

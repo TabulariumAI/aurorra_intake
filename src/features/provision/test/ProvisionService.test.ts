@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createProvisionService } from "../service/ProvisionService";
 import type { ProvisionRuntime } from "../type/provision.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
+import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
@@ -21,7 +22,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     numOfPages: 1,
     indexChoices: null,
     choicesBySession: {},
-    workflow: null,
+    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 
@@ -98,7 +99,7 @@ describe("ProvisionService", () => {
       message: "Screening complete",
       phase: "completed",
     });
-    expect(receive.mock.calls[3][0].detail.actions.map((action: { label: string }) => action.label)).toEqual([
+    expect(receive.mock.calls[3][0].actions.map((action: { label: string }) => action.label)).toEqual([
       "Continue",
       "Cancel and Restart",
     ]);
@@ -109,7 +110,7 @@ describe("ProvisionService", () => {
     const service = createProvisionService(runtime);
 
     await service.process();
-    await receive.mock.calls[3][0].detail.actions[0].onConfirm();
+    await receive.mock.calls[3][0].actions[0].onConfirm();
 
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
@@ -117,7 +118,7 @@ describe("ProvisionService", () => {
     );
     expect(receive.mock.calls.slice(-2).map(([event]) => [event.message, event.phase, event.detail])).toEqual([
       ["Screening complete", "completed", undefined],
-      ["Confirmation received", "started", undefined],
+      ["Confirmation received", "completed", undefined],
     ]);
   });
 
@@ -126,7 +127,7 @@ describe("ProvisionService", () => {
     const service = createProvisionService(runtime);
 
     await service.process();
-    receive.mock.calls[3][0].detail.actions[1].onConfirm();
+    receive.mock.calls[3][0].actions[1].onConfirm();
 
     expect(restart).toHaveBeenCalledTimes(1);
   });

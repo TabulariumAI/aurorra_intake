@@ -8,7 +8,7 @@
     "moduleResolution": "Bundler",
     "noEmit": true,
     "paths": {
-      "aurorra-ui": ["../aurorra_ui/src/public-api.ts"],
+      "aurora-core": ["../aurora_core/src/public-api.ts"],
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
       "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime"],

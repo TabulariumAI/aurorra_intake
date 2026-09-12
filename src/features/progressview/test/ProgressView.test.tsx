@@ -35,7 +35,7 @@ describe("ProgressView", () => {
         jobs={[
           { jobId: "session", message: "Creating a session", phase: "completed" },
           { jobId: "upload", message: "Uploading your document", phase: "started" },
-          { error: "Index service unavailable", jobId: "page-1", message: "Processing page 1 of 2...", phase: "failed" },
+          { error: "Index service unavailable", jobId: "page-1", message: "Identifying document page 1 of 2...", phase: "failed" },
         ]}
         onBack={onBack}
       />,
@@ -47,6 +47,7 @@ describe("ProgressView", () => {
     const rows = within(timeline).getAllByRole("listitem");
 
     expect(screen.getByTestId("progress-intro")).toHaveTextContent("I’ll keep you updated as I process your document.");
+    expect(view).toHaveAttribute("data-panel-scroll", "true");
     expect(screen.getByTestId("progress-caption")).toHaveTextContent("Document processing");
     expect(screen.getByTestId("progress-caption")).toHaveStyle({ textTransform: "uppercase" });
     expect(screen.getByTestId("progress-intro").firstElementChild).toHaveStyle({
@@ -141,17 +142,43 @@ describe("ProgressView", () => {
     expect(scroll.mock.instances[1]).toBe(screen.getAllByRole("listitem")[1]);
   });
 
+  it("keeps a completed upload rendered as completed when the next update appears", () => {
+    const view = render(
+      <ProgressView
+        jobs={[{ jobId: "upload", message: "Uploading your document", phase: "completed" }]}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("progress-completed-check")).toBeVisible();
+    expect(screen.queryByTestId("progress-success-star")).not.toBeInTheDocument();
+
+    view.rerender(
+      <ProgressView
+        jobs={[
+          { jobId: "upload", message: "Uploading your document", phase: "completed" },
+          { jobId: "refine", message: "Refining document", phase: "started" },
+        ]}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const upload = screen.getAllByRole("listitem")[0];
+    expect(within(upload).getByTestId("progress-completed-check")).toBeVisible();
+    expect(within(upload).queryByTestId("progress-success-star")).not.toBeInTheDocument();
+  });
+
   it("renders screening details and confirmation actions in the timeline", () => {
     const onCancel = vi.fn();
     const onContinue = vi.fn();
     render(
       <ProgressView
         jobs={[{
+          actions: [
+            { label: "Continue", onConfirm: onContinue, requireConfirmation: false, variant: "primary" },
+            { label: "Cancel and Restart", onConfirm: onCancel, requireConfirmation: true, variant: "secondary" },
+          ],
           detail: {
-            actions: [
-              { label: "Continue", onConfirm: onContinue, requireConfirmation: false, variant: "primary" },
-              { label: "Cancel and Restart", onConfirm: onCancel, requireConfirmation: true, variant: "secondary" },
-            ],
             description: "Your document has successfully passed the initial review.",
             summary: "Processing will continue after confirmation.",
           },
@@ -165,18 +192,18 @@ describe("ProgressView", () => {
 
     const row = screen.getByRole("listitem");
     expect(within(row).getByText("Screening complete")).toBeVisible();
-    expect(within(row).getByTestId("progress-success-star")).toBeVisible();
-    expect(within(row).getByTestId("progress-success-star").querySelector("path")).toHaveAttribute("d", "m12 2.5 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.5 6.3-.9L12 2.5Z");
+    expect(within(row).getByTestId("progress-completed-check")).toBeVisible();
+    expect(within(row).queryByTestId("progress-success-star")).not.toBeInTheDocument();
     expect(within(row).getByLabelText("Completed")).toHaveStyle({
-      backgroundColor: "#F0F6FA",
-      border: "1px solid #1B7FA6",
-      color: "#1B7FA6",
+      backgroundColor: "#ECF7F1",
+      border: "1px solid #1E8E5E",
+      color: "#1E8E5E",
     });
-    expect(within(row).getByText("Screening complete").parentElement).toHaveStyle({ backgroundColor: "rgba(27, 127, 166, 0.05)" });
+    expect(within(row).getByText("Screening complete").parentElement?.style.backgroundColor).toBe("transparent");
     expect(within(row).getByText("Screening complete").parentElement).toHaveStyle({ paddingLeft: "0.9rem" });
     expect(within(row).getByText("Your document has successfully passed the initial review.")).toBeVisible();
     expect(within(row).getByText("Processing will continue after confirmation.")).toBeVisible();
-    expect(within(row).getByTestId("progress-detail-actions")).toHaveStyle({ justifyContent: "center" });
+    expect(within(row).getByTestId("progress-actions")).toHaveStyle({ justifyContent: "center" });
 
     fireEvent.click(within(row).getByRole("button", { name: "Continue" }));
     expect(onContinue).toHaveBeenCalledTimes(1);
@@ -184,5 +211,24 @@ describe("ProgressView", () => {
     expect(onCancel).not.toHaveBeenCalled();
     fireEvent.click(within(row).getByRole("button", { name: "Confirm" }));
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+  it("keeps screening details but hides their actions after processing continues", () => {
+    render(
+      <ProgressView
+        jobs={[
+          {
+            jobId: "screening", message: "Screening complete", phase: "completed",
+            detail: { description: "Document accepted", summary: "Ready for processing" },
+            actions: [{ label: "Continue", onConfirm: vi.fn(), requireConfirmation: false, variant: "primary" }],
+          },
+          { jobId: "refine", message: "Refining document", phase: "started" },
+        ]}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Document accepted")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("progress-spinner")).toBeVisible();
+    expect(screen.getByTestId("progress-completed-check")).toBeVisible();
   });
 });

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { ConfButton } from "aurorra-ui";
+import { ConfButton } from "aurora-core";
 import { selectPanelStyles } from "../style/select.styles";
 import type { IntakeItemRenderer } from "../../intake/type/intake.types";
 import type { UseSelectPanelResult } from "../type/select.types";
@@ -11,6 +11,7 @@ const SelectViewer = lazy(async () => {
 });
 
 type SelectPanelViewProps = {
+  active: boolean;
   dropTarget: HTMLElement;
   helper: string;
   renderPreview: IntakeItemRenderer;
@@ -18,7 +19,7 @@ type SelectPanelViewProps = {
   select: UseSelectPanelResult;
 };
 
-export function SelectPanelView({ dropTarget, helper, renderPreview, renderSelect, select }: SelectPanelViewProps) {
+export function SelectPanelView({ active, dropTarget, helper, renderPreview, renderSelect, select }: SelectPanelViewProps) {
   const selectContent = select.mode === "select" ? (
     <SelectForm
       dropTarget={dropTarget}
@@ -76,8 +77,8 @@ export function SelectPanelView({ dropTarget, helper, renderPreview, renderSelec
   return (
     <div style={selectPanelStyles.host}>
       {select.mode === "review"
-        ? renderPreview({ children: previewContent, helper })
-        : renderSelect({ children: selectContent, helper })}
+        ? renderPreview({ active, children: previewContent, helper })
+        : renderSelect({ active, children: selectContent, helper })}
     </div>
   );
 }

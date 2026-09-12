@@ -13,6 +13,7 @@ export type IntakeContainerActions = {
 };
 
 export type IntakeItemProps = {
+  active: boolean;
   children: ReactNode;
   helper: string;
 };

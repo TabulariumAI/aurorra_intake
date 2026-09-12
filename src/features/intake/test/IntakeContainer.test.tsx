@@ -49,7 +49,7 @@ describe("IntakeContainer", () => {
       />,
     );
 
-    expect(screen.getByTestId("settings-panel")).toHaveStyle({ alignItems: "center", display: "flex", overflow: "auto" });
+    expect(screen.getByTestId("settings-panel")).toHaveStyle({ alignItems: "center", display: "flex", overflow: "hidden" });
     expect(screen.getByText("Settings form")).toBeVisible();
   });
 });

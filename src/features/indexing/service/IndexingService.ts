@@ -3,31 +3,15 @@ import type {
   IndexingServiceActions,
   IndexingStatusResponse,
 } from "../type/indexing.types";
+import { ENRICHMENT_STEPS, PAGE_PROGRESS_STAGES, PAGE_SERVICES } from "../config/indexing.config";
+import type { ProgressJob } from "../../progressview/type/progress.types";
+import { createIndexingPayload } from "../../choices/service/choicesData";
 
 type ErrorLike = {
   error?: unknown;
   details?: unknown;
   message?: unknown;
 };
-
-const PAGE_SERVICES = [
-  "ConfidentialIndexing",
-  "TransactionIndexing",
-  "EndorsementIndexing",
-  "PartyClauseIndexing",
-  "RecitalIndexing",
-  "ExhibitIndexing",
-  "MonetaryInfoIndexing",
-  "AcknowledgmentIndexing",
-  "CourtIndexing",
-  "VitalIndexing",
-] as const;
-
-const ENRICHMENT_STEPS = [
-  ["LegalEnrichment", "Enriching legal descriptions"],
-  ["PartyEnrichment", "Enriching party information"],
-  ["Validation", "Validating document data"],
-] as const;
 
 function resolveMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
@@ -92,9 +76,7 @@ class IndexingService implements IndexingServiceActions {
 
     runtime.store.set("indexingStepStatus", true);
     let isComplete = false;
-    let lastJobId = crypto.randomUUID();
-    let lastMessage = "Identifying pages";
-    runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+    let lastProgress: ProgressJob = { jobId: crypto.randomUUID(), message: "Refining document", phase: "started" };
 
     try {
       const session = runtime.store.get("session");
@@ -123,59 +105,65 @@ class IndexingService implements IndexingServiceActions {
       const sessionId = String(session);
       const pageSegments = PAGE_SERVICES.filter((service) => (levels.get(service) ?? 0) > 0).length;
       const pageIntervalMs = runtime.baseIntervalMs + 50 * pageSegments;
+      isComplete = await this.checkStatus(sessionId);
+      if (isComplete) return;
+
+      runtime.progress.receive(lastProgress);
+      const indexedChoices = createIndexingPayload(choices);
+      await this.start(sessionId, documentName, indexedChoices);
       await delay(runtime.baseIntervalMs);
       isComplete = await this.checkStatus(sessionId);
-
       if (!isComplete) {
-        lastJobId = crypto.randomUUID();
-        lastMessage = "Refining document";
-        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
-        await this.start(sessionId, documentName, choices);
-        await delay(runtime.baseIntervalMs);
-        isComplete = await this.checkStatus(sessionId);
+        runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
 
       if (!isComplete) {
-        lastJobId = crypto.randomUUID();
-        lastMessage = "Recognizing document";
-        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        lastProgress = { jobId: crypto.randomUUID(), message: "Recognizing document", phase: "started" };
+        runtime.progress.receive(lastProgress);
         await delay(runtime.baseIntervalMs);
         isComplete = await this.checkStatus(sessionId);
+        if (!isComplete) {
+          runtime.progress.receive({ ...lastProgress, phase: "completed" });
+        }
       }
 
-      if (!isComplete) {
+      for (const stage of PAGE_PROGRESS_STAGES) {
+        if (isComplete) break;
+        const jobId = crypto.randomUUID();
         for (let page = 1; page <= pages; page++) {
-          lastJobId = crypto.randomUUID();
-          lastMessage = `Processing page ${page} of ${pages}`;
-          runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+          lastProgress = { jobId, message: `${stage} page ${page} of ${pages}`, phase: "started" };
+          runtime.progress.receive(lastProgress);
           await delay(pageIntervalMs);
           isComplete = await this.checkStatus(sessionId);
-          if (isComplete) {
-            break;
-          }
+          if (isComplete) break;
+          runtime.progress.receive({ ...lastProgress, phase: "completed" });
         }
       }
 
       for (const [service, message] of ENRICHMENT_STEPS) {
         if (isComplete || (levels.get(service) ?? 0) <= 0) continue;
-        lastJobId = crypto.randomUUID();
-        lastMessage = message;
-        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        lastProgress = { jobId: crypto.randomUUID(), message, phase: "started" };
+        runtime.progress.receive(lastProgress);
         await delay(runtime.baseIntervalMs);
         isComplete = await this.checkStatus(sessionId);
+        if (!isComplete) {
+          runtime.progress.receive({ ...lastProgress, phase: "completed" });
+        }
       }
 
       if (!isComplete) {
-        lastJobId = crypto.randomUUID();
-        lastMessage = "Analyzing Index Quality";
-        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        lastProgress = { jobId: crypto.randomUUID(), message: "Analyzing Index Quality", phase: "started" };
+        runtime.progress.receive(lastProgress);
         await delay(runtime.baseIntervalMs);
+        isComplete = await this.checkStatus(sessionId);
+        if (!isComplete) {
+          runtime.progress.receive({ ...lastProgress, phase: "completed" });
+        }
       }
 
       if (!isComplete) {
-        lastJobId = crypto.randomUUID();
-        lastMessage = "Retrieving processed data...";
-        runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "started" });
+        lastProgress = { jobId: crypto.randomUUID(), message: "Retrieving processed data...", phase: "started" };
+        runtime.progress.receive(lastProgress);
         let attempts = 0;
         while (!isComplete && attempts < 11) {
           await delay(runtime.baseIntervalMs);
@@ -202,10 +190,10 @@ class IndexingService implements IndexingServiceActions {
         });
         return;
       }
-      runtime.progress.receive({ jobId: lastJobId, message: lastMessage, phase: "completed" });
+      runtime.progress.receive({ ...lastProgress, phase: "completed" });
     } catch (error) {
       const message = getErrorMessage(error, "document processing", runtime);
-      runtime.progress.receive({ error: message, jobId: lastJobId, message: lastMessage, phase: "failed" });
+      runtime.progress.receive({ ...lastProgress, error: message, phase: "failed" });
     } finally {
       runtime.store.set("indexingStepStatus", false);
       if (isComplete) {

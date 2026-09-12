@@ -1,19 +1,20 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ChoicesPanel } from "../component/ChoicesPanel";
-import { ChoiceData, CHOICESTRUCTURE } from "../service/choicesData";
+import { ChoiceData, DEFAULT_WORKFLOW_SETTINGS, CHOICESTRUCTURE } from "../service/choicesData";
 
 describe("ChoicesPanel", () => {
   it("renders Intake choices with the host Preview action", () => {
     const onClose = vi.fn();
 
     render(
-      <ChoicesPanel
-        disabledGroups={[]}
-        initialAlwaysReview={false}
-        initialChoices={[{ service: "Recognition", level: 4 }]}
-        onCancel={onClose}
-        onClose={onClose}
+        <ChoicesPanel
+          disabledGroups={[]}
+          initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
+          choicesEditable
+          initialChoices={[{ service: "Recognition", level: 4 }]}
+          onCancel={onClose}
+          onClose={onClose}
         onSave={vi.fn()}
         structure={CHOICESTRUCTURE}
       />,
@@ -21,8 +22,14 @@ describe("ChoicesPanel", () => {
 
     expect(screen.queryByRole("heading", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close preview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Settings" }).querySelector("[data-panel-scroll='true']")).toBeTruthy();
     expect(screen.getByRole("radio", { name: /4 -/ })).toBeChecked();
     expect(screen.queryByRole("checkbox", { name: "Studio Mode" })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-service-id="LegalEnrichment"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-service-id="PartyEnrichment"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-service-id="ChainEnrichment"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-service-id="HistoryEnrichment"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-service-id="FeeComputation"]')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledOnce();
@@ -38,7 +45,8 @@ describe("ChoicesPanel", () => {
 
     render(
       <ChoicesPanel
-        initialAlwaysReview={false}
+        initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
+        choicesEditable={false}
         initialChoices={choices}
         onCancel={vi.fn()}
         onClose={vi.fn()}

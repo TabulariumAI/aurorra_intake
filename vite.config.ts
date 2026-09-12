@@ -8,11 +8,12 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      "aurorra-ui": path.resolve(rootDir, "../aurorra_ui/src/public-api.ts"),
+      "aurora-core": path.resolve(rootDir, "../aurora_core/src/public-api.ts"),
       react: path.resolve(rootDir, "node_modules/react"),
       "react-dom": path.resolve(rootDir, "node_modules/react-dom"),
+      zustand: path.resolve(rootDir, "node_modules/zustand"),
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ["react", "react-dom", "zustand"],
     preserveSymlinks: true,
   },
   plugins: [react()],

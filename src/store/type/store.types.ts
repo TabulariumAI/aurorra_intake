@@ -1,3 +1,5 @@
+import type { WorkflowSettings } from "../../features/choices/type/choices.types";
+
 export type StoreValues = {
   settingsOpen: boolean;
   isSessionInProcess: boolean;
@@ -15,7 +17,7 @@ export type StoreValues = {
   choicesBySession: Record<string, unknown[] | null>;
   selectionResetVersion: number;
   sessionRequest: IntakeSessionRequest | null;
-  workflow: unknown;
+  workflow: WorkflowSettings;
 };
 
 export type IntakeSessionRequest = { id: number; session: string };

@@ -1,5 +1,5 @@
 import type { ViewerState } from "@tabulariumai/aurora-lens";
-import { ConfButton } from "aurorra-ui";
+import { ConfButton } from "aurora-core";
 import { useSelectViewer } from "../hook/useSelectViewer";
 import { selectViewerStyle, wrapperStyles } from "../style/select.styles";
 import type { SelectViewerProps } from "../type/selectViewer.types";

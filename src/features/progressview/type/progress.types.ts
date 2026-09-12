@@ -8,12 +8,11 @@ export type ProgressAction = {
 };
 
 export type ProgressDetail = {
-  actions: readonly ProgressAction[];
   description: string;
   summary: string;
 };
 
-export type ProgressEvent = {
+export type ProgressJob = {
   actions?: readonly ProgressAction[];
   detail?: ProgressDetail;
   jobId: string;
@@ -22,11 +21,13 @@ export type ProgressEvent = {
   error?: string;
 };
 
-export type ProgressJob = Pick<ProgressEvent, "actions" | "detail" | "jobId" | "message" | "phase" | "error">;
-
 export type ProgressActions = {
-  receive(event: ProgressEvent): void;
+  receive(job: ProgressJob): void;
   reset(): void;
+};
+
+export type ProgressState = ProgressActions & {
+  jobs: readonly ProgressJob[];
 };
 
 export type ProgressViewProps = {

@@ -25,25 +25,26 @@ export type ChoiceGroup = {
 
 export type ChoiceStructure = {
   choices: ChoiceGroup[];
-  workflow?: {
-    alwaysReview?: boolean;
-    autoRefine?: boolean;
-  };
 };
+
+export type WorkflowSettingName = "Review" | "Redact" | "Manifest" | "Record" | "Abstract";
+
+export type WorkflowSetting = {
+  name: WorkflowSettingName;
+  label: string;
+  value: boolean;
+};
+
+export type WorkflowSettings = WorkflowSetting[];
 
 export type ChoiceValue = {
   service: string;
   level: number;
 };
 
-export type ChoiceWorkflow = {
-  alwaysReview: boolean;
-  autoRefine: boolean;
-};
-
 export type ChoiceResult = {
   choices: ChoiceValue[];
-  workflow: ChoiceWorkflow;
+  workflow: WorkflowSettings;
 };
 
 export type ChoicesBackendData = {
@@ -100,7 +101,7 @@ export type SessionDataLoadRuntime = Pick<ChoicesRuntime, "dataWorkerClient" | "
 
 export type ChoicesSaveResult = {
   choices: ChoiceValue[];
-  alwaysReview: boolean;
+  workflow: WorkflowSettings;
   changed: boolean;
 };
 
@@ -110,13 +111,14 @@ export type ChoiceFormViewOptions = {
 
 export type ChoiceFormSubmitPayload = {
   choices: ChoiceValue[];
-  alwaysReview: boolean;
+  workflow: WorkflowSettings;
 };
 
 export type ChoiceFormProps = {
   structure: ChoiceStructure;
   initialChoices: unknown;
-  initialAlwaysReview: boolean;
+  initialWorkflow: WorkflowSettings;
+  choicesEditable: boolean;
   disabledGroups?: string[];
   onSave(payload: ChoiceFormSubmitPayload): void;
   onCancel(): void;

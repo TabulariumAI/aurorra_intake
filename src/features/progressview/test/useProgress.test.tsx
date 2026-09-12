@@ -3,6 +3,33 @@ import { describe, expect, it } from "vitest";
 import { useProgress } from "../hook/useProgress";
 
 describe("useProgress", () => {
+  it("updates identifying and processing page rows through all seven pages", () => {
+    const { result } = renderHook(() => useProgress());
+    act(() => result.current.receive({ jobId: "recognize", message: "Recognizing document", phase: "started" }));
+    act(() => result.current.receive({ jobId: "recognize", message: "Recognizing document", phase: "completed" }));
+
+    for (const stage of ["Identifying document", "Indexing document"]) {
+      for (let page = 1; page <= 7; page++) {
+        act(() => result.current.receive({ jobId: stage, message: `${stage} page ${page} of 7`, phase: "started" }));
+        expect(result.current.jobs.at(-1)).toEqual({ jobId: stage, message: `${stage} page ${page} of 7`, phase: "started" });
+        if (stage === "Identifying document") {
+          expect(result.current.jobs.some((job) => job.jobId === "Indexing document")).toBe(false);
+        } else {
+          expect(result.current.jobs[1]).toEqual({ jobId: "Identifying document", message: "Identifying document page 7 of 7", phase: "completed" });
+        }
+        act(() => result.current.receive({ jobId: stage, message: `${stage} page ${page} of 7`, phase: "completed" }));
+      }
+    }
+
+    act(() => result.current.receive({ jobId: "enrich", message: "Enriching legal descriptions", phase: "started" }));
+    expect(result.current.jobs).toEqual([
+      { jobId: "recognize", message: "Recognizing document", phase: "completed" },
+      { jobId: "Identifying document", message: "Identifying document page 7 of 7", phase: "completed" },
+      { jobId: "Indexing document", message: "Indexing document page 7 of 7", phase: "completed" },
+      { jobId: "enrich", message: "Enriching legal descriptions", phase: "started" },
+    ]);
+  });
+
   it("keeps the starting message while each job reaches a terminal state", () => {
     const { result } = renderHook(() => useProgress());
 
@@ -19,7 +46,7 @@ describe("useProgress", () => {
     ]);
   });
 
-  it("completes the active job when the next job starts and resets on a new intake", () => {
+  it("keeps an active job started when a different job starts and resets on a new intake", () => {
     const { result } = renderHook(() => useProgress());
 
     act(() => {
@@ -28,7 +55,7 @@ describe("useProgress", () => {
     });
 
     expect(result.current.jobs).toEqual([
-      { jobId: "session", message: "Creating a session", phase: "completed" },
+      { jobId: "session", message: "Creating a session", phase: "started" },
       { jobId: "upload", message: "Uploading your document", phase: "started" },
     ]);
 
@@ -47,7 +74,7 @@ describe("useProgress", () => {
     });
 
     expect(result.current.jobs).toEqual([
-      { jobId: "retrieve-1", message: "Retrieving processed data...", phase: "completed" },
+      { jobId: "retrieve-1", message: "Retrieving processed data...", phase: "started" },
       { jobId: "retrieve-2", message: "Retrieving processed data...", phase: "completed" },
     ]);
   });
@@ -100,7 +127,7 @@ describe("useProgress", () => {
     });
 
     expect(result.current.jobs).toEqual([
-      { jobId: "retrieve-1", message: "Retrieving processed data...", phase: "completed" },
+      { jobId: "retrieve-1", message: "Retrieving processed data...", phase: "started" },
       { error: "Index service unavailable", jobId: "retrieve-2", message: "Retrieving processed data...", phase: "failed" },
     ]);
   });
@@ -114,7 +141,7 @@ describe("useProgress", () => {
     });
 
     expect(result.current.jobs).toEqual([
-      { jobId: "retrieve-11", message: "Retrieving processed data...", phase: "completed" },
+      { jobId: "retrieve-11", message: "Retrieving processed data...", phase: "started" },
       { jobId: "delay", message: "Processing is taking longer than expected.", phase: "info" },
     ]);
   });

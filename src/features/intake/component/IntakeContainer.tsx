@@ -32,7 +32,7 @@ export function IntakeContainer({
       <section
         id="settings-panel"
         data-testid="settings-panel"
-        style={{ ...getIntakeSlotStyle(isSettingsPanelVisible), overflow: "auto" }}
+        style={{ ...getIntakeSlotStyle(isSettingsPanelVisible), overflow: "hidden" }}
       >
         {settings}
       </section>

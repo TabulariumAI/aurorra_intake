@@ -96,27 +96,27 @@ export class ProvisionService {
       const screeningJobId = crypto.randomUUID();
       runtime.progress.receive({ jobId: screeningJobId, message: "Screening complete", phase: "started" });
       runtime.progress.receive({
+        actions: [
+          {
+            label: "Continue",
+            onConfirm: () => {
+              runtime.progress.receive({ jobId: screeningJobId, message: "Screening complete", phase: "completed" });
+              runtime.progress.receive({ jobId: crypto.randomUUID(), message: "Confirmation received", phase: "completed" });
+              runtime.eventBus.emit(runtime.events.reRoute, {
+                [runtime.events.reRoute.detail.stage]: "indexing",
+              });
+            },
+            requireConfirmation: false,
+            variant: "primary",
+          },
+          {
+            label: "Cancel and Restart",
+            onConfirm: runtime.restart,
+            requireConfirmation: true,
+            variant: "secondary",
+          },
+        ],
         detail: {
-          actions: [
-            {
-              label: "Continue",
-              onConfirm: () => {
-                runtime.progress.receive({ jobId: screeningJobId, message: "Screening complete", phase: "completed" });
-                runtime.progress.receive({ jobId: crypto.randomUUID(), message: "Confirmation received", phase: "started" });
-                runtime.eventBus.emit(runtime.events.reRoute, {
-                  [runtime.events.reRoute.detail.stage]: "indexing",
-                });
-              },
-              requireConfirmation: false,
-              variant: "primary",
-            },
-            {
-              label: "Cancel and Restart",
-              onConfirm: runtime.restart,
-              requireConfirmation: true,
-              variant: "secondary",
-            },
-          ],
           description: String(result.description),
           summary: result.accepted
             ? "A comprehensive analysis of this document will now be performed to classify and extract all required information."

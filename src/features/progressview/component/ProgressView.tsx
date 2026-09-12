@@ -1,4 +1,4 @@
-import { ConfButton } from "aurorra-ui";
+import { ConfButton } from "aurora-core";
 import { useEffect, useRef } from "react";
 import {
   progressMessageStyles,
@@ -8,7 +8,7 @@ import {
 } from "../style/progress.styles";
 import type { ProgressPhase, ProgressViewProps } from "../type/progress.types";
 
-function ProgressIcon({ final, phase }: { final: boolean; phase: ProgressPhase }) {
+function ProgressIcon({ phase }: { phase: ProgressPhase }) {
   if (phase === "started") {
     return (
       <svg aria-hidden="true" className="progressview-active" data-testid="progress-spinner" fill="none" height="34" viewBox="0 0 24 24" width="34">
@@ -18,13 +18,6 @@ function ProgressIcon({ final, phase }: { final: boolean; phase: ProgressPhase }
     );
   }
   if (phase === "completed") {
-    if (final) {
-      return (
-        <svg aria-hidden="true" data-testid="progress-success-star" fill="none" height="20" viewBox="0 0 24 24" width="20">
-          <path d="m12 2.5 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.5 6.3-.9L12 2.5Z" fill="currentColor" />
-        </svg>
-      );
-    }
     return (
       <svg aria-hidden="true" data-testid="progress-completed-check" fill="none" height="20" viewBox="0 0 24 24" width="20">
         <path d="m7.5 12.2 3 3 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
@@ -55,7 +48,7 @@ export function ProgressView({ jobs, onBack }: ProgressViewProps) {
   }, [jobs]);
 
   return (
-    <section aria-label="Document processing" aria-live="polite" data-testid="progress-view" style={progressStyles.root}>
+    <section aria-label="Document processing" aria-live="polite" data-panel-scroll="true" data-testid="progress-view" style={progressStyles.root}>
       <style>{progressMotionStyles}</style>
       <div data-testid="progress-content" style={progressStyles.content}>
         <p data-testid="progress-caption" style={progressStyles.caption}>Document processing</p>
@@ -76,37 +69,24 @@ export function ProgressView({ jobs, onBack }: ProgressViewProps) {
                 aria-current={job.phase === "started" ? "step" : undefined}
                 aria-label={job.phase === "started" ? "In progress" : job.phase === "completed" ? "Completed" : job.phase === "failed" ? "Failed" : "Information"}
                 className={job.phase === "started" ? "progressview-active-ring" : undefined}
-                style={{ ...progressStyles.icon, ...progressPhaseStyles[job.phase], ...(index === lastIndex && job.phase === "completed" ? progressStyles.finalIcon : {}) }}
+                style={{ ...progressStyles.icon, ...progressPhaseStyles[job.phase] }}
               >
-                <ProgressIcon final={index === lastIndex} phase={job.phase} />
+                <ProgressIcon phase={job.phase} />
               </span>
               <div style={{
                 ...progressStyles.message,
                 ...progressMessageStyles[job.phase],
                 ...(job.detail ? progressStyles.detailMessage : {}),
-                ...(index === lastIndex && job.phase === "completed" ? progressStyles.finalMessage : {}),
               }}>
                 <span style={job.detail ? progressStyles.detailCopy : progressStyles.messageCopy}>{job.message}</span>
                 {job.detail ? (
                   <div style={progressStyles.detail}>
                     <p style={progressStyles.detailText}>{job.detail.description}</p>
                     <p style={progressStyles.detailText}>{job.detail.summary}</p>
-                    <div data-testid="progress-detail-actions" style={progressStyles.detailActions}>
-                      {index === lastIndex ? job.detail.actions.map((action) => (
-                        <ConfButton
-                          data-progress-action={action.label}
-                          key={action.label}
-                          label={action.label}
-                          onConfirm={action.onConfirm}
-                          requireConfirmation={action.requireConfirmation}
-                          variant={action.variant}
-                        />
-                      )) : null}
-                    </div>
                   </div>
                 ) : null}
-                {job.actions ? (
-                  <div data-testid="progress-actions" style={progressStyles.detailActions}>
+                {job.actions && (!job.detail || index === lastIndex) ? (
+                  <div data-testid="progress-actions" style={{ ...progressStyles.actions, ...(job.detail ? progressStyles.detailActions : {}) }}>
                     {job.actions.map((action) => (
                       <ConfButton
                         data-progress-action={action.label}
