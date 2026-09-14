@@ -311,9 +311,9 @@ describe("Container", () => {
     expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
     expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
     expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    act(() => storeApi.getState().closeSettings());
 
     expect(screen.getByTestId("select-panel")).not.toHaveStyle({ display: "none" });
     expect(screen.getByTestId("settings-panel")).toHaveStyle({ display: "none" });
@@ -334,7 +334,7 @@ describe("Container", () => {
     });
 
     expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
   it("passes the intake selection reset version to the selection owner", () => {
@@ -367,7 +367,7 @@ it("reports only the active renderer through settings, progress, and restart", (
   act(() => storeApi.getState().openSettings());
   expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "false");
   expect(screen.getByTestId("choices-host")).toHaveAttribute("data-active", "true");
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  act(() => storeApi.getState().closeSettings());
   expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
   act(() => {
     capturedEventBus!.emit({ name: "reRoute" }, { stage: "session", jobId: "session-1" });
@@ -377,7 +377,7 @@ it("reports only the active renderer through settings, progress, and restart", (
   expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "true");
   act(() => storeApi.getState().openSettings());
   expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  act(() => storeApi.getState().closeSettings());
   expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "true");
   fireEvent.click(screen.getByRole("button", { name: "Cancel and Restart" }));
   expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");

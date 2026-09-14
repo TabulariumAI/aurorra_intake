@@ -95,7 +95,7 @@ describe("SelectPanelView", () => {
     expect(start).not.toHaveBeenCalled();
     expect(button).toHaveAttribute("data-armed", "true");
     expect(button).toHaveTextContent("Confirm");
-    expect(button.style.backgroundColor).toBe("var(--primary)");
+    expect(button.style.backgroundColor).toBe("var(--primary-dark)");
   });
 
   it("renders Review through the Preview wrapper and not the Select wrapper", () => {

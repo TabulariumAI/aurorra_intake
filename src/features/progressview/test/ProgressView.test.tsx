@@ -50,10 +50,10 @@ describe("ProgressView", () => {
     expect(view).toHaveAttribute("data-panel-scroll", "true");
     expect(screen.getByTestId("progress-caption")).toHaveTextContent("Document processing");
     expect(screen.getByTestId("progress-caption")).toHaveStyle({ textTransform: "uppercase" });
+    expect(screen.getByTestId("progress-intro").firstElementChild).toHaveAttribute("style", expect.stringContaining("border: 1px solid var(--primary-dark)"));
     expect(screen.getByTestId("progress-intro").firstElementChild).toHaveStyle({
-      backgroundColor: "#F0F6FA",
-      border: "1px solid #1B7FA6",
-      color: "#1B7FA6",
+      backgroundColor: "var(--gray-50)",
+      color: "var(--primary-dark)",
     });
     expect(screen.queryByText("I am summarizing")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
@@ -65,31 +65,31 @@ describe("ProgressView", () => {
     });
     expect(rows).toHaveLength(3);
     expect(within(rows[0]).getByLabelText("Completed")).toHaveStyle({
-      backgroundColor: "#ECF7F1",
-      border: "1px solid #1E8E5E",
-      color: "#1E8E5E",
+      backgroundColor: "#ECFDF3",
+      border: "1px solid #15803D",
+      color: "#15803D",
     });
-    expect(within(rows[0]).getByText("Creating a session").parentElement).toHaveStyle({ backgroundColor: "rgba(30, 142, 94, 0.05)" });
+    expect(within(rows[0]).getByText("Creating a session").parentElement).toHaveStyle({ backgroundColor: "#ECFDF3" });
     expect(within(rows[0]).getByTestId("progress-completed-check")).toBeVisible();
     expect(within(rows[0]).getByTestId("progress-connector")).toHaveStyle({
-      borderLeftColor: "#B7C8CF",
+      borderLeftColor: "var(--gray-300)",
       borderLeftStyle: "dotted",
       borderLeftWidth: "2px",
     });
     expect(screen.getByTestId("progress-intro-connector")).toHaveStyle({
-      borderLeftColor: "#B7C8CF",
+      borderLeftColor: "var(--gray-300)",
       bottom: "-1.35rem",
       top: "2.5rem",
     });
+    expect(within(rows[1]).getByLabelText("In progress")).toHaveAttribute("style", expect.stringContaining("border: 1px solid var(--primary-dark)"));
     expect(within(rows[1]).getByLabelText("In progress")).toHaveStyle({
-      backgroundColor: "#F0F6FA",
-      border: "1px solid #1B7FA6",
-      color: "#1B7FA6",
+      backgroundColor: "var(--gray-50)",
+      color: "var(--primary-dark)",
     });
     expect(within(rows[1]).getByLabelText("In progress")).toHaveAttribute("aria-current", "step");
     expect(within(rows[1]).getByTestId("progress-spinner")).toHaveAttribute("height", "34");
     expect(within(rows[1]).getByText("Uploading your document")).toBeVisible();
-    expect(within(rows[1]).getByText("Uploading your document").parentElement).toHaveStyle({ backgroundColor: "rgba(27, 127, 166, 0.05)" });
+    expect(within(rows[1]).getByText("Uploading your document").parentElement).toHaveStyle({ backgroundColor: "var(--accent-surface)" });
     expect(within(rows[2]).queryByTestId("progress-connector")).not.toBeInTheDocument();
     expect(within(rows[2]).getByLabelText("Failed")).toBeVisible();
     expect(within(rows[2]).getByRole("alert")).toHaveTextContent("Index service unavailable");
@@ -116,7 +116,7 @@ describe("ProgressView", () => {
 
     expect(screen.getByLabelText("Information")).toBeVisible();
     expect(screen.getByText("Processing is taking longer than expected.")).toBeVisible();
-    expect(screen.getByText("Processing is taking longer than expected.").parentElement).toHaveStyle({ backgroundColor: "rgba(27, 127, 166, 0.05)" });
+    expect(screen.getByText("Processing is taking longer than expected.").parentElement).toHaveStyle({ backgroundColor: "var(--accent-surface)" });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel and Restart" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View metadata" }));
@@ -195,9 +195,9 @@ describe("ProgressView", () => {
     expect(within(row).getByTestId("progress-completed-check")).toBeVisible();
     expect(within(row).queryByTestId("progress-success-star")).not.toBeInTheDocument();
     expect(within(row).getByLabelText("Completed")).toHaveStyle({
-      backgroundColor: "#ECF7F1",
-      border: "1px solid #1E8E5E",
-      color: "#1E8E5E",
+      backgroundColor: "#ECFDF3",
+      border: "1px solid #15803D",
+      color: "#15803D",
     });
     expect(within(row).getByText("Screening complete").parentElement?.style.backgroundColor).toBe("transparent");
     expect(within(row).getByText("Screening complete").parentElement).toHaveStyle({ paddingLeft: "0.9rem" });

@@ -51,22 +51,20 @@ export const selectFormStyles = {
     color: "var(--title-ink)",
     fontSize: "1.08rem",
     fontWeight: "700",
-    lineHeight: "1.3",
+    lineHeight: "1.45",
     textAlign: "center",
   },
   separator: {
     margin: "0",
     color: "var(--body-ink)",
     fontSize: "0.92rem",
-    opacity: 0.74,
-    lineHeight: "1.3",
+    lineHeight: "1.45",
     textAlign: "center",
   },
   info: {
     margin: "0",
     color: "var(--body-ink)",
     fontSize: "0.88rem",
-    opacity: 0.72,
     lineHeight: "1.45",
     textAlign: "center",
   },
@@ -105,8 +103,7 @@ export const selectFormStyles = {
   safetyLine: {
     color: "var(--text-color-light)",
     fontSize: "0.86rem",
-    lineHeight: "1.35",
-    opacity: 0.78,
+    lineHeight: "1.45",
   },
 } satisfies Record<string, CSSProperties>;
 

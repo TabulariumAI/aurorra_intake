@@ -146,7 +146,7 @@ describe("ChoicesService", () => {
       { name: "Redact", label: "Redact document", value: true },
       { name: "Manifest", label: "Generate manifest", value: true },
       { name: "Record", label: "Endorse document", value: true },
-      { name: "Abstract", label: "Analyze the document", value: true },
+      { name: "Abstract", label: "Analyze document", value: true },
     ];
 
     expect(service.save(choices, workflow)).toEqual({

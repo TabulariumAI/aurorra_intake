@@ -30,14 +30,14 @@ describe("intake styles", () => {
 
   it("uses aligned progress and success feedback", () => {
     expect(progressStyles.avatar).toMatchObject({
-      backgroundColor: "#F0F6FA",
-      border: "1px solid #1B7FA6",
-      color: "#1B7FA6",
+      backgroundColor: "var(--gray-50)",
+      border: "1px solid var(--primary-dark)",
+      color: "var(--primary-dark)",
     });
     expect(progressStyles.introCopy).toMatchObject({
-      backgroundColor: "rgba(27, 127, 166, 0.05)",
+      backgroundColor: "var(--accent-surface)",
       borderRadius: "var(--radius-card)",
     });
-    expect(progressMessageStyles.completed).toMatchObject({ backgroundColor: "rgba(30, 142, 94, 0.05)" });
+    expect(progressMessageStyles.completed).toMatchObject({ backgroundColor: "#ECFDF3" });
   });
 });

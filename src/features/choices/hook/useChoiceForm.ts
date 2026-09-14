@@ -7,7 +7,7 @@ import type {
   WorkflowSettings,
 } from "../type/choices.types";
 import { ChoiceData } from "../service/choicesData";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Intent = 0 | 1;
 
@@ -16,14 +16,13 @@ type ChoiceFormState = {
   intents: Record<string, Intent>;
   checked: Record<string, boolean>;
   workflow: Record<WorkflowSettingName, boolean>;
-  dirty: boolean;
 };
 
 type ChoiceFormController = ChoiceFormState & {
+  dirty: boolean;
   setRadioLevel(choiceName: string, level: number): void;
   setCheckboxIntent(serviceId: string, checked: boolean): void;
   setWorkflowValue(name: WorkflowSettingName, checked: boolean): void;
-  reset(): void;
   submit(): ChoiceFormSubmitPayload;
 };
 
@@ -151,7 +150,6 @@ function buildInitialState(
     intents,
     checked: recomputeChecked(structure, intents),
     workflow: workflowToState(initialWorkflow),
-    dirty: false,
   };
 }
 
@@ -204,11 +202,13 @@ export function useChoiceForm(
   initialChoices: unknown,
   initialWorkflow: WorkflowSettings,
 ): ChoiceFormController {
-  const createInitial = () => buildInitialState(structure, initialChoices, initialWorkflow);
-  const [state, setState] = useState<ChoiceFormState>(createInitial);
+  const initial = useMemo(() => buildInitialState(structure, initialChoices, initialWorkflow), [structure, initialChoices, initialWorkflow]);
+  const [state, setState] = useState<ChoiceFormState>(initial);
 
   return {
     ...state,
+    dirty: JSON.stringify(extractChoices(structure, state)) !== JSON.stringify(extractChoices(structure, initial))
+      || JSON.stringify(extractWorkflow(state)) !== JSON.stringify(extractWorkflow(initial)),
     setRadioLevel(choiceName, level) {
       setState((current) => ({
         ...current,
@@ -216,7 +216,6 @@ export function useChoiceForm(
           ...current.radioLevels,
           [choiceName]: level,
         },
-        dirty: true,
       }));
     },
     setCheckboxIntent(serviceId, checked) {
@@ -229,7 +228,6 @@ export function useChoiceForm(
           ...current,
           intents,
           checked: recomputeChecked(structure, intents),
-          dirty: true,
         };
       });
     },
@@ -240,11 +238,7 @@ export function useChoiceForm(
           ...current.workflow,
           [name]: checked,
         },
-        dirty: true,
       }));
-    },
-    reset() {
-      setState(createInitial());
     },
     submit() {
       return {

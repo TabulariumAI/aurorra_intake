@@ -278,8 +278,6 @@ export function Container({
             choicesService.save(payload.choices, payload.workflow);
             closeSettings();
           }}
-          onCancel={closeSettings}
-          onClose={closeSettings}
         />
         ),
         helper: "",

@@ -4,8 +4,24 @@ import { ChoicesPanel } from "../component/ChoicesPanel";
 import { ChoiceData, DEFAULT_WORKFLOW_SETTINGS, CHOICESTRUCTURE } from "../service/choicesData";
 
 describe("ChoicesPanel", () => {
+  it("disables unchanged actions and supports manually reverted settings without closing", () => {
+    const onSave = vi.fn();
+    render(<ChoicesPanel initialWorkflow={DEFAULT_WORKFLOW_SETTINGS} choicesEditable initialChoices={[{ service: "Recognition", level: 4 }]} onSave={onSave} structure={CHOICESTRUCTURE} />);
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    const original = screen.getByRole("radio", { name: /4 -/ });
+    const changed = screen.getByRole("radio", { name: /3 -/ });
+    fireEvent.click(changed);
+    expect(screen.getByRole("button", { name: "Update" })).toBeVisible();
+    fireEvent.click(original);
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+    fireEvent.click(changed);
+    fireEvent.click(original);
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(original).toBeChecked();
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
   it("renders Intake choices with the host Preview action", () => {
-    const onClose = vi.fn();
 
     render(
         <ChoicesPanel
@@ -13,8 +29,6 @@ describe("ChoicesPanel", () => {
           initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
           choicesEditable
           initialChoices={[{ service: "Recognition", level: 4 }]}
-          onCancel={onClose}
-          onClose={onClose}
         onSave={vi.fn()}
         structure={CHOICESTRUCTURE}
       />,
@@ -31,8 +45,7 @@ describe("ChoicesPanel", () => {
     expect(document.querySelector('[data-service-id="HistoryEnrichment"]')).not.toBeInTheDocument();
     expect(document.querySelector('[data-service-id="FeeComputation"]')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(onClose).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
   it("renders enabled and disabled numeric choice levels", () => {
@@ -48,8 +61,6 @@ describe("ChoicesPanel", () => {
         initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
         choicesEditable={false}
         initialChoices={choices}
-        onCancel={vi.fn()}
-        onClose={vi.fn()}
         onSave={vi.fn()}
         structure={CHOICESTRUCTURE}
       />,
