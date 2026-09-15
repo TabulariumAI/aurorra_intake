@@ -41,6 +41,7 @@ export type ContainerProps = {
   onAlert?: (message: string) => void;
   onCanceled?: () => void;
   onComplete?: (payload: IntakeCompletePayload) => void;
+  onIndexed(result: { session: string; document: string }): void;
   onFailure?: (message: string) => void;
   onLoaderChange(lines: readonly string[] | null): void;
   onReadyChange(ready: boolean): void;
@@ -65,6 +66,7 @@ export function Container({
   onAlert,
   onCanceled,
   onComplete,
+  onIndexed,
   onFailure,
   onLoaderChange,
   onReadyChange,
@@ -201,6 +203,7 @@ export function Container({
   }), [apiGatewayUrl, commonRuntime, restart]);
 
   const indexingService = useMemo(() => createIndexingService({
+    onIndexed,
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
@@ -217,7 +220,7 @@ export function Container({
     getAuthToken() {
       return authToken ?? "";
     },
-  }), [apiGatewayUrl, authToken, commonRuntime, intervalMs]);
+  }), [apiGatewayUrl, authToken, commonRuntime, intervalMs, onIndexed]);
 
   useEffect(() => {
     sessionRef.current = sessionService;
@@ -232,6 +235,7 @@ export function Container({
     setStoreValue("sessionRequest", null);
     setRuntimeAuthToken(authToken);
     void sessionService.setSession(sessionRequest.session).then(onSessionLoaded).catch((error: unknown) => {
+      console.error("[Intake:load-session]", error);
       const message = error instanceof Error ? error.message : String(error);
       onFailure?.(message);
       onAlert?.(message);
@@ -268,18 +272,19 @@ export function Container({
       })}
       settings={renderChoices({
         active: panel === "settings",
-        children: (
+        children: settingsOpen ? (
         <ChoiceForm
           structure={CHOICESTRUCTURE}
           initialChoices={initialChoices}
           initialWorkflow={initialWorkflow}
           choicesEditable
+          onCancel={closeSettings}
           onSave={(payload) => {
             choicesService.save(payload.choices, payload.workflow);
             closeSettings();
           }}
         />
-        ),
+        ) : null,
         helper: "",
       })}
     />

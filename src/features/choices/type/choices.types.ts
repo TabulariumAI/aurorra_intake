@@ -121,6 +121,7 @@ export type ChoiceFormProps = {
   choicesEditable: boolean;
   disabledGroups?: string[];
   onSave(payload: ChoiceFormSubmitPayload): void;
+  onCancel(): void;
 };
 
 export type ChoicesPanelProps = ChoiceFormProps;

@@ -55,6 +55,7 @@ export type IndexingServiceActions = {
 };
 
 export type IndexingRuntime = {
+  onIndexed(result: { session: string; document: string }): void;
   alert: {
     format(message: unknown, args?: Record<string, string>): string;
   };

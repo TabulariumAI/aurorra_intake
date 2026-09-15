@@ -150,7 +150,7 @@ describe("Container", () => {
     storeApi.getState().requestSession("session-1");
 
     const { rerender } = render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -173,7 +173,7 @@ describe("Container", () => {
     });
 
     rerender(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -189,7 +189,7 @@ describe("Container", () => {
     setSession.mockResolvedValueOnce(undefined);
 
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -216,7 +216,7 @@ describe("Container", () => {
   it("returns to Select after a failed progress job", () => {
     const onCanceled = vi.fn();
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -244,7 +244,7 @@ describe("Container", () => {
 
   it("shows progress when the confirmed selection routes to session creation", () => {
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -268,7 +268,7 @@ describe("Container", () => {
 
   it("keeps provision updates in the progress panel", () => {
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -294,7 +294,7 @@ describe("Container", () => {
 
   it("renders settings inside the intake container and closes to the prior panel", () => {
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -321,7 +321,7 @@ describe("Container", () => {
 
   it("opens settings from the intake store action", () => {
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -339,7 +339,7 @@ describe("Container", () => {
 
   it("passes the intake selection reset version to the selection owner", () => {
     render(
-      <Container
+      <Container onIndexed={vi.fn()}
         {...hostProps()}
         authToken="token"
         apiGatewayUrl="https://user.example.com"
@@ -358,9 +358,26 @@ describe("Container", () => {
 });
 
 
+it("discards canceled settings and reopens accepted settings cleanly", () => {
+  storeApi.getState().resetAllState();
+  render(<Container onIndexed={vi.fn()} {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} />);
+  const original = storeApi.getState().indexChoices;
+  const workflow = storeApi.getState().workflow;
+  act(() => storeApi.getState().openSettings());
+  fireEvent.click(screen.getByRole("radio", { name: /Level3 -/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Review Before Index" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
+  expect(storeApi.getState().indexChoices).toEqual(original);
+  expect(storeApi.getState().workflow).toEqual(workflow);
+  act(() => storeApi.getState().openSettings());
+  expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+  expect(screen.getByRole("radio", { name: /Level3 -/ })).not.toBeChecked();
+});
+
 it("reports only the active renderer through settings, progress, and restart", () => {
   storeApi.getState().resetAllState();
-  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} />);
+  render(<Container onIndexed={vi.fn()} {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} />);
   expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
   expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
   expect(screen.getByTestId("choices-host")).toHaveAttribute("data-active", "false");

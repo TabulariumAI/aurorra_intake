@@ -12,7 +12,7 @@ import type {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
-  const message = candidate?.error ?? candidate?.details ?? candidate?.message;
+  const message = [candidate?.error, candidate?.details, candidate?.message].find((value) => typeof value === "string" && value.length > 0);
   return typeof message === "string" ? message : fallback;
 }
 
@@ -87,6 +87,7 @@ export class SessionService implements SessionServiceActions {
         [runtime.events.reRoute.detail.file]: document,
       });
     } catch (error) {
+      console.error("[Intake:session]", error);
       const jobMessage = getErrorMessage(error, "Session creation failed.");
       runtime.progress.receive({ error: jobMessage, jobId, message: "Creating a session", phase: "failed" });
     } finally {

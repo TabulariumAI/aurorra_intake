@@ -16,7 +16,7 @@ type ErrorLike = {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
-  const message = candidate?.error ?? candidate?.details ?? candidate?.message;
+  const message = [candidate?.error, candidate?.details, candidate?.message].find((value) => typeof value === "string" && value.length > 0);
   return typeof message === "string" ? message : fallback;
 }
 
@@ -98,6 +98,7 @@ export class UploadService implements UploadServiceActions {
         });
       }
     } catch (error) {
+      console.error("[Intake:upload]", error);
       const message = getErrorMessage(error, "Document upload failed.");
       runtime.progress.receive({ error: message, jobId, message: "Uploading your document", phase: "failed" });
     } finally {

@@ -3,7 +3,7 @@ import type { SelectRuntime } from "../type/selectRuntime.types";
 
 export function getSelectErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
-  const message = candidate?.error ?? candidate?.details ?? candidate?.message;
+  const message = [candidate?.error, candidate?.details, candidate?.message].find((value) => typeof value === "string" && value.length > 0);
   return typeof message === "string" ? message : fallback;
 }
 
@@ -34,6 +34,7 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
           [runtime.events.reRoute.detail.jobId]: jobId,
         });
       } catch (error) {
+        console.error("[Intake:selection]", error);
         const message = getSelectErrorMessage(error, "Session creation failed.");
         runtime.progress.receive({ error: message, jobId, message: "Creating a session", phase: "failed" });
         throw error;

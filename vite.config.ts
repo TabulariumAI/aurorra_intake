@@ -23,7 +23,7 @@ export default defineConfig({
       formats: ["es"],
     },
     rollupOptions: {
-      external: ["react", "react-dom", "react-dom/client", "react-dom/server"],
+      external: ["aurora-core", "react", "react-dom", "react-dom/client", "react-dom/server"],
     },
   },
 });

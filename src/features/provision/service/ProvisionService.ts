@@ -127,6 +127,7 @@ export class ProvisionService {
         phase: "completed",
       });
     } catch (error) {
+      console.error("[Intake:provision]", error);
       const message = getErrorMessage(error, "Document screening failed.");
       runtime.progress.receive({ error: message, jobId, message: "Reviewing your document", phase: "failed" });
     } finally {

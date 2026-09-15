@@ -127,6 +127,25 @@ describe("UploadService", () => {
     );
   });
 
+  it("preserves the worker message and logs status and response details", async () => {
+    const { receive, runtime } = createRuntime({ session: "session-1" });
+    const error = Object.assign(new Error("Upload failed with status 403: Forbidden"), {
+      status: 403,
+      code: "upload_failed",
+      details: { errorDetails: "AuthenticationFailed", status: 403 },
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      runtime.uploadWorkerClient.upload = vi.fn().mockRejectedValue(error);
+      await createUploadService(runtime).process(new File(["pdf"], "source.pdf", { type: "application/pdf" }));
+      expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ error: error.message, phase: "failed" }));
+      expect(log).toHaveBeenCalledWith("[Intake:upload]", error);
+      expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("keeps upload failure in the progress timeline", async () => {
     const { receive, runtime } = createRuntime({ session: "session-1" });
     runtime.uploadWorkerClient.upload = vi.fn(async () => {

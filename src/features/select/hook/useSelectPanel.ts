@@ -249,7 +249,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       await clearLens();
     } catch (error) {
       const message = getSelectErrorMessage(error, "Unable to clear selected document.");
-      console.error("Selection reset error:", message);
+      console.error("Selection reset error:", message, error);
       showFailureMessage(message);
     }
   }, [actions, clearLens, resetReviewState, service, showFailureMessage]);
@@ -287,7 +287,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     } catch (error) {
       if (loadId !== loadIdRef.current) return;
       const message = getSelectErrorMessage(error, "An error occurred while analyzing document.");
-      console.error("Selection analysis error:", message);
+      console.error("Selection analysis error:", message, error);
       showFailureMessage(message);
       service.setDocumentSelected(false);
     } finally {
@@ -320,7 +320,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       await service.start(getPageCount(viewerState), getFile);
     } catch (error) {
       showFailureMessage(error instanceof Error ? error.message : String(error));
-      console.error("Step1:", getSelectErrorMessage(error, "An error occurred while processing the document."));
+      console.error("Step1:", getSelectErrorMessage(error, "An error occurred while processing the document."), error);
       startingRef.current = false;
       setStarting(false);
     }

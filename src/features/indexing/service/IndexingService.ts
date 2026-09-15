@@ -74,12 +74,13 @@ class IndexingService implements IndexingServiceActions {
       return;
     }
 
+    const session = runtime.store.get("session");
+    const documentName = runtime.store.get("document");
     runtime.store.set("indexingStepStatus", true);
     let isComplete = false;
     let lastProgress: ProgressJob = { jobId: crypto.randomUUID(), message: "Refining document", phase: "started" };
 
     try {
-      const session = runtime.store.get("session");
       if (!session) {
         throw new Error(runtime.alert.format(runtime.messages.SESSION_REQ_INFO));
       }
@@ -97,7 +98,6 @@ class IndexingService implements IndexingServiceActions {
         }
       }
 
-      const documentName = runtime.store.get("document");
       const pages = runtime.choices.getActualPages(
         choices,
         runtime.store.get("numOfPages"),
@@ -192,11 +192,13 @@ class IndexingService implements IndexingServiceActions {
       }
       runtime.progress.receive({ ...lastProgress, phase: "completed" });
     } catch (error) {
+      console.error("[Intake:indexing]", error);
       const message = getErrorMessage(error, "document processing", runtime);
       runtime.progress.receive({ ...lastProgress, error: message, phase: "failed" });
     } finally {
       runtime.store.set("indexingStepStatus", false);
       if (isComplete) {
+        runtime.onIndexed({ session: String(session), document: String(documentName) });
         runtime.eventBus.emit(runtime.events.reRoute, {
           [runtime.events.reRoute.detail.stage]: "metadata",
         });
@@ -236,6 +238,7 @@ class IndexingService implements IndexingServiceActions {
       }
       return false;
     } catch (error) {
+      console.error("[Intake:indexing]", error);
       const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
         [runtime.messages.ERR_ACT.args.action]: "document processing",
       });

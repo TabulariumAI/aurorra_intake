@@ -23,6 +23,7 @@ export function ChoiceForm({
   choicesEditable,
   disabledGroups = [],
   onSave,
+  onCancel,
 }: ChoiceFormProps) {
   const form = useChoiceForm(structure, initialChoices, initialWorkflow);
   const data = new ChoiceData(structure);
@@ -126,6 +127,7 @@ export function ChoiceForm({
           requireConfirmation={false}
           onConfirm={() => { if (form.dirty) onSave(form.submit()); }}
         />
+        <ConfButton label="Cancel" variant="secondary" requireConfirmation={false} onConfirm={onCancel} />
       </div>
     </div>
   );

@@ -61,6 +61,7 @@ describe("selectService", () => {
     expect(getSelectErrorMessage({ details: "detail text" }, "fallback")).toBe("detail text");
     expect(getSelectErrorMessage({ message: "message text" }, "fallback")).toBe("message text");
     expect(getSelectErrorMessage({}, "fallback")).toBe("fallback");
+    expect(getSelectErrorMessage({ details: { status: 403 }, message: "Forbidden" }, "fallback")).toBe("Forbidden");
   });
 
   it("emits session start before resolving the document and routes the same job", async () => {

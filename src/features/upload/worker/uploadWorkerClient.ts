@@ -52,11 +52,13 @@ async function runWorker<T>(command: unknown): Promise<T> {
       reject(resolveError(message, payload));
     };
 
-    worker.onerror = () => {
+    worker.onerror = (event) => {
       if (settled) return;
       settled = true;
       cleanup();
-      reject(new Error("Upload worker failed"));
+      reject(resolveError(event.message || "Upload worker failed", {
+        details: { filename: event.filename, lineno: event.lineno, colno: event.colno, error: event.error },
+      }));
     };
 
     worker.postMessage(command);

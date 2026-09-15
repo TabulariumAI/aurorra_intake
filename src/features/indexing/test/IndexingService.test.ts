@@ -6,7 +6,9 @@ import { CHOICESTRUCTURE, ChoiceData, DEFAULT_WORKFLOW_SETTINGS, createIndexingP
 import type { IndexingRuntime } from "../type/indexing.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+});
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -48,7 +50,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
 function createRuntime(seed: Partial<StoreValues> = {}) {
   const defaultChoices = new ChoiceData(CHOICESTRUCTURE).generateDefaultJson();
   const receive = vi.fn();
-  const runtime: IndexingRuntime = {
+  const runtime: IndexingRuntime = { onIndexed: vi.fn(),
     alert: { format: vi.fn((message, args) => `formatted:${String((message as { args?: unknown })?.args ? args?.action : message)}`) },
     messages: {
       ERR_ACT: { args: { action: "action" } },
@@ -102,6 +104,7 @@ describe("IndexingService", () => {
     await processing;
 
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", defaultChoices);
+    expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
     expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
       "session-1": defaultChoices,
     });
@@ -425,6 +428,7 @@ describe("IndexingService", () => {
     expect(receive.mock.calls.at(-1)?.[0].jobId).not.toBe(lastRetrieval?.jobId);
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     await receive.mock.calls.at(-1)?.[0].actions[0].onConfirm();
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
   });
 
@@ -497,4 +501,28 @@ describe("IndexingService", () => {
     expect(runtime.indexingWorkerClient.status).not.toHaveBeenCalled();
     expect(runtime.indexingWorkerClient.start).not.toHaveBeenCalled();
   });
+});
+
+it.each(["completed", "processing", "error"] as const)("publishes only confirmed indexing completion: %s", async (status) => {
+  const { runtime } = createRuntime();
+  runtime.indexingWorkerClient.status = vi.fn(async () => ({ status, data: "" }));
+  const processing = createIndexingService(runtime).process();
+  await vi.runAllTimersAsync();
+  await processing;
+  if (status === "completed") {
+    expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
+  } else {
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+  }
+});
+
+it("publishes the indexing session captured before polling", async () => {
+  const { runtime } = createRuntime();
+  let finish!: (value: { status: "completed"; data: string }) => void;
+  runtime.indexingWorkerClient.status = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+  const processing = createIndexingService(runtime).process();
+  runtime.store.set("session", "session-2");
+  finish({ status: "completed", data: "" });
+  await processing;
+  expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
 });
