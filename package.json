@@ -2,7 +2,27 @@
   "name": "aurorra-intake",
   "private": true,
   "version": "0.0.0",
+  "description": "React intake workflow for PDF and TIFF document selection, upload, session provisioning, and indexing in the Tabularium AI platform.",
   "type": "module",
+  "license": "Apache-2.0",
+  "author": "Tabularium AI",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TabulariumAI/aurorra_intake.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TabulariumAI/aurorra_intake/issues"
+  },
+  "homepage": "https://github.com/TabulariumAI/aurorra_intake#readme",
+  "keywords": [
+    "document-intake",
+    "document-processing",
+    "indexing",
+    "pdf",
+    "tiff",
+    "react",
+    "tabularium-ai"
+  ],
   "main": "./src/public-api.ts",
   "module": "./src/public-api.ts",
   "types": "./src/public-api.ts",
