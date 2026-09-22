@@ -1,6 +1,7 @@
 import type { IntakeContainerActions } from "../../intake/type/intake.types";
 import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 import type { SelectViewerProps, ViewerDecodeOptions } from "./selectViewer.types";
+import type { ExportProgress } from "@tabulariumai/aurora-lens";
 
 export type SelectUploadStatus =
   | { kind: "idle" }
@@ -23,12 +24,14 @@ export type SelectPanelActions = {
 };
 
 export type SelectPanelProps = {
+  maxFileSizeBytes: number;
   dropTarget: HTMLElement;
   actions: IntakeShellActions;
   selectionResetVersion?: number;
 };
 
 export type SelectFormProps = {
+  maxFileSizeBytes: number;
   dropTarget: HTMLElement;
   status: SelectUploadStatus;
   onFileSelected: (file: File) => void;
@@ -46,7 +49,7 @@ export type ReviewDocumentLens = {
   decodeDoc(file: File, options: ViewerDecodeOptions): Promise<void>;
   restoreSession(): Promise<boolean>;
   hasChanges(): boolean;
-  exportTiff(): Promise<Blob>;
+  exportTiff(onProgress: (progress: ExportProgress) => void): Promise<Blob>;
   showThumbnails(): Promise<void> | void;
   close(): void;
 };
@@ -55,12 +58,13 @@ export type SelectService = {
   clear(): void;
   isDocumentSelected(): boolean;
   setDocumentSelected(selected: boolean): void;
-  start(pageCount: number, getDocument: () => Promise<File | null>): Promise<void>;
+  start(pageCount: number, getDocument: (onProgress: (progress: ExportProgress) => void) => Promise<File | null>): Promise<void>;
   showSettings(): void;
   createTiffFile(blob: Blob): File;
 };
 
 export type UseSelectPanelOptions = {
+  maxFileSizeBytes: number;
   actions: IntakeContainerActions;
   service: SelectService;
   selectionResetVersion?: number;

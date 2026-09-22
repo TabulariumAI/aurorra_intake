@@ -19,24 +19,36 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
       runtime.store.set("documentSelected", selected);
     },
     async start(pageCount, getDocument) {
-      const jobId = crypto.randomUUID();
+      let jobId = crypto.randomUUID();
+      let message = "Preparing your document…";
       runtime.progress.reset();
-      runtime.progress.receive({ jobId, message: "Creating a session", phase: "started" });
+      runtime.progress.receive({ jobId, message, phase: "started" });
       try {
         runtime.store.set("numOfPages", pageCount);
-        const document = await getDocument();
+        const document = await getDocument((progress) => {
+          runtime.progress.receive({
+            jobId,
+            message: progress.phase === "finalizing" ? "Finalizing your document…" : message,
+            phase: "started",
+            progress: progress.phase === "pages" ? { completed: progress.completed, total: progress.total } : null,
+          });
+        });
         if (!document) {
           throw new Error("Failed to get the selected file.");
         }
+        runtime.progress.receive({ jobId, message, phase: "completed", progress: null });
+        jobId = crypto.randomUUID();
+        message = "Creating a session";
+        runtime.progress.receive({ jobId, message, phase: "started" });
         await runtime.eventBus.emitAsync(runtime.events.reRoute, {
           [runtime.events.reRoute.detail.stage]: "session",
           [runtime.events.reRoute.detail.file]: document,
           [runtime.events.reRoute.detail.jobId]: jobId,
         });
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") throw error;
         console.error("[Intake:selection]", error);
-        const message = getSelectErrorMessage(error, "Session creation failed.");
-        runtime.progress.receive({ error: message, jobId, message: "Creating a session", phase: "failed" });
+        runtime.progress.receive({ error: getSelectErrorMessage(error, "Session creation failed."), jobId, message, phase: "failed", progress: null });
         throw error;
       }
     },

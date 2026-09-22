@@ -64,7 +64,7 @@ describe("selectService", () => {
     expect(getSelectErrorMessage({ details: { status: 403 }, message: "Forbidden" }, "fallback")).toBe("Forbidden");
   });
 
-  it("emits session start before resolving the document and routes the same job", async () => {
+  it("completes preparation before starting and routing the session job", async () => {
     const { receive, runtime } = createRuntime();
     const service = createSelectService(runtime);
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
@@ -76,13 +76,17 @@ describe("selectService", () => {
 
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", true);
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 7);
-    expect(receive).toHaveBeenCalledWith({
-      jobId: expect.any(String),
-      message: "Creating a session",
-      phase: "started",
-    });
+    const prepareId = receive.mock.calls[0][0].jobId;
+    const jobId = receive.mock.calls[2][0].jobId;
+    expect(jobId).not.toBe(prepareId);
+    expect(receive.mock.calls.map(([event]) => event)).toEqual([
+      { jobId: prepareId, message: "Preparing your document…", phase: "started" },
+      { jobId: prepareId, message: "Preparing your document…", phase: "completed", progress: null },
+      { jobId, message: "Creating a session", phase: "started" },
+    ]);
     expect(receive.mock.invocationCallOrder[0]).toBeLessThan(getDocument.mock.invocationCallOrder[0]);
-    const jobId = receive.mock.calls[0][0].jobId;
+    expect(runtime.progress.reset).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.progress.reset).mock.invocationCallOrder[0]).toBeLessThan(receive.mock.invocationCallOrder[0]);
     expect(runtime.eventBus.emitAsync).toHaveBeenCalledWith(
       runtime.events.reRoute,
       { stage: "session", file, jobId },
@@ -90,7 +94,7 @@ describe("selectService", () => {
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.showChoices);
   });
 
-  it("fails the immediate session job when document preparation fails", async () => {
+  it("fails only preparation when document preparation fails", async () => {
     const { receive, runtime } = createRuntime();
     const service = createSelectService(runtime);
     const failure = new Error("TIFF export failed.");
@@ -103,9 +107,46 @@ describe("selectService", () => {
     expect(receive.mock.calls[0][0].jobId).toBe(receive.mock.calls[1][0].jobId);
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
       error: "TIFF export failed.",
-      message: "Creating a session",
+      message: "Preparing your document…",
     }));
     expect(runtime.eventBus.emitAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps preparation active without routing while the document is pending", async () => {
+    const { receive, runtime } = createRuntime();
+    let resolve!: (file: File) => void;
+    const document = new Promise<File>((ready) => { resolve = ready; });
+    const file = new File(["tiff"], "document.tif", { type: "image/tiff" });
+    const started = createSelectService(runtime).start(2, () => document);
+
+    expect(receive).toHaveBeenCalledTimes(1);
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Preparing your document…", phase: "started" }));
+    expect(runtime.eventBus.emitAsync).not.toHaveBeenCalled();
+    resolve(file);
+    await started;
+    expect(runtime.eventBus.emitAsync).toHaveBeenCalledTimes(1);
+    expect(runtime.eventBus.emitAsync).toHaveBeenCalledWith(runtime.events.reRoute, expect.objectContaining({ file }));
+  });
+
+  it("fails preparation without creating a session when the document is missing", async () => {
+    const { receive, runtime } = createRuntime();
+    await expect(createSelectService(runtime).start(2, async () => null)).rejects.toThrow("Failed to get the selected file.");
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Preparing your document…", phase: "failed" }));
+    expect(runtime.eventBus.emitAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps preparation completed when session routing rejects", async () => {
+    const { receive, runtime } = createRuntime();
+    const error = new Error("Routing failed");
+    vi.mocked(runtime.eventBus.emitAsync).mockRejectedValueOnce(error);
+    await expect(createSelectService(runtime).start(2, async () => new File(["pdf"], "document.pdf"))).rejects.toThrow(error);
+    expect(receive.mock.calls.map(([event]) => [event.message, event.phase])).toEqual([
+      ["Preparing your document…", "started"],
+      ["Preparing your document…", "completed"],
+      ["Creating a session", "started"],
+      ["Creating a session", "failed"],
+    ]);
+    expect(receive.mock.calls[3][0].jobId).toBe(receive.mock.calls[2][0].jobId);
   });
 
   it("clears document selection", () => {
@@ -115,5 +156,30 @@ describe("selectService", () => {
     service.clear();
 
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", false);
+  });
+
+  it("updates the preparation job with real page progress and waits through finalization", async () => {
+    const { receive, runtime } = createRuntime();
+    let resolve!: (file: File) => void;
+    const ready = new Promise<File>((done) => { resolve = done; });
+    let report!: Parameters<Parameters<ReturnType<typeof createSelectService>["start"]>[1]>[0];
+    const started = createSelectService(runtime).start(3, (onProgress) => { report = onProgress; return ready; });
+    const jobId = receive.mock.calls[0][0].jobId;
+    report({ phase: "pages", completed: 1, total: 3 });
+    expect(receive).toHaveBeenLastCalledWith({ jobId, message: "Preparing your document…", phase: "started", progress: { completed: 1, total: 3 } });
+    report({ phase: "finalizing", completed: 3, total: 3 });
+    expect(receive).toHaveBeenLastCalledWith({ jobId, message: "Finalizing your document…", phase: "started", progress: null });
+    expect(runtime.eventBus.emitAsync).not.toHaveBeenCalled();
+    resolve(new File(["tiff"], "document.tif"));
+    await started;
+    expect(receive).toHaveBeenCalledWith({ jobId, message: "Preparing your document…", phase: "completed", progress: null });
+  });
+
+  it("does not add a failed job when resetting the viewer aborts export", async () => {
+    const { receive, runtime } = createRuntime();
+    const canceled = new DOMException("TIFF export closed.", "AbortError");
+    await expect(createSelectService(runtime).start(2, async () => { throw canceled; })).rejects.toBe(canceled);
+    expect(receive).toHaveBeenCalledTimes(1);
+    expect(runtime.eventBus.emitAsync).not.toHaveBeenCalled();
   });
 });

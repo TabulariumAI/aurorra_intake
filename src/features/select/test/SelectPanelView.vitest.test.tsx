@@ -43,6 +43,7 @@ const renderPreview: IntakeItemRenderer = ({ children }) => (
 function view(select: UseSelectPanelResult) {
   return (
     <SelectPanelView
+      maxFileSizeBytes={20 * 1024 * 1024}
       active={true}
       dropTarget={document.createElement("section")}
       helper={select.mode === "review" ? "Review helper" : "Select helper"}
@@ -114,7 +115,7 @@ it.each(["select", "review"] as const)("reports activation changes for %s withou
   select.mode = mode;
   const renderSelect = vi.fn(() => <span>Select</span>);
   const renderPreview = vi.fn(() => <span>Review</span>);
-  const props = { dropTarget: document.createElement("section"), helper: "Helper", renderSelect, renderPreview, select };
+  const props = { maxFileSizeBytes: 20 * 1024 * 1024, dropTarget: document.createElement("section"), helper: "Helper", renderSelect, renderPreview, select };
   const { rerender } = render(<SelectPanelView {...props} active={true} />);
   const renderer = mode === "select" ? renderSelect : renderPreview;
   const inactive = mode === "select" ? renderPreview : renderSelect;

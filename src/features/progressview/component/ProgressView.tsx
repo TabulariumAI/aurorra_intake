@@ -79,6 +79,21 @@ export function ProgressView({ jobs, onBack }: ProgressViewProps) {
                 ...(job.detail ? progressStyles.detailMessage : {}),
               }}>
                 <span style={job.detail ? progressStyles.detailCopy : progressStyles.messageCopy}>{job.message}</span>
+                {job.progress ? (
+                  <>
+                    <span style={progressStyles.pageCount}>{job.progress.completed} of {job.progress.total} pages prepared</span>
+                    <div
+                      role="progressbar"
+                      aria-label="Pages prepared"
+                      aria-valuemin={0}
+                      aria-valuemax={job.progress.total}
+                      aria-valuenow={job.progress.completed}
+                      style={progressStyles.bar}
+                    >
+                      <span style={{ ...progressStyles.fill, width: `${job.progress.completed / job.progress.total * 100}%` }} />
+                    </div>
+                  </>
+                ) : null}
                 {job.detail ? (
                   <div style={progressStyles.detail}>
                     <p style={progressStyles.detailText}>{job.detail.description}</p>

@@ -12,6 +12,7 @@ import type {
   UseSelectPanelResult,
 } from "../type/select.types";
 import type { ViewerApi } from "../type/selectViewer.types";
+import type { ExportProgress } from "@tabulariumai/aurora-lens";
 
 const SELECT_COPY = {
   helper: "Drag and drop a PDF or multi-page TIFF, or select a file to begin.",
@@ -26,7 +27,7 @@ function getPageCount(state: ReviewDocumentState) {
 }
 
 export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelResult {
-  const { actions, service, selectionResetVersion } = options;
+  const { maxFileSizeBytes, actions, service, selectionResetVersion } = options;
   const lensRef = useRef<ReviewDocumentLens | null>(null);
   const sourceFileRef = useRef<File | null>(null);
   const loadIdRef = useRef(0);
@@ -154,8 +155,8 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       hasChanges() {
         return typeof viewerApi?.isDirty === "function" ? viewerApi.isDirty() : false;
       },
-      exportTiff() {
-        return waitForViewerApi().then((api) => api.exportTiff());
+      exportTiff(onProgress) {
+        return waitForViewerApi().then((api) => api.exportTiff(onProgress));
       },
       showThumbnails() {
         return waitForViewerApi().then((api) => api.showThumbnails());
@@ -255,11 +256,11 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   }, [actions, clearLens, resetReviewState, service, showFailureMessage]);
 
   const selectFile = useCallback(async (file: File) => {
-    const failure = validateSelectFile(file);
+    const failure = validateSelectFile(file, maxFileSizeBytes);
     if (failure) {
       setUploadStatus({
         kind: "error",
-        message: failure === "format" ? "Unsupported file format." : "File too large. Maximum 10MB.",
+        message: failure === "format" ? "Unsupported file format." : `File too large. Maximum ${maxFileSizeBytes / (1024 * 1024)}MB.`,
       });
       return;
     }
@@ -295,15 +296,15 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
         setLoading(false);
       }
     }
-  }, [actions, createViewer, disposeLens, showFailureMessage, service]);
+  }, [actions, createViewer, disposeLens, showFailureMessage, service, maxFileSizeBytes]);
 
-  const getFile = useCallback(async () => {
+  const getFile = useCallback(async (onProgress: (progress: ExportProgress) => void) => {
     const lens = lensRef.current;
     if (!lens) {
       throw new Error("Aurora Lens is not ready.");
     }
     if (lens.hasChanges() || sourceFileRef.current === null) {
-      const blob = await lens.exportTiff();
+      const blob = await lens.exportTiff(onProgress);
       sourceFileRef.current = service.createTiffFile(blob);
     }
     return sourceFileRef.current;
@@ -315,16 +316,19 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     }
     startingRef.current = true;
     setStarting(true);
+    actions.showProgress();
+    const loadId = loadIdRef.current;
 
     try {
       await service.start(getPageCount(viewerState), getFile);
     } catch (error) {
+      if (loadId !== loadIdRef.current) return;
       showFailureMessage(error instanceof Error ? error.message : String(error));
       console.error("Step1:", getSelectErrorMessage(error, "An error occurred while processing the document."), error);
       startingRef.current = false;
       setStarting(false);
     }
-  }, [getFile, showFailureMessage, viewerState, viewerStatus, service]);
+  }, [actions, getFile, showFailureMessage, viewerState, viewerStatus, service]);
 
   const cancel = useCallback(() => {
     mountSelectForm();

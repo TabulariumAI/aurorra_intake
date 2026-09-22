@@ -38,6 +38,7 @@ export type ContainerProps = {
   authToken: string | null;
   apiGatewayUrl: string;
   intervalMs: number;
+  maxFileSizeBytes: number;
   onAlert?: (message: string) => void;
   onCanceled?: () => void;
   onComplete?: (payload: IntakeCompletePayload) => void;
@@ -63,6 +64,7 @@ export function Container({
   authToken,
   apiGatewayUrl,
   intervalMs,
+  maxFileSizeBytes,
   onAlert,
   onCanceled,
   onComplete,
@@ -126,7 +128,6 @@ export function Container({
       const event = eventConfig as EventConfig;
       if (event.name === events.reRoute.name) {
         if (payload?.stage === "session") {
-          actions.showProgress();
           onStarted?.();
         }
         void orchestrator.route(payload as IntakeRoutePayload);
@@ -141,7 +142,6 @@ export function Container({
       const event = eventConfig as EventConfig;
       if (event.name === events.reRoute.name) {
         if (payload?.stage === "session") {
-          actions.showProgress();
           onStarted?.();
         }
         await orchestrator.route(payload as IntakeRoutePayload);
@@ -149,7 +149,7 @@ export function Container({
       }
       this.emit(eventConfig, payload);
     },
-  }), [actions, onStarted, orchestrator]);
+  }), [onStarted, openSettings, orchestrator]);
 
   const commonRuntime = useMemo(() => ({
     alert: intakeAlert,
@@ -190,8 +190,8 @@ export function Container({
     events: {
       reRoute: events.reRoute,
     },
-    uploadWorkerClient: createUploadWorkerClient(),
-  }), [commonRuntime]);
+    uploadWorkerClient: createUploadWorkerClient(maxFileSizeBytes),
+  }), [commonRuntime, maxFileSizeBytes]);
 
   const provisionService = useMemo(() => createProvisionService({
     ...commonRuntime,
@@ -245,6 +245,7 @@ export function Container({
   const panel = settingsOpen ? "settings" : state.container.panel;
   const selectContent = selectHost ? (
     <SelectPanel
+      maxFileSizeBytes={maxFileSizeBytes}
       active={panel === "select"}
       dropTarget={selectHost}
       actions={actions}

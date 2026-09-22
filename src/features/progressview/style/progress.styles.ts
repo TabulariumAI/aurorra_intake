@@ -126,6 +126,23 @@ export const progressStyles = {
   messageCopy: {
     color: "var(--title-ink)",
   },
+  pageCount: {
+    color: "var(--body-ink)",
+    fontSize: "0.88rem",
+    fontWeight: 400,
+  },
+  bar: {
+    height: "0.25rem",
+    marginTop: "0.28rem",
+    backgroundColor: "var(--gray-300)",
+    borderRadius: "var(--radius-pill)",
+    overflow: "hidden",
+  },
+  fill: {
+    display: "block",
+    height: "100%",
+    backgroundColor: "var(--primary-dark)",
+  },
   detailMessage: {
     margin: "0 0 1.15rem",
     padding: "0.25rem 0.9rem 0",

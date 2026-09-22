@@ -27,6 +27,7 @@ import { AurorraIntake } from "aurorra-intake";
   authToken={authToken}
   apiGatewayUrl={apiGatewayUrl}
   intervalMs={3500}
+  maxFileSizeBytes={appConfig.maxFileSizeBytes}
   onIndexed={({ session, document }) => console.log(session, document)}
   onLoaderChange={() => {}}
   onReadyChange={() => {}}

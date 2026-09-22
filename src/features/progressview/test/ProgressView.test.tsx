@@ -17,6 +17,17 @@ afterEach(() => {
 });
 
 describe("ProgressView", () => {
+  it("shows actual page progress and removes the bar during finalization", () => {
+    const { rerender } = render(<ProgressView jobs={[{ jobId: "prepare", message: "Preparing your document…", phase: "started", progress: { completed: 8, total: 24 } }]} onBack={vi.fn()} />);
+    const bar = screen.getByRole("progressbar", { name: "Pages prepared" });
+    expect(bar).toHaveAttribute("aria-valuenow", "8");
+    expect(bar).toHaveAttribute("aria-valuemax", "24");
+    expect(screen.getByText("8 of 24 pages prepared")).toBeVisible();
+    rerender(<ProgressView jobs={[{ jobId: "prepare", message: "Finalizing your document…", phase: "started", progress: null }]} onBack={vi.fn()} />);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.getByText("Finalizing your document…")).toBeVisible();
+    expect(screen.queryByLabelText("Completed")).not.toBeInTheDocument();
+  });
   it("does not render a recovery action while processing is active", () => {
     render(
       <ProgressView

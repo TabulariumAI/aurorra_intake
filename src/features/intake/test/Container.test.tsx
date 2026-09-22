@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
+import type { IntakeContainerActions, IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Container } from "../component/Container";
 import type { ContainerProps } from "../component/Container";
@@ -10,6 +10,7 @@ type MockEventBus = {
 };
 
 let capturedEventBus: MockEventBus | null = null;
+let capturedActions: IntakeContainerActions;
 let capturedProgress: ((event: { error?: string; jobId: string; message: string; phase: "started" | "completed" | "failed" }) => void) | null = null;
 const setSession = vi.fn();
 const workerMocks = vi.hoisted(() => ({
@@ -31,8 +32,9 @@ function wrap(name: string) {
   );
 }
 
-function hostProps(): Pick<ContainerProps, "intervalMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect"> {
+function hostProps(): Pick<ContainerProps, "maxFileSizeBytes" | "intervalMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect"> {
   return {
+    maxFileSizeBytes: 20 * 1024 * 1024,
     intervalMs: 13000,
     onLoaderChange: vi.fn(),
     renderChoices: wrap("choices"),
@@ -116,15 +118,19 @@ vi.mock("../../indexing/service/IndexingService", () => ({
 }));
 
 vi.mock("../../select/component/SelectPanel", () => ({
-  SelectPanel: ({ active, renderSelect, selectionResetVersion }: {
+  SelectPanel: ({ active, actions, renderSelect, selectionResetVersion }: {
     active: boolean;
+    actions: IntakeContainerActions;
     renderSelect: IntakeItemRenderer;
     selectionResetVersion?: number;
-  }) => renderSelect({
-    active,
-    children: <div data-testid="select-panel-mock" data-selection-reset-version={selectionResetVersion} />,
-    helper: "Select helper",
-  }),
+  }) => {
+    capturedActions = actions;
+    return renderSelect({
+      active,
+      children: <div data-testid="select-panel-mock" data-selection-reset-version={selectionResetVersion} />,
+      helper: "Select helper",
+    });
+  },
 }));
 
 describe("Container", () => {
@@ -226,6 +232,7 @@ describe("Container", () => {
     );
 
     act(() => {
+      capturedActions.showProgress();
       capturedEventBus!.emit({ name: "reRoute" }, {
         file: new File(["pdf"], "source.pdf", { type: "application/pdf" }),
         jobId: "session-1",
@@ -242,7 +249,7 @@ describe("Container", () => {
     expect(onCanceled).toHaveBeenCalledTimes(1);
   });
 
-  it("shows progress when the confirmed selection routes to session creation", () => {
+  it("shows progress when selection starts preparation before session routing", () => {
     render(
       <Container onIndexed={vi.fn()}
         {...hostProps()}
@@ -253,11 +260,7 @@ describe("Container", () => {
     );
 
     act(() => {
-      capturedEventBus!.emit({ name: "reRoute" }, {
-        file: new File(["pdf"], "source.pdf", { type: "application/pdf" }),
-        jobId: "session-1",
-        stage: "session",
-      });
+      capturedActions.showProgress();
     });
 
     expect(screen.getByTestId("progress-panel")).not.toHaveStyle({ display: "none" });
@@ -277,6 +280,7 @@ describe("Container", () => {
     );
 
     act(() => {
+      capturedActions.showProgress();
       capturedEventBus!.emit({ name: "reRoute" }, {
         file: new File(["pdf"], "source.pdf", { type: "application/pdf" }),
         jobId: "session-1",
@@ -387,6 +391,7 @@ it("reports only the active renderer through settings, progress, and restart", (
   act(() => storeApi.getState().closeSettings());
   expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
   act(() => {
+    capturedActions.showProgress();
     capturedEventBus!.emit({ name: "reRoute" }, { stage: "session", jobId: "session-1" });
     capturedProgress!({ jobId: "session-1", message: "Creating a session", phase: "failed", error: "Failed" });
   });

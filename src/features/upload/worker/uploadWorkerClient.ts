@@ -65,10 +65,10 @@ async function runWorker<T>(command: unknown): Promise<T> {
   });
 }
 
-export function createUploadWorkerClient(): UploadWorkerClient {
+export function createUploadWorkerClient(maxFileSizeBytes: number): UploadWorkerClient {
   return {
     async upload(command) {
-      return runWorker({ type: "upload", ...command });
+      return runWorker({ type: "upload", ...command, maxFileSizeBytes });
     },
   };
 }

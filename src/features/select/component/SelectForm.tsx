@@ -32,6 +32,7 @@ function SafetyIcon() {
 }
 
 export function SelectForm({
+  maxFileSizeBytes,
   dropTarget,
   status,
   onFileSelected,
@@ -88,7 +89,7 @@ export function SelectForm({
 
   const statusMessage = status.kind === "error"
     ? `${status.message} Please try again.`
-    : "PDF or multi-page TIFF, up to 10 MB.";
+    : `PDF or multi-page TIFF, up to ${maxFileSizeBytes / (1024 * 1024)} MB.`;
   const isError = status.kind === "error";
 
   return (

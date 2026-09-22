@@ -16,6 +16,7 @@ type SelectPanelInternalProps = SelectPanelProps & {
 
 export function SelectPanel({
   active,
+  maxFileSizeBytes,
   dropTarget,
   actions,
   onLoaderChange,
@@ -27,7 +28,7 @@ export function SelectPanel({
   selectionResetVersion,
 }: SelectPanelInternalProps) {
   const initializedRef = useRef(false);
-  const select = useSelectPanel({ actions, service, selectionResetVersion });
+  const select = useSelectPanel({ maxFileSizeBytes, actions, service, selectionResetVersion });
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -42,6 +43,7 @@ export function SelectPanel({
 
   return (
     <SelectPanelView
+      maxFileSizeBytes={maxFileSizeBytes}
       active={active}
       dropTarget={dropTarget}
       helper={helper}

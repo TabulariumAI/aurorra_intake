@@ -16,6 +16,7 @@ export type UploadContext = {
 
 export type UploadWorkerCommand = {
   type: "upload";
+  maxFileSizeBytes: number;
   sasToken: string;
   baseUrl: string;
   file: UploadDocument;
@@ -38,7 +39,7 @@ export type UploadWorkerFailure = {
 export type UploadWorkerResult<T> = UploadWorkerSuccess<T> | UploadWorkerFailure;
 
 export type UploadWorkerClient = {
-  upload(command: Omit<UploadWorkerCommand, "type">): Promise<unknown>;
+  upload(command: Omit<UploadWorkerCommand, "type" | "maxFileSizeBytes">): Promise<unknown>;
 };
 
 export type UploadServiceActions = {

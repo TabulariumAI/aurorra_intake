@@ -12,6 +12,7 @@ const SelectViewer = lazy(async () => {
 
 type SelectPanelViewProps = {
   active: boolean;
+  maxFileSizeBytes: number;
   dropTarget: HTMLElement;
   helper: string;
   renderPreview: IntakeItemRenderer;
@@ -19,9 +20,10 @@ type SelectPanelViewProps = {
   select: UseSelectPanelResult;
 };
 
-export function SelectPanelView({ active, dropTarget, helper, renderPreview, renderSelect, select }: SelectPanelViewProps) {
+export function SelectPanelView({ active, maxFileSizeBytes, dropTarget, helper, renderPreview, renderSelect, select }: SelectPanelViewProps) {
   const selectContent = select.mode === "select" ? (
     <SelectForm
+      maxFileSizeBytes={maxFileSizeBytes}
       dropTarget={dropTarget}
       status={select.uploadStatus}
       onFileSelected={(file) => {

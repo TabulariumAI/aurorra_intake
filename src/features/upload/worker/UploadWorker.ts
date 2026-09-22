@@ -49,14 +49,14 @@ export class UploadWorker {
       };
     }
 
-    if (command.file.size > 10 * 1024 * 1024) {
+    if (command.file.size > command.maxFileSizeBytes) {
       return {
         ok: false,
         code: "bad_request",
-        error: "File size exceeds the 10 MB limit.",
+        error: `File size exceeds the ${command.maxFileSizeBytes / (1024 * 1024)} MB limit.`,
         details: {
           fileSize: command.file.size,
-          maxSize: "10 MB",
+          maxSize: `${command.maxFileSizeBytes / (1024 * 1024)} MB`,
         },
       };
     }

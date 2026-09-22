@@ -164,9 +164,7 @@ function extractChoices(structure: ChoiceStructure, state: ChoiceFormState): Cho
       });
     } else if (choice.items) {
       for (const item of choice.items) {
-        if (state.checked[item.name]) {
-          result.push({ service: item.name, level: 1 });
-        }
+        result.push({ service: item.name, level: state.checked[item.name] ? 1 : 0 });
       }
     } else {
       result.push({

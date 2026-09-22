@@ -19,6 +19,7 @@ export type ProgressJob = {
   message: string;
   phase: ProgressPhase;
   error?: string;
+  progress?: { completed: number; total: number } | null;
 };
 
 export type ProgressActions = {

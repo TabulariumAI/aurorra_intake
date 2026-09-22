@@ -32,7 +32,7 @@ function createService(documentSelected = true): SelectService {
     isDocumentSelected: vi.fn(() => documentSelected),
     setDocumentSelected: vi.fn(),
     start: vi.fn(async (_pageCount, getDocument) => {
-      await getDocument();
+      await getDocument(vi.fn());
     }),
     showSettings: vi.fn(),
     createTiffFile: vi.fn((blob) => new File([blob], "review.tiff", { type: "image/tiff" })),
@@ -100,7 +100,7 @@ describe("useSelectPanel", () => {
     const decode = deferred<void>();
     const viewer = createViewerApi(false);
     viewer.decodeDoc = vi.fn(() => decode.promise);
-    const { result } = renderHook(() => useSelectPanel({ actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
 
     let selectFile: Promise<void> = Promise.resolve();
     act(() => {
@@ -133,7 +133,7 @@ describe("useSelectPanel", () => {
     const firstService = createService();
     const secondService = createService();
     const { result, rerender } = renderHook(
-      ({ service }) => useSelectPanel({ actions, service }),
+      ({ service }) => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }),
       { initialProps: { service: firstService } },
     );
 
@@ -155,7 +155,7 @@ describe("useSelectPanel", () => {
   it("returns to select mode when stored lens restore is unavailable", async () => {
     const actions = createActions();
     const service = createService();
-    const { result } = renderHook(() => useSelectPanel({ actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
 
     act(() => {
       result.current.actions.initialize();
@@ -183,7 +183,7 @@ describe("useSelectPanel", () => {
     const actions = createActions();
     const service = createService();
     const viewer = createViewerApi(true);
-    const { result, unmount } = renderHook(() => useSelectPanel({ actions, service }));
+    const { result, unmount } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
 
     act(() => {
       result.current.actions.initialize();
@@ -210,7 +210,7 @@ describe("useSelectPanel", () => {
     const actions = createActions();
     const service = createService();
     const viewer = createViewerApi(true);
-    const { result } = renderHook(() => useSelectPanel({ actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
 
     act(() => {
       result.current.actions.initialize();
@@ -253,7 +253,7 @@ describe("useSelectPanel", () => {
     };
     const viewer = createViewerApi(true);
     const { result, rerender } = renderHook(
-      ({ selectionResetVersion }) => useSelectPanel({
+      ({ selectionResetVersion }) => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024,
         actions,
         service,
         selectionResetVersion,
@@ -307,7 +307,7 @@ describe("useSelectPanel", () => {
       }),
       isDocumentSelected: vi.fn(() => documentSelected),
     };
-    const { result } = renderHook(() => useSelectPanel({
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024,
       actions,
       service,
       selectionResetVersion: 1,
@@ -331,7 +331,7 @@ describe("useSelectPanel", () => {
     deleteStoredViewerSession.mockRejectedValueOnce(new Error("IndexedDB delete failed"));
     const actions = createActions();
     const service = createService();
-    const { result } = renderHook(() => useSelectPanel({
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024,
       actions,
       service,
       selectionResetVersion: 1,
@@ -352,7 +352,7 @@ describe("useSelectPanel", () => {
     const viewer = createViewerApi(true);
     viewer.restoreSession = vi.fn(() => restore.promise);
     const { result, rerender } = renderHook(
-      ({ selectionResetVersion }) => useSelectPanel({
+      ({ selectionResetVersion }) => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024,
         actions,
         service,
         selectionResetVersion,
@@ -399,7 +399,7 @@ describe("useSelectPanel", () => {
     const viewer = createViewerApi(false);
     viewer.decodeDoc = vi.fn(() => decode.promise);
     const { result, rerender } = renderHook(
-      ({ selectionResetVersion }) => useSelectPanel({
+      ({ selectionResetVersion }) => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024,
         actions,
         service,
         selectionResetVersion,
@@ -445,7 +445,7 @@ describe("useSelectPanel", () => {
     const service = createService(false);
     const viewer = createViewerApi(false);
     const file = new File(["document"], "document.pdf", { type: "application/pdf" });
-    const { result } = renderHook(() => useSelectPanel({ actions, service }));
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
 
     let selectFile: Promise<void> = Promise.resolve();
     act(() => {
@@ -472,5 +472,84 @@ describe("useSelectPanel", () => {
 
     expect(service.start).toHaveBeenCalledWith(3, expect.any(Function));
     expect(viewer.exportTiff).not.toHaveBeenCalled();
+    expect(actions.showProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["edited", "restored"])("shows progress and retains the %s viewer while export is pending", async (source) => {
+    const actions = createActions();
+    const service = createService(source === "restored");
+    const viewer = createViewerApi(true);
+    const exported = deferred<Blob>();
+    viewer.isDirty = vi.fn(() => source === "edited");
+    viewer.exportTiff = vi.fn(() => exported.promise);
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
+    act(() => result.current.actions.initialize());
+    let selected: Promise<void> | undefined;
+    if (source === "edited") {
+      act(() => { selected = result.current.actions.selectFile(new File(["pdf"], "document.pdf")); });
+    }
+    await act(async () => {
+      result.current.viewer.props?.onApiReady?.(viewer);
+      result.current.viewer.props?.onStateChange?.(createViewerState(2));
+      result.current.viewer.props?.onStatusChange?.("ready");
+      await selected;
+    });
+    const props = result.current.viewer.props;
+    let started: Promise<void>;
+    act(() => { started = result.current.actions.start(); });
+    await waitFor(() => expect(viewer.exportTiff).toHaveBeenCalledTimes(1));
+    expect(actions.showProgress).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(actions.showProgress).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(viewer.exportTiff).mock.invocationCallOrder[0]);
+    expect(result.current.viewer.props).toBe(props);
+    expect(result.current.mode).toBe("review");
+    expect(viewer.exportTiff).toHaveBeenCalledWith(expect.any(Function));
+    expect(result.current.review).toEqual({ startDisabled: true, cancelDisabled: true });
+    expect(viewer.close).not.toHaveBeenCalled();
+    await act(async () => { await result.current.actions.start(); });
+    expect(service.start).toHaveBeenCalledTimes(1);
+    const blob = new Blob(["tiff"], { type: "image/tiff" });
+    await act(async () => { exported.resolve(blob); await started; });
+    expect(service.createTiffFile).toHaveBeenCalledWith(blob);
+    expect(actions.showProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show progress or start before the viewer has ready pages", async () => {
+    const actions = createActions();
+    const service = createService();
+    const { result } = renderHook(() => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service }));
+    act(() => result.current.actions.initialize());
+    await act(async () => { result.current.viewer.props?.onApiReady?.(createViewerApi(true)); });
+    await act(async () => { await result.current.actions.start(); });
+    act(() => {
+      result.current.viewer.props?.onStatusChange?.("ready");
+      result.current.viewer.props?.onStateChange?.(createViewerState(0));
+    });
+    await act(async () => { await result.current.actions.start(); });
+    expect(actions.showProgress).not.toHaveBeenCalled();
+    expect(service.start).not.toHaveBeenCalled();
+  });
+
+  it("keeps the reset selection clean when its previous export is aborted", async () => {
+    const actions = createActions();
+    const service = createService();
+    const viewer = createViewerApi(true);
+    let reject!: (error: Error) => void;
+    viewer.exportTiff = vi.fn(() => new Promise<Blob>((_resolve, fail) => { reject = fail; }));
+    viewer.clear = vi.fn(() => { reject(new DOMException("TIFF export closed.", "AbortError")); });
+    const { result, rerender } = renderHook(({ selectionResetVersion }) => useSelectPanel({ maxFileSizeBytes: 20 * 1024 * 1024, actions, service, selectionResetVersion }), { initialProps: { selectionResetVersion: 0 } });
+    act(() => result.current.actions.initialize());
+    await act(async () => {
+      result.current.viewer.props?.onApiReady?.(viewer);
+      result.current.viewer.props?.onStateChange?.(createViewerState(2));
+      result.current.viewer.props?.onStatusChange?.("ready");
+    });
+    let started!: Promise<void>;
+    act(() => { started = result.current.actions.start(); });
+    await waitFor(() => expect(viewer.exportTiff).toHaveBeenCalledTimes(1));
+    rerender({ selectionResetVersion: 1 });
+    await act(async () => { await started; });
+    expect(result.current.mode).toBe("select");
+    expect(result.current.uploadStatus).toEqual({ kind: "idle" });
+    expect(viewer.clear).toHaveBeenCalledTimes(1);
   });
 });
