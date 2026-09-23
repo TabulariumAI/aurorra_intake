@@ -131,13 +131,18 @@ class IndexingService implements IndexingServiceActions {
         if (isComplete) break;
         const jobId = crypto.randomUUID();
         for (let page = 1; page <= pages; page++) {
-          lastProgress = { jobId, message: `${stage} page ${page} of ${pages}`, phase: "started" };
+          lastProgress = {
+            jobId,
+            message: stage,
+            phase: "started",
+            progress: { completed: page, total: pages, unit: "pages" },
+          };
           runtime.progress.receive(lastProgress);
           await delay(pageIntervalMs);
           isComplete = await this.checkStatus(sessionId);
           if (isComplete) break;
-          runtime.progress.receive({ ...lastProgress, phase: "completed" });
         }
+        if (!isComplete && pages > 0) runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
 
       for (const [service, message] of ENRICHMENT_STEPS) {
@@ -162,11 +167,18 @@ class IndexingService implements IndexingServiceActions {
       }
 
       if (!isComplete) {
-        lastProgress = { jobId: crypto.randomUUID(), message: "Retrieving processed data...", phase: "started" };
+        lastProgress = {
+          jobId: crypto.randomUUID(),
+          message: "Retrieving processed data...",
+          phase: "started",
+          progress: { completed: 0, total: 11, unit: "steps" },
+        };
         runtime.progress.receive(lastProgress);
         let attempts = 0;
         while (!isComplete && attempts < 11) {
           await delay(runtime.baseIntervalMs);
+          lastProgress = { ...lastProgress, progress: { completed: attempts + 1, total: 11, unit: "steps" } };
+          runtime.progress.receive(lastProgress);
           isComplete = await this.checkStatus(sessionId);
           attempts += 1;
         }

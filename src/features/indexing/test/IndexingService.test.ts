@@ -123,14 +123,12 @@ describe("IndexingService", () => {
       ["Refining document", "completed"],
       ["Recognizing document", "started"],
       ["Recognizing document", "completed"],
-      ["Identifying document page 1 of 2", "started"],
-      ["Identifying document page 1 of 2", "completed"],
-      ["Identifying document page 2 of 2", "started"],
-      ["Identifying document page 2 of 2", "completed"],
-      ["Indexing document page 1 of 2", "started"],
-      ["Indexing document page 1 of 2", "completed"],
-      ["Indexing document page 2 of 2", "started"],
-      ["Indexing document page 2 of 2", "completed"],
+      ["Identifying document", "started"],
+      ["Identifying document", "started"],
+      ["Identifying document", "completed"],
+      ["Indexing document", "started"],
+      ["Indexing document", "started"],
+      ["Indexing document", "completed"],
       ["Enriching legal descriptions", "started"],
       ["Enriching legal descriptions", "completed"],
       ["Enriching party information", "started"],
@@ -140,18 +138,17 @@ describe("IndexingService", () => {
       ["Analyzing Index Quality", "started"],
       ["Analyzing Index Quality", "completed"],
       ["Retrieving processed data...", "started"],
+      ["Retrieving processed data...", "started"],
       ["Retrieving processed data...", "completed"],
     ]);
     expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([7, 7, 357, 357, 357, 357, 7, 7, 7, 7, 7]);
     setTimeoutSpy.mockRestore();
     const events = receive.mock.calls.map(([event]) => event);
     expect(events[5].jobId).toBe(events[4].jobId);
-    expect(events[7].jobId).toBe(events[6].jobId);
-    expect(events[9].jobId).toBe(events[8].jobId);
-    expect(events[11].jobId).toBe(events[10].jobId);
-    expect(events[4].jobId).toBe(events[6].jobId);
-    expect(events[8].jobId).toBe(events[10].jobId);
-    expect(events[4].jobId).not.toBe(events[8].jobId);
+    expect(events[6].jobId).toBe(events[4].jobId);
+    expect(events[8].jobId).toBe(events[7].jobId);
+    expect(events[9].jobId).toBe(events[7].jobId);
+    expect(events[4].jobId).not.toBe(events[7].jobId);
     expect(new Set(events.map((event) => event.jobId)).size).toBe(9);
   });
 
@@ -181,16 +178,16 @@ describe("IndexingService", () => {
     await run;
 
     const events = receive.mock.calls.map(([event]) => event);
-    const identifying = events.filter((event) => event.message.startsWith("Identifying document page"));
-    const indexing = events.filter((event) => event.message.startsWith("Indexing document page"));
-    expect(identifying.filter((event) => event.phase === "started").map((event) => event.message)).toEqual(
-      Array.from({ length: stage === "Indexing document" ? 7 : lastPage }, (_, index) => `Identifying document page ${index + 1} of 7`),
+    const identifying = events.filter((event) => event.message === "Identifying document");
+    const indexing = events.filter((event) => event.message === "Indexing document");
+    expect(identifying.filter((event) => event.phase === "started").map((event) => event.progress)).toEqual(
+      Array.from({ length: stage === "Indexing document" ? 7 : lastPage }, (_, index) => ({ completed: index + 1, total: 7, unit: "pages" })),
     );
     expect(new Set(identifying.map((event) => event.jobId)).size).toBe(1);
     if (stage === "Indexing document") {
-      expect(identifying.at(-1)).toMatchObject({ message: "Identifying document page 7 of 7", phase: "completed" });
-      expect(indexing.filter((event) => event.phase === "started").map((event) => event.message)).toEqual(
-        Array.from({ length: lastPage }, (_, index) => `Indexing document page ${index + 1} of 7`),
+      expect(identifying.at(-1)).toMatchObject({ message: "Identifying document", phase: "completed", progress: { completed: 7, total: 7, unit: "pages" } });
+      expect(indexing.filter((event) => event.phase === "started").map((event) => event.progress)).toEqual(
+        Array.from({ length: lastPage }, (_, index) => ({ completed: index + 1, total: 7, unit: "pages" })),
       );
       expect(new Set(indexing.map((event) => event.jobId)).size).toBe(1);
       expect(identifying[0].jobId).not.toBe(indexing[0].jobId);
@@ -199,8 +196,9 @@ describe("IndexingService", () => {
       expect(indexing).toEqual([]);
     }
     expect(events.at(-1)).toMatchObject({
-      message: `${stage} page ${lastPage} of 7`,
+      message: stage,
       phase: status === "completed" ? "completed" : "failed",
+      progress: { completed: lastPage, total: 7, unit: "pages" },
       ...(status === "error" ? { error: "formatted:document processing worker failed" } : {}),
     });
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(lastCheck);
@@ -250,31 +248,31 @@ describe("IndexingService", () => {
     runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
     const run = createIndexingService(runtime).process();
     await act(async () => { await vi.advanceTimersByTimeAsync(13000); });
-    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document page 1 of 2", phase: "started" });
-    expect(result.current.jobs.some((job) => job.message.startsWith("Indexing document page"))).toBe(false);
+    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 2, unit: "pages" } });
+    expect(result.current.jobs.some((job) => job.message === "Indexing document")).toBe(false);
 
     await act(async () => { await vi.advanceTimersByTimeAsync(6849); });
-    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document page 1 of 2", phase: "started" });
+    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 2, unit: "pages" } });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document page 2 of 2", phase: "started" });
-    expect(result.current.jobs.some((job) => job.message.startsWith("Indexing document page"))).toBe(false);
+    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document", phase: "started", progress: { completed: 2, total: 2, unit: "pages" } });
+    expect(result.current.jobs.some((job) => job.message === "Indexing document")).toBe(false);
 
     await act(async () => { await vi.advanceTimersByTimeAsync(6850); });
     expect(result.current.jobs.slice(-2)).toEqual([
-      expect.objectContaining({ message: "Identifying document page 2 of 2", phase: "completed" }),
-      expect.objectContaining({ message: "Indexing document page 1 of 2", phase: "started" }),
+      expect.objectContaining({ message: "Identifying document", phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } }),
+      expect.objectContaining({ message: "Indexing document", phase: "started", progress: { completed: 1, total: 2, unit: "pages" } }),
     ]);
     await act(async () => { await vi.advanceTimersByTimeAsync(6850); });
     expect(result.current.jobs.slice(-2)).toEqual([
-      expect.objectContaining({ message: "Identifying document page 2 of 2", phase: "completed" }),
-      expect.objectContaining({ message: "Indexing document page 2 of 2", phase: "started" }),
+      expect.objectContaining({ message: "Identifying document", phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } }),
+      expect.objectContaining({ message: "Indexing document", phase: "started", progress: { completed: 2, total: 2, unit: "pages" } }),
     ]);
     await act(async () => {
       await vi.runAllTimersAsync();
       await run;
     });
-    expect(result.current.jobs.filter((job) => job.message.startsWith("Identifying document page"))).toHaveLength(1);
-    expect(result.current.jobs.filter((job) => job.message.startsWith("Indexing document page"))).toHaveLength(1);
+    expect(result.current.jobs.filter((job) => job.message === "Identifying document")).toHaveLength(1);
+    expect(result.current.jobs.filter((job) => job.message === "Indexing document")).toHaveLength(1);
   });
 
   it("keeps the current page active while a status response is outstanding", async () => {
@@ -287,13 +285,13 @@ describe("IndexingService", () => {
       .mockImplementationOnce(() => new Promise((resolve) => { resolveStatus = resolve; }));
     const run = createIndexingService(runtime).process();
     await vi.advanceTimersByTimeAsync(353);
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document page 1 of 1", phase: "started" }));
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 1, unit: "pages" } }));
     await vi.advanceTimersByTimeAsync(6500);
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document page 1 of 1", phase: "started" }));
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 1, unit: "pages" } }));
     resolveStatus({ status: "completed", data: "" });
     await run;
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document page 1 of 1", phase: "completed" }));
-    expect(receive.mock.calls.some(([event]) => event.message.startsWith("Indexing document page"))).toBe(false);
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document", phase: "completed", progress: { completed: 1, total: 1, unit: "pages" } }));
+    expect(receive.mock.calls.some(([event]) => event.message === "Indexing document")).toBe(false);
   });
 
   it("reports an initial status failure in progress", async () => {
@@ -356,10 +354,10 @@ describe("IndexingService", () => {
       "Refining document",
       "Recognizing document",
       "Recognizing document",
-      "Identifying document page 1 of 1",
-      "Identifying document page 1 of 1",
-      "Indexing document page 1 of 1",
-      "Indexing document page 1 of 1",
+      "Identifying document",
+      "Identifying document",
+      "Indexing document",
+      "Indexing document",
       "Enriching legal descriptions",
       "Enriching legal descriptions",
       "Enriching party information",
@@ -368,6 +366,7 @@ describe("IndexingService", () => {
       "Validating document data",
       "Analyzing Index Quality",
       "Analyzing Index Quality",
+      "Retrieving processed data...",
       "Retrieving processed data...",
       "Retrieving processed data...",
     ]);
@@ -415,7 +414,7 @@ describe("IndexingService", () => {
       event.message === "Retrieving processed data..." && event.phase === "started"
     ));
     const lastRetrieval = retrievals.at(-1)?.[0];
-    expect(retrievals).toHaveLength(1);
+    expect(retrievals).toHaveLength(12);
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
       message: "Processing is taking longer than expected.",
       phase: "info",
@@ -424,6 +423,7 @@ describe("IndexingService", () => {
     expect(lastRetrieval).toMatchObject({
       message: "Retrieving processed data...",
       phase: "started",
+      progress: { completed: 11, total: 11, unit: "steps" },
     });
     expect(receive.mock.calls.at(-1)?.[0].jobId).not.toBe(lastRetrieval?.jobId);
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
@@ -486,6 +486,7 @@ describe("IndexingService", () => {
       jobId: retrieve?.jobId,
       message: "Retrieving processed data...",
       phase: "failed",
+      progress: { completed: 1, total: 11, unit: "steps" },
     });
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
   });

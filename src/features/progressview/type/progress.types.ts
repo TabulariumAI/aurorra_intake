@@ -12,6 +12,12 @@ export type ProgressDetail = {
   summary: string;
 };
 
+export type ProgressCount = {
+  completed: number;
+  total: number;
+  unit?: "prepared-pages" | "pages" | "sessions" | "steps";
+};
+
 export type ProgressJob = {
   actions?: readonly ProgressAction[];
   detail?: ProgressDetail;
@@ -19,7 +25,7 @@ export type ProgressJob = {
   message: string;
   phase: ProgressPhase;
   error?: string;
-  progress?: { completed: number; total: number } | null;
+  progress?: ProgressCount | null;
 };
 
 export type ProgressActions = {

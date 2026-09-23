@@ -6,7 +6,7 @@ import {
   progressPhaseStyles,
   progressStyles,
 } from "../style/progress.styles";
-import type { ProgressPhase, ProgressViewProps } from "../type/progress.types";
+import type { ProgressCount, ProgressJob, ProgressPhase, ProgressViewProps } from "../type/progress.types";
 
 function ProgressIcon({ phase }: { phase: ProgressPhase }) {
   if (phase === "started") {
@@ -39,8 +39,58 @@ function ProgressIcon({ phase }: { phase: ProgressPhase }) {
   );
 }
 
+type ProgressGroup = {
+  current: ProgressJob;
+  jobId: string;
+  members: readonly ProgressJob[];
+  message: string;
+  phase: ProgressPhase;
+};
+
+function groupProgressJobs(jobs: readonly ProgressJob[]): readonly ProgressGroup[] {
+  const groups: ProgressGroup[] = [];
+  for (const job of jobs) {
+    const previous = groups.at(-1);
+    if (!previous || previous.message !== job.message) {
+      groups.push({ current: job, jobId: job.jobId, members: [job], message: job.message, phase: job.phase });
+      continue;
+    }
+    const members = [...previous.members, job];
+    groups[groups.length - 1] = {
+      ...previous,
+      current: job,
+      members,
+      phase: members.some((member) => member.phase === "failed")
+        ? "failed"
+        : members.some((member) => member.phase === "started") ? "started" : job.phase,
+    };
+  }
+  return groups;
+}
+
+function getCount(progress: ProgressCount | null | undefined) {
+  if (!progress || !Number.isFinite(progress.completed) || !Number.isFinite(progress.total)
+    || !Number.isInteger(progress.completed) || !Number.isInteger(progress.total) || progress.total <= 0) return undefined;
+  return { completed: Math.min(Math.max(progress.completed, 0), progress.total), total: progress.total, unit: progress.unit };
+}
+
+function countText(message: string, count: NonNullable<ReturnType<typeof getCount>>) {
+  if (count.unit === "pages") return `Page ${count.completed} of ${count.total}`;
+  if (count.unit === "sessions") return `Session ${count.completed} of ${count.total}`;
+  if (count.unit === "steps") return `Step ${count.completed} of ${count.total}`;
+  return `${count.completed} of ${count.total} pages prepared`;
+}
+
+function countLabel(message: string, count: NonNullable<ReturnType<typeof getCount>>) {
+  if (count.unit === "sessions") return "Linking sessions";
+  if (count.unit === "prepared-pages" || count.unit === undefined) return "Pages prepared";
+  return message;
+}
+
 export function ProgressView({ jobs, onBack }: ProgressViewProps) {
-  const lastIndex = jobs.length - 1;
+  const groups = groupProgressJobs(jobs);
+  const lastIndex = groups.length - 1;
+  const lastRawJob = jobs.at(-1);
   const lastRow = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -62,60 +112,72 @@ export function ProgressView({ jobs, onBack }: ProgressViewProps) {
           <p style={progressStyles.introCopy}>I’ll keep you updated as I process your document.</p>
         </div>
         <ol aria-label="Document processing updates" style={progressStyles.timeline}>
-          {jobs.map((job, index) => (
-            <li data-phase={job.phase} key={job.jobId} ref={index === lastIndex ? lastRow : undefined} style={progressStyles.row}>
+          {groups.map((group, index) => {
+            const count = group.phase === "completed" ? undefined : getCount(group.current.progress);
+            const indeterminate = group.phase === "started"
+              && group.members.length > 1
+              && group.members.every((member) => member.progress === undefined);
+            const hasDetail = group.members.some((member) => member.detail);
+            return (
+            <li data-phase={group.phase} key={group.jobId} ref={index === lastIndex ? lastRow : undefined} style={progressStyles.row}>
               {index < lastIndex ? <span data-testid="progress-connector" style={progressStyles.connector} /> : null}
               <span
-                aria-current={job.phase === "started" ? "step" : undefined}
-                aria-label={job.phase === "started" ? "In progress" : job.phase === "completed" ? "Completed" : job.phase === "failed" ? "Failed" : "Information"}
-                className={job.phase === "started" ? "progressview-active-ring" : undefined}
-                style={{ ...progressStyles.icon, ...progressPhaseStyles[job.phase] }}
+                aria-current={group.phase === "started" ? "step" : undefined}
+                aria-label={group.phase === "started" ? "In progress" : group.phase === "completed" ? "Completed" : group.phase === "failed" ? "Failed" : "Information"}
+                className={group.phase === "started" ? "progressview-active-ring" : undefined}
+                style={{ ...progressStyles.icon, ...progressPhaseStyles[group.phase] }}
               >
-                <ProgressIcon phase={job.phase} />
+                <ProgressIcon phase={group.phase} />
               </span>
               <div style={{
                 ...progressStyles.message,
-                ...progressMessageStyles[job.phase],
-                ...(job.detail ? progressStyles.detailMessage : {}),
+                ...progressMessageStyles[group.phase],
+                ...(hasDetail ? progressStyles.detailMessage : {}),
               }}>
-                <span style={job.detail ? progressStyles.detailCopy : progressStyles.messageCopy}>{job.message}</span>
-                {job.progress ? (
+                <span style={hasDetail ? progressStyles.detailCopy : progressStyles.messageCopy}>{group.message}</span>
+                {count ? (
                   <>
-                    <span style={progressStyles.pageCount}>{job.progress.completed} of {job.progress.total} pages prepared</span>
+                    <span style={progressStyles.pageCount}>{countText(group.message, count)}</span>
                     <div
                       role="progressbar"
-                      aria-label="Pages prepared"
+                      aria-label={countLabel(group.message, count)}
                       aria-valuemin={0}
-                      aria-valuemax={job.progress.total}
-                      aria-valuenow={job.progress.completed}
+                      aria-valuemax={count.total}
+                      aria-valuenow={count.completed}
+                      aria-valuetext={countText(group.message, count)}
                       style={progressStyles.bar}
                     >
-                      <span style={{ ...progressStyles.fill, width: `${job.progress.completed / job.progress.total * 100}%` }} />
+                      <span style={{ ...progressStyles.fill, width: `${100 * count.completed / count.total}%` }} />
                     </div>
                   </>
                 ) : null}
-                {job.detail ? (
-                  <div style={progressStyles.detail}>
-                    <p style={progressStyles.detailText}>{job.detail.description}</p>
-                    <p style={progressStyles.detailText}>{job.detail.summary}</p>
+                {indeterminate ? <div aria-label={group.message} role="progressbar" style={progressStyles.bar}><span className="progressview-indeterminate" style={progressStyles.fill} /></div> : null}
+                {group.members.map((member) => (
+                  <div key={member.jobId}>
+                    {member.detail ? (
+                      <div style={progressStyles.detail}>
+                        <p style={progressStyles.detailText}>{member.detail.description}</p>
+                        <p style={progressStyles.detailText}>{member.detail.summary}</p>
+                      </div>
+                    ) : null}
+                    {member.actions && (!member.detail || member.jobId === lastRawJob?.jobId) ? (
+                      <div data-testid="progress-actions" style={{ ...progressStyles.actions, ...(member.detail ? progressStyles.detailActions : {}) }}>
+                        {member.actions.map((action) => (
+                          <ConfButton
+                            data-progress-action={action.label}
+                            key={action.label}
+                            label={action.label}
+                            onConfirm={action.onConfirm}
+                            requireConfirmation={action.requireConfirmation}
+                            variant={action.variant}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    {member.phase === "failed" ? <span role="alert" style={progressStyles.error}>{member.error}</span> : null}
                   </div>
-                ) : null}
-                {job.actions && (!job.detail || index === lastIndex) ? (
-                  <div data-testid="progress-actions" style={{ ...progressStyles.actions, ...(job.detail ? progressStyles.detailActions : {}) }}>
-                    {job.actions.map((action) => (
-                      <ConfButton
-                        data-progress-action={action.label}
-                        key={action.label}
-                        label={action.label}
-                        onConfirm={action.onConfirm}
-                        requireConfirmation={action.requireConfirmation}
-                        variant={action.variant}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                {job.phase === "failed" ? <span role="alert" style={progressStyles.error}>{job.error}</span> : null}
-                {job.phase === "failed" ? (
+                ))}
+                {group.phase === "failed" ? (
                   <div data-testid="progress-failure-action" style={progressStyles.failureAction}>
                     <ConfButton
                       label="Cancel and Restart"
@@ -127,7 +189,8 @@ export function ProgressView({ jobs, onBack }: ProgressViewProps) {
                 ) : null}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       </div>
     </section>

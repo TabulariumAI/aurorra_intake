@@ -17,6 +17,22 @@ afterEach(() => {
 });
 
 describe("ProgressView", () => {
+  it("groups only consecutive jobs with the same message for display", () => {
+    render(
+      <ProgressView
+        jobs={[
+          { jobId: "first", message: "Retrieving processed data...", phase: "completed" },
+          { jobId: "second", message: "Retrieving processed data...", phase: "started" },
+          { jobId: "third", message: "Checking metadata", phase: "started" },
+          { jobId: "fourth", message: "Retrieving processed data...", phase: "started" },
+        ]}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
   it("shows actual page progress and removes the bar during finalization", () => {
     const { rerender } = render(<ProgressView jobs={[{ jobId: "prepare", message: "Preparing your document…", phase: "started", progress: { completed: 8, total: 24 } }]} onBack={vi.fn()} />);
     const bar = screen.getByRole("progressbar", { name: "Pages prepared" });
@@ -27,6 +43,39 @@ describe("ProgressView", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.getByText("Finalizing your document…")).toBeVisible();
     expect(screen.queryByLabelText("Completed")).not.toBeInTheDocument();
+  });
+
+  it("renders validated page counters with their stable message as the accessible name", () => {
+    const { rerender } = render(<ProgressView jobs={[{
+      jobId: "indexing",
+      message: "Indexing document",
+      phase: "started",
+      progress: { completed: 9, total: 5, unit: "pages" },
+    }]} onBack={vi.fn()} />);
+
+    const bar = screen.getByRole("progressbar", { name: "Indexing document" });
+    expect(bar).toHaveAttribute("aria-valuemin", "0");
+    expect(bar).toHaveAttribute("aria-valuemax", "5");
+    expect(bar).toHaveAttribute("aria-valuenow", "5");
+    expect(bar).toHaveAttribute("aria-valuetext", "Page 5 of 5");
+    expect(screen.getByText("Page 5 of 5")).toBeVisible();
+
+    rerender(<ProgressView jobs={[{
+      jobId: "indexing",
+      message: "Indexing document",
+      phase: "completed",
+      progress: { completed: 5, total: 5, unit: "pages" },
+    }]} onBack={vi.fn()} />);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Page 5 of 5")).not.toBeInTheDocument();
+
+    rerender(<ProgressView jobs={[{
+      jobId: "indexing",
+      message: "Indexing document",
+      phase: "started",
+      progress: { completed: 1.5, total: 5, unit: "pages" },
+    }]} onBack={vi.fn()} />);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
   it("does not render a recovery action while processing is active", () => {
     render(

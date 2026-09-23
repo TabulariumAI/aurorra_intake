@@ -4,10 +4,12 @@ import type { ProgressPhase } from "../type/progress.types";
 export const progressMotionStyles = `
   @keyframes progressview-spin { to { transform: rotate(360deg); } }
   @keyframes progressview-pulse { 50% { box-shadow: 0 0 0 0.55rem rgba(0, 139, 163, 0); } }
+  @keyframes progressview-indeterminate { 50% { opacity: 0.75; } }
   .progressview-active { animation: progressview-spin 0.9s linear infinite; }
   .progressview-active-ring { animation: progressview-pulse 1.8s ease-out infinite; }
+  .progressview-indeterminate { animation: progressview-indeterminate 1.8s ease-in-out infinite; opacity: 0.55; width: 100%; }
   @media (prefers-reduced-motion: reduce) {
-    .progressview-active, .progressview-active-ring { animation: none; }
+    .progressview-active, .progressview-active-ring, .progressview-indeterminate { animation: none; opacity: 0.55; }
   }
 `;
 

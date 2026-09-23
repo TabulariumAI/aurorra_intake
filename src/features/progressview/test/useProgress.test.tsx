@@ -3,6 +3,18 @@ import { describe, expect, it } from "vitest";
 import { useProgress } from "../hook/useProgress";
 
 describe("useProgress", () => {
+  it("retains omitted progress on an update and clears it for an explicit restart", () => {
+    const { result } = renderHook(() => useProgress());
+
+    act(() => {
+      result.current.receive({ jobId: "retrieve", message: "Retrieving processed data...", phase: "started", progress: { completed: 3, total: 11, unit: "steps" } });
+      result.current.receive({ jobId: "retrieve", message: "Retrieving processed data...", phase: "completed" });
+      result.current.receive({ jobId: "retrieve", message: "Retrieving processed data...", phase: "started" });
+    });
+
+    expect(result.current.jobs).toEqual([{ jobId: "retrieve", message: "Retrieving processed data...", phase: "started" }]);
+  });
+
   it("updates identifying and processing page rows through all seven pages", () => {
     const { result } = renderHook(() => useProgress());
     act(() => result.current.receive({ jobId: "recognize", message: "Recognizing document", phase: "started" }));
