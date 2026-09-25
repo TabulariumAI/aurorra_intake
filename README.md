@@ -27,6 +27,7 @@ import { AurorraIntake } from "aurorra-intake";
   authToken={authToken}
   apiGatewayUrl={apiGatewayUrl}
   intervalMs={3500}
+  intervalPageMs={500}
   maxFileSizeBytes={appConfig.maxFileSizeBytes}
   onIndexed={({ session, document }) => console.log(session, document)}
   onLoaderChange={() => {}}
@@ -37,6 +38,8 @@ import { AurorraIntake } from "aurorra-intake";
   renderSelect={({ children }) => children}
 />
 ```
+
+`intervalPageMs` controls each page update during refining, recognizing, identifying, and indexing. `intervalMs` controls enrichment, quality analysis, and retrieval delays. Page totals use the existing recognition selection; backend status determines completion.
 
 The host is responsible for supplying valid credentials and a gateway that implements the required session, workflow-settings, provisioning, and indexing endpoints.
 

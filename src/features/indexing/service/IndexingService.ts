@@ -3,7 +3,7 @@ import type {
   IndexingServiceActions,
   IndexingStatusResponse,
 } from "../type/indexing.types";
-import { ENRICHMENT_STEPS, PAGE_PROGRESS_STAGES, PAGE_SERVICES } from "../config/indexing.config";
+import { ENRICHMENT_STEPS, PAGE_PROGRESS_STAGES } from "../config/indexing.config";
 import type { ProgressJob } from "../../progressview/type/progress.types";
 import { createIndexingPayload } from "../../choices/service/choicesData";
 
@@ -78,7 +78,7 @@ class IndexingService implements IndexingServiceActions {
     const documentName = runtime.store.get("document");
     runtime.store.set("indexingStepStatus", true);
     let isComplete = false;
-    let lastProgress: ProgressJob = { jobId: crypto.randomUUID(), message: "Refining document", phase: "started" };
+    let lastProgress: ProgressJob = { jobId: crypto.randomUUID(), message: PAGE_PROGRESS_STAGES[0], phase: "started" };
 
     try {
       if (!session) {
@@ -103,33 +103,16 @@ class IndexingService implements IndexingServiceActions {
         runtime.store.get("numOfPages"),
       );
       const sessionId = String(session);
-      const pageSegments = PAGE_SERVICES.filter((service) => (levels.get(service) ?? 0) > 0).length;
-      const pageIntervalMs = runtime.baseIntervalMs + 50 * pageSegments;
       isComplete = await this.checkStatus(sessionId);
       if (isComplete) return;
 
       runtime.progress.receive(lastProgress);
       const indexedChoices = createIndexingPayload(choices);
       await this.start(sessionId, documentName, indexedChoices);
-      await delay(runtime.baseIntervalMs);
-      isComplete = await this.checkStatus(sessionId);
-      if (!isComplete) {
-        runtime.progress.receive({ ...lastProgress, phase: "completed" });
-      }
-
-      if (!isComplete) {
-        lastProgress = { jobId: crypto.randomUUID(), message: "Recognizing document", phase: "started" };
-        runtime.progress.receive(lastProgress);
-        await delay(runtime.baseIntervalMs);
-        isComplete = await this.checkStatus(sessionId);
-        if (!isComplete) {
-          runtime.progress.receive({ ...lastProgress, phase: "completed" });
-        }
-      }
 
       for (const stage of PAGE_PROGRESS_STAGES) {
         if (isComplete) break;
-        const jobId = crypto.randomUUID();
+        const jobId = stage === lastProgress.message ? lastProgress.jobId : crypto.randomUUID();
         for (let page = 1; page <= pages; page++) {
           lastProgress = {
             jobId,
@@ -138,7 +121,7 @@ class IndexingService implements IndexingServiceActions {
             progress: { completed: page, total: pages, unit: "pages" },
           };
           runtime.progress.receive(lastProgress);
-          await delay(pageIntervalMs);
+          await delay(runtime.intervalPageMs);
           isComplete = await this.checkStatus(sessionId);
           if (isComplete) break;
         }
@@ -185,6 +168,7 @@ class IndexingService implements IndexingServiceActions {
       }
 
       if (!isComplete) {
+        runtime.progress.receive({ ...lastProgress, phase: "info", progress: null });
         runtime.progress.receive({
           jobId: crypto.randomUUID(),
           message: "Processing is taking longer than expected.",

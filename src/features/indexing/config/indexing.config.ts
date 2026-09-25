@@ -1,17 +1,6 @@
-export const PAGE_SERVICES = [
-  "ConfidentialIndexing",
-  "TransactionIndexing",
-  "EndorsementIndexing",
-  "PartyClauseIndexing",
-  "RecitalIndexing",
-  "ExhibitIndexing",
-  "MonetaryInfoIndexing",
-  "AcknowledgmentIndexing",
-  "CourtIndexing",
-  "VitalIndexing",
-] as const;
-
 export const PAGE_PROGRESS_STAGES = [
+  "Refining document",
+  "Recognizing document",
   "Identifying document",
   "Indexing document",
 ] as const;

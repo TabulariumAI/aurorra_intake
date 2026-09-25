@@ -38,6 +38,7 @@ export type ContainerProps = {
   authToken: string | null;
   apiGatewayUrl: string;
   intervalMs: number;
+  intervalPageMs: number;
   maxFileSizeBytes: number;
   onAlert?: (message: string) => void;
   onCanceled?: () => void;
@@ -64,6 +65,7 @@ export function Container({
   authToken,
   apiGatewayUrl,
   intervalMs,
+  intervalPageMs,
   maxFileSizeBytes,
   onAlert,
   onCanceled,
@@ -216,11 +218,12 @@ export function Container({
     },
     choiceStructure: CHOICESTRUCTURE,
     baseIntervalMs: intervalMs,
+    intervalPageMs,
     indexingWorkerClient: createIndexingWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     getAuthToken() {
       return authToken ?? "";
     },
-  }), [apiGatewayUrl, authToken, commonRuntime, intervalMs, onIndexed]);
+  }), [apiGatewayUrl, authToken, commonRuntime, intervalMs, intervalPageMs, onIndexed]);
 
   useEffect(() => {
     sessionRef.current = sessionService;

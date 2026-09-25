@@ -45,15 +45,15 @@ describe("ProgressView", () => {
     expect(screen.queryByLabelText("Completed")).not.toBeInTheDocument();
   });
 
-  it("renders validated page counters with their stable message as the accessible name", () => {
+  it.each(["Refining document", "Recognizing document", "Identifying document", "Indexing document"])("renders validated page counters for %s", message => {
     const { rerender } = render(<ProgressView jobs={[{
       jobId: "indexing",
-      message: "Indexing document",
+      message,
       phase: "started",
       progress: { completed: 9, total: 5, unit: "pages" },
     }]} onBack={vi.fn()} />);
 
-    const bar = screen.getByRole("progressbar", { name: "Indexing document" });
+    const bar = screen.getByRole("progressbar", { name: message });
     expect(bar).toHaveAttribute("aria-valuemin", "0");
     expect(bar).toHaveAttribute("aria-valuemax", "5");
     expect(bar).toHaveAttribute("aria-valuenow", "5");
@@ -62,7 +62,7 @@ describe("ProgressView", () => {
 
     rerender(<ProgressView jobs={[{
       jobId: "indexing",
-      message: "Indexing document",
+      message,
       phase: "completed",
       progress: { completed: 5, total: 5, unit: "pages" },
     }]} onBack={vi.fn()} />);
@@ -71,7 +71,7 @@ describe("ProgressView", () => {
 
     rerender(<ProgressView jobs={[{
       jobId: "indexing",
-      message: "Indexing document",
+      message,
       phase: "started",
       progress: { completed: 1.5, total: 5, unit: "pages" },
     }]} onBack={vi.fn()} />);
@@ -165,6 +165,11 @@ describe("ProgressView", () => {
     render(
       <ProgressView
         jobs={[{
+          jobId: "retrieve",
+          message: "Retrieving processed data...",
+          phase: "info",
+          progress: null,
+        }, {
           actions: [{ label: "View metadata", onConfirm: viewMetadata, requireConfirmation: false, variant: "primary" }],
           jobId: "retrieve-11",
           message: "Processing is taking longer than expected.",
@@ -174,7 +179,12 @@ describe("ProgressView", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Information")).toBeVisible();
+    expect(screen.getAllByLabelText("Information")).toHaveLength(2);
+    expect(screen.getByText("Retrieving processed data...")).toBeVisible();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("progress-spinner")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("progress-completed-check")).not.toBeInTheDocument();
+    expect(screen.queryByText("Step 11 of 11")).not.toBeInTheDocument();
     expect(screen.getByText("Processing is taking longer than expected.")).toBeVisible();
     expect(screen.getByText("Processing is taking longer than expected.").parentElement).toHaveStyle({ backgroundColor: "var(--accent-surface)" });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

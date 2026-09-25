@@ -15,31 +15,20 @@ describe("useProgress", () => {
     expect(result.current.jobs).toEqual([{ jobId: "retrieve", message: "Retrieving processed data...", phase: "started" }]);
   });
 
-  it("updates identifying and processing page rows through all seven pages", () => {
+  it("updates all four page stages in place and retains completed rows", () => {
     const { result } = renderHook(() => useProgress());
-    act(() => result.current.receive({ jobId: "recognize", message: "Recognizing document", phase: "started" }));
-    act(() => result.current.receive({ jobId: "recognize", message: "Recognizing document", phase: "completed" }));
-
-    for (const stage of ["Identifying document", "Indexing document"]) {
+    const stages = ["Refining document", "Recognizing document", "Identifying document", "Indexing document"];
+    for (const [index, message] of stages.entries()) {
       for (let page = 1; page <= 7; page++) {
-        act(() => result.current.receive({ jobId: stage, message: `${stage} page ${page} of 7`, phase: "started" }));
-        expect(result.current.jobs.at(-1)).toEqual({ jobId: stage, message: `${stage} page ${page} of 7`, phase: "started" });
-        if (stage === "Identifying document") {
-          expect(result.current.jobs.some((job) => job.jobId === "Indexing document")).toBe(false);
-        } else {
-          expect(result.current.jobs[1]).toEqual({ jobId: "Identifying document", message: "Identifying document page 7 of 7", phase: "completed" });
-        }
-        act(() => result.current.receive({ jobId: stage, message: `${stage} page ${page} of 7`, phase: "completed" }));
+        const job = { jobId: message, message, phase: "started" as const, progress: { completed: page, total: 7, unit: "pages" as const } };
+        act(() => result.current.receive(job));
+        expect(result.current.jobs).toHaveLength(index + 1);
+        expect(result.current.jobs.at(-1)).toEqual(job);
+        expect(result.current.jobs.slice(0, -1).every(event => event.phase === "completed")).toBe(true);
       }
+      act(() => result.current.receive({ jobId: message, message, phase: "completed" }));
     }
-
-    act(() => result.current.receive({ jobId: "enrich", message: "Enriching legal descriptions", phase: "started" }));
-    expect(result.current.jobs).toEqual([
-      { jobId: "recognize", message: "Recognizing document", phase: "completed" },
-      { jobId: "Identifying document", message: "Identifying document page 7 of 7", phase: "completed" },
-      { jobId: "Indexing document", message: "Indexing document page 7 of 7", phase: "completed" },
-      { jobId: "enrich", message: "Enriching legal descriptions", phase: "started" },
-    ]);
+    expect(result.current.jobs).toEqual(stages.map(message => ({ jobId: message, message, phase: "completed", progress: { completed: 7, total: 7, unit: "pages" } })));
   });
 
   it("keeps the starting message while each job reaches a terminal state", () => {
@@ -148,12 +137,13 @@ describe("useProgress", () => {
     const { result } = renderHook(() => useProgress());
 
     act(() => {
-      result.current.receive({ jobId: "retrieve-11", message: "Retrieving processed data...", phase: "started" });
+      result.current.receive({ jobId: "retrieve-11", message: "Retrieving processed data...", phase: "started", progress: { completed: 11, total: 11, unit: "steps" } });
+      result.current.receive({ jobId: "retrieve-11", message: "Retrieving processed data...", phase: "info", progress: null });
       result.current.receive({ jobId: "delay", message: "Processing is taking longer than expected.", phase: "info" });
     });
 
     expect(result.current.jobs).toEqual([
-      { jobId: "retrieve-11", message: "Retrieving processed data...", phase: "started" },
+      { jobId: "retrieve-11", message: "Retrieving processed data...", phase: "info", progress: null },
       { jobId: "delay", message: "Processing is taking longer than expected.", phase: "info" },
     ]);
   });

@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createIndexingService } from "../service/IndexingService";
 import { useProgress } from "../../progressview/hook/useProgress";
-import { CHOICESTRUCTURE, ChoiceData, DEFAULT_WORKFLOW_SETTINGS, createIndexingPayload } from "../../choices/service/choicesData";
+import { CHOICESTRUCTURE, ChoiceData, Choices, DEFAULT_WORKFLOW_SETTINGS, createIndexingPayload } from "../../choices/service/choicesData";
 import type { IndexingRuntime } from "../type/indexing.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
@@ -67,6 +67,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     },
     choiceStructure: CHOICESTRUCTURE,
     baseIntervalMs: 1,
+    intervalPageMs: 500,
     indexingWorkerClient: {
       start: vi.fn(async () => undefined),
       status: vi.fn(async () => ({ status: "completed", data: "" })),
@@ -87,6 +88,8 @@ describe("IndexingService", () => {
       .mockResolvedValueOnce({ status: "pending", data: "" })
       .mockResolvedValueOnce({ status: "pending", data: "" })
       .mockResolvedValueOnce({ status: "pending", data: "" })
+      .mockResolvedValueOnce({ status: "processing", data: "" })
+      .mockResolvedValueOnce({ status: "processing", data: "" })
       .mockResolvedValueOnce({ status: "processing", data: "" })
       .mockResolvedValueOnce({ status: "processing", data: "" })
       .mockResolvedValueOnce({ status: "processing", data: "" })
@@ -120,7 +123,10 @@ describe("IndexingService", () => {
     );
     expect(receive.mock.calls.map(([event]) => [event.message, event.phase])).toEqual([
       ["Refining document", "started"],
+      ["Refining document", "started"],
+      ["Refining document", "started"],
       ["Refining document", "completed"],
+      ["Recognizing document", "started"],
       ["Recognizing document", "started"],
       ["Recognizing document", "completed"],
       ["Identifying document", "started"],
@@ -141,72 +147,96 @@ describe("IndexingService", () => {
       ["Retrieving processed data...", "started"],
       ["Retrieving processed data...", "completed"],
     ]);
-    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([7, 7, 357, 357, 357, 357, 7, 7, 7, 7, 7]);
+    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([500, 500, 500, 500, 500, 500, 500, 500, 7, 7, 7, 7, 7]);
     setTimeoutSpy.mockRestore();
     const events = receive.mock.calls.map(([event]) => event);
-    expect(events[5].jobId).toBe(events[4].jobId);
-    expect(events[6].jobId).toBe(events[4].jobId);
-    expect(events[8].jobId).toBe(events[7].jobId);
-    expect(events[9].jobId).toBe(events[7].jobId);
-    expect(events[4].jobId).not.toBe(events[7].jobId);
+    for (const stage of ["Refining document", "Recognizing document", "Identifying document", "Indexing document"]) {
+      const jobs = events.filter(event => event.message === stage);
+      expect(new Set(jobs.map(event => event.jobId)).size).toBe(1);
+      expect(jobs.filter(event => event.phase === "started" && event.progress).map(event => event.progress)).toEqual([
+        { completed: 1, total: 2, unit: "pages" }, { completed: 2, total: 2, unit: "pages" },
+      ]);
+      expect(jobs.at(-1)).toMatchObject({ phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } });
+    }
     expect(new Set(events.map((event) => event.jobId)).size).toBe(9);
   });
 
-  it.each([
-    ["Identifying document", 1, "completed"],
-    ["Identifying document", 2, "completed"],
-    ["Identifying document", 7, "completed"],
-    ["Identifying document", 2, "error"],
-    ["Identifying document", 7, "error"],
-    ["Indexing document", 1, "completed"],
-    ["Indexing document", 2, "completed"],
-    ["Indexing document", 7, "completed"],
-    ["Indexing document", 2, "error"],
-    ["Indexing document", 7, "error"],
-  ] as const)("stops %s at page %i when status returns %s", async (stage, lastPage, status) => {
+  const stages = ["Refining document", "Recognizing document", "Identifying document", "Indexing document"];
+
+  it.each(stages.flatMap(stage => [1, 2, 7].flatMap(page => ["completed", "error"].map(status => ({ stage, page, status })))))
+  ("stops $stage at page $page when status returns $status", async ({ stage, page, status }) => {
     const { receive, runtime } = createRuntime();
     runtime.choices.getActualPages = vi.fn(() => 7);
-    const lastCheck = 3 + (stage === "Indexing document" ? 7 : 0) + lastPage;
+    const stageIndex = stages.indexOf(stage);
+    const lastCheck = 1 + stageIndex * 7 + page;
     let checks = 0;
-    runtime.indexingWorkerClient.status = vi.fn(async () => ({
-      status: ++checks === lastCheck ? status : "pending",
-      data: status === "error" ? "worker failed" : "",
-    }));
-
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === lastCheck ? status : "pending", data: status === "error" ? "worker failed" : "" }));
     const run = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await run;
-
     const events = receive.mock.calls.map(([event]) => event);
-    const identifying = events.filter((event) => event.message === "Identifying document");
-    const indexing = events.filter((event) => event.message === "Indexing document");
-    expect(identifying.filter((event) => event.phase === "started").map((event) => event.progress)).toEqual(
-      Array.from({ length: stage === "Indexing document" ? 7 : lastPage }, (_, index) => ({ completed: index + 1, total: 7, unit: "pages" })),
-    );
-    expect(new Set(identifying.map((event) => event.jobId)).size).toBe(1);
-    if (stage === "Indexing document") {
-      expect(identifying.at(-1)).toMatchObject({ message: "Identifying document", phase: "completed", progress: { completed: 7, total: 7, unit: "pages" } });
-      expect(indexing.filter((event) => event.phase === "started").map((event) => event.progress)).toEqual(
-        Array.from({ length: lastPage }, (_, index) => ({ completed: index + 1, total: 7, unit: "pages" })),
+    for (const [index, message] of stages.entries()) {
+      const jobs = events.filter(event => event.message === message);
+      if (index > stageIndex) {
+        expect(jobs).toEqual([]);
+        continue;
+      }
+      expect(jobs.filter(event => event.phase === "started" && event.progress).map(event => event.progress)).toEqual(
+        Array.from({ length: index === stageIndex ? page : 7 }, (_, i) => ({ completed: i + 1, total: 7, unit: "pages" })),
       );
-      expect(new Set(indexing.map((event) => event.jobId)).size).toBe(1);
-      expect(identifying[0].jobId).not.toBe(indexing[0].jobId);
-      expect(events.indexOf(identifying.at(-1))).toBeLessThan(events.indexOf(indexing[0]));
-    } else {
-      expect(indexing).toEqual([]);
+      expect(new Set(jobs.map(event => event.jobId)).size).toBe(1);
+      expect(jobs.at(-1)).toMatchObject({ phase: index === stageIndex && status === "error" ? "failed" : "completed" });
     }
-    expect(events.at(-1)).toMatchObject({
-      message: stage,
-      phase: status === "completed" ? "completed" : "failed",
-      progress: { completed: lastPage, total: 7, unit: "pages" },
-      ...(status === "error" ? { error: "formatted:document processing worker failed" } : {}),
-    });
+    expect(events.at(-1)).toMatchObject({ message: stage, phase: status === "error" ? "failed" : "completed", progress: { completed: page, total: 7, unit: "pages" } });
+    expect(runtime.indexingWorkerClient.start).toHaveBeenCalledOnce();
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(lastCheck);
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
     if (status === "completed") {
-      expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
+      expect(runtime.onIndexed).toHaveBeenCalledOnce();
+      expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
     } else {
+      expect(events.at(-1).error).toBe("formatted:document processing worker failed");
+      expect(runtime.onIndexed).not.toHaveBeenCalled();
       expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each(["completed", "error"])("keeps refining visible while start is pending and handles %s", async status => {
+    const { receive, runtime } = createRuntime();
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    runtime.indexingWorkerClient.start = vi.fn(() => new Promise<void>((ready, fail) => { resolve = ready; reject = fail; }));
+    runtime.indexingWorkerClient.status = vi.fn().mockResolvedValueOnce({ status: "pending", data: "" }).mockResolvedValue({ status: "completed", data: "" });
+    const run = createIndexingService(runtime).process();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(receive).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "Refining document", phase: "started" }));
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledOnce();
+    const jobId = receive.mock.calls[0][0].jobId;
+    if (status === "error") reject(new Error("Start unavailable"));
+    else resolve();
+    await vi.runAllTimersAsync();
+    await run;
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ jobId, message: "Refining document", phase: status === "error" ? "failed" : "completed" }));
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+    if (status === "error") {
+      expect(receive.mock.calls.at(-1)?.[0].error).toContain("Start unavailable");
+      expect(runtime.onIndexed).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([1, 2, 3, 4, 5, 0])("uses the recognition page limit for all stages at level %i", async level => {
+    const choices = new ChoiceData(CHOICESTRUCTURE).generateDefaultJson().map(choice => choice.service === "Recognition" ? { ...choice, level } : choice);
+    const { receive, runtime } = createRuntime({ numOfPages: 24, indexChoices: choices });
+    runtime.choices.getActualPages = (values, pages) => Choices.getActualPages(values, Number(pages));
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
+    const run = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await run;
+    const total = [24, 1, 3, 8, 13, 20][level];
+    for (const stage of stages) {
+      const events = receive.mock.calls.map(([event]) => event).filter(event => event.message === stage && event.phase === "started" && event.progress);
+      expect(events).toHaveLength(total);
+      expect(events.at(-1).progress).toEqual({ completed: total, total, unit: "pages" });
     }
   });
 
@@ -239,59 +269,46 @@ describe("IndexingService", () => {
     expect(result.current.jobs[1].phase).toBe("completed");
   });
 
-  it("keeps identification active across polling and finishes every page before processing", async () => {
+  it("advances each page only after the configured delay and keeps one row per stage", async () => {
     const { result } = renderHook(() => useProgress());
     const { runtime } = createRuntime();
-    runtime.baseIntervalMs = 6500;
+    runtime.intervalPageMs = 137;
     runtime.choices.getActualPages = vi.fn(() => 2);
     runtime.progress = result.current;
     runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
-    const run = createIndexingService(runtime).process();
-    await act(async () => { await vi.advanceTimersByTimeAsync(13000); });
-    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 2, unit: "pages" } });
-    expect(result.current.jobs.some((job) => job.message === "Indexing document")).toBe(false);
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(6849); });
-    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 2, unit: "pages" } });
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(result.current.jobs.at(-1)).toMatchObject({ message: "Identifying document", phase: "started", progress: { completed: 2, total: 2, unit: "pages" } });
-    expect(result.current.jobs.some((job) => job.message === "Indexing document")).toBe(false);
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(6850); });
-    expect(result.current.jobs.slice(-2)).toEqual([
-      expect.objectContaining({ message: "Identifying document", phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } }),
-      expect.objectContaining({ message: "Indexing document", phase: "started", progress: { completed: 1, total: 2, unit: "pages" } }),
-    ]);
-    await act(async () => { await vi.advanceTimersByTimeAsync(6850); });
-    expect(result.current.jobs.slice(-2)).toEqual([
-      expect.objectContaining({ message: "Identifying document", phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } }),
-      expect.objectContaining({ message: "Indexing document", phase: "started", progress: { completed: 2, total: 2, unit: "pages" } }),
-    ]);
-    await act(async () => {
-      await vi.runAllTimersAsync();
-      await run;
-    });
-    expect(result.current.jobs.filter((job) => job.message === "Identifying document")).toHaveLength(1);
-    expect(result.current.jobs.filter((job) => job.message === "Indexing document")).toHaveLength(1);
+    let run!: Promise<void>;
+    await act(async () => { run = createIndexingService(runtime).process(); });
+    for (const [index, message] of stages.entries()) {
+      for (const page of [1, 2]) {
+        expect(result.current.jobs).toHaveLength(index + 1);
+        expect(result.current.jobs.at(-1)).toMatchObject({ message, phase: "started", progress: { completed: page, total: 2, unit: "pages" } });
+        await act(async () => { await vi.advanceTimersByTimeAsync(136); });
+        expect(result.current.jobs.at(-1)).toMatchObject({ message, phase: "started", progress: { completed: page, total: 2, unit: "pages" } });
+        await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      }
+      expect(result.current.jobs[index]).toMatchObject({ message, phase: "completed" });
+    }
+    await act(async () => { await vi.runAllTimersAsync(); await run; });
   });
 
-  it("keeps the current page active while a status response is outstanding", async () => {
+  it.each(stages)("keeps %s active while its status response is outstanding", async stage => {
     const { receive, runtime } = createRuntime();
-    let resolveStatus!: (value: unknown) => void;
-    runtime.indexingWorkerClient.status = vi.fn()
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveStatus = resolve; }));
+    let resolve!: (value: unknown) => void;
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(() => ++checks === stages.indexOf(stage) + 2
+      ? new Promise(ready => { resolve = ready; })
+      : Promise.resolve({ status: "pending", data: "" }));
     const run = createIndexingService(runtime).process();
-    await vi.advanceTimersByTimeAsync(353);
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 1, unit: "pages" } }));
-    await vi.advanceTimersByTimeAsync(6500);
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document", phase: "started", progress: { completed: 1, total: 1, unit: "pages" } }));
-    resolveStatus({ status: "completed", data: "" });
+    await vi.advanceTimersByTimeAsync((stages.indexOf(stage) + 1) * 500);
+    const event = { message: stage, phase: "started", progress: { completed: 1, total: 1, unit: "pages" } };
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining(event));
+    const calls = receive.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(receive).toHaveBeenCalledTimes(calls);
+    resolve({ status: "completed", data: "" });
     await run;
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Identifying document", phase: "completed", progress: { completed: 1, total: 1, unit: "pages" } }));
-    expect(receive.mock.calls.some(([event]) => event.message === "Indexing document")).toBe(false);
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ ...event, phase: "completed" }));
+    expect(runtime.onIndexed).toHaveBeenCalledOnce();
   });
 
   it("reports an initial status failure in progress", async () => {
@@ -315,7 +332,7 @@ describe("IndexingService", () => {
     expect(runtime.indexingWorkerClient.start).not.toHaveBeenCalled();
   });
 
-  it("shows only supported enabled enrichment updates and uses the calculated page interval", async () => {
+  it("shows only supported enabled enrichment updates and uses the configured page interval independently of enabled services", async () => {
     const choices = new ChoiceData(CHOICESTRUCTURE).generateDefaultJson().map((choice) => ({
       ...choice,
       level: [
@@ -352,6 +369,7 @@ describe("IndexingService", () => {
     expect(receive.mock.calls.map(([event]) => event.message)).toEqual([
       "Refining document",
       "Refining document",
+      "Refining document",
       "Recognizing document",
       "Recognizing document",
       "Identifying document",
@@ -370,7 +388,7 @@ describe("IndexingService", () => {
       "Retrieving processed data...",
       "Retrieving processed data...",
     ]);
-    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([7, 7, 107, 107, 7, 7, 7, 7, 7]);
+    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([500, 500, 500, 500, 7, 7, 7, 7, 7]);
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(10);
     setTimeoutSpy.mockRestore();
   });
@@ -382,12 +400,7 @@ describe("IndexingService", () => {
     }));
     const { receive, runtime } = createRuntime({ indexChoices: choices });
     runtime.choices.getActualPages = vi.fn(() => 1);
-    runtime.indexingWorkerClient.status = vi.fn()
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "completed", data: "" });
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
 
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
@@ -425,11 +438,49 @@ describe("IndexingService", () => {
       phase: "started",
       progress: { completed: 11, total: 11, unit: "steps" },
     });
+    expect(receive.mock.calls.at(-2)?.[0]).toEqual({
+      jobId: lastRetrieval?.jobId,
+      message: "Retrieving processed data...",
+      phase: "info",
+      progress: null,
+    });
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(20);
+    await vi.advanceTimersByTimeAsync(35000);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(20);
     expect(receive.mock.calls.at(-1)?.[0].jobId).not.toBe(lastRetrieval?.jobId);
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     await receive.mock.calls.at(-1)?.[0].actions[0].onConfirm();
     expect(runtime.onIndexed).not.toHaveBeenCalled();
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
+  });
+
+  it.each(["pending", "processing", "completed", "error"] as const)("handles %s on the final retrieval attempt", async status => {
+    const { receive, runtime } = createRuntime();
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === 20 ? status : "pending", data: status === "error" ? "Retrieval failed" : "" }));
+    const run = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await run;
+    const events = receive.mock.calls.map(([event]) => event);
+    const retrieval = events.filter(event => event.message === "Retrieving processed data...");
+    expect(new Set(retrieval.map(event => event.jobId)).size).toBe(1);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(20);
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+    if (status === "completed" || status === "error") {
+      expect(retrieval.at(-1)).toMatchObject({ phase: status === "completed" ? "completed" : "failed", progress: { completed: 11, total: 11, unit: "steps" } });
+      expect(events.some(event => event.phase === "info")).toBe(false);
+    } else {
+      expect(retrieval.at(-1)).toMatchObject({ phase: "info", progress: null });
+      expect(events.at(-1)).toMatchObject({ message: "Processing is taking longer than expected.", phase: "info" });
+    }
+    if (status === "completed") {
+      expect(runtime.onIndexed).toHaveBeenCalledOnce();
+      expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+    } else {
+      expect(runtime.onIndexed).not.toHaveBeenCalled();
+      expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    }
   });
 
   it("returns true only for completed status", async () => {

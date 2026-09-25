@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { IntakeContainerActions, IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createIndexingService } from "../../indexing/service/IndexingService";
 import { Container } from "../component/Container";
 import type { ContainerProps } from "../component/Container";
 import { storeApi } from "../../../store/state/store";
@@ -32,10 +33,11 @@ function wrap(name: string) {
   );
 }
 
-function hostProps(): Pick<ContainerProps, "maxFileSizeBytes" | "intervalMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect"> {
+function hostProps(): Pick<ContainerProps, "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect"> {
   return {
     maxFileSizeBytes: 20 * 1024 * 1024,
     intervalMs: 13000,
+    intervalPageMs: 500,
     onLoaderChange: vi.fn(),
     renderChoices: wrap("choices"),
     renderPreview: wrap("preview"),
@@ -141,6 +143,14 @@ describe("Container", () => {
     workerMocks.createSessionWorkerClient.mockClear();
     capturedEventBus = null;
     capturedProgress = null;
+  });
+
+  it("passes both intervals to indexing and refreshes the page interval", () => {
+    const props = { ...hostProps(), authToken: "token", apiGatewayUrl: "https://user.example.com", onReadyChange: vi.fn(), onIndexed: vi.fn() };
+    const { rerender } = render(<Container {...props} />);
+    expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 500 }));
+    rerender(<Container {...props} intervalPageMs={137} />);
+    expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 137 }));
   });
 
   it("handles typed host requests and reports the loaded session", async () => {

@@ -76,6 +76,7 @@ export type IndexingRuntime = {
   };
   choiceStructure: unknown;
   baseIntervalMs: number;
+  intervalPageMs: number;
   indexingWorkerClient: IndexingWorkerClient;
   progress: ProgressActions;
   getAuthToken(): string;

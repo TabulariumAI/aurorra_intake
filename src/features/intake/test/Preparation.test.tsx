@@ -56,6 +56,7 @@ it.each(["success", "failure"])("renders preparation during export and handles %
     apiGatewayUrl="https://gateway.test"
     maxFileSizeBytes={20 * 1024 * 1024}
     intervalMs={4000}
+    intervalPageMs={500}
     onIndexed={vi.fn()}
     onLoaderChange={vi.fn()}
     onReadyChange={vi.fn()}
