@@ -1,7 +1,8 @@
+import type { Ref } from "react";
 import type { IntakeContainerActions } from "../../intake/type/intake.types";
 import type { IntakeShellActions } from "../../intake/type/intakeShell.types";
 import type { SelectViewerProps, ViewerDecodeOptions } from "./selectViewer.types";
-import type { ExportProgress } from "@tabulariumai/aurora-lens";
+import type { ExportProgress, PageSizeConfig, PageSizeFailure, TiffPixelFormat } from "@tabulariumai/aurora-lens";
 
 export type SelectUploadStatus =
   | { kind: "idle" }
@@ -13,6 +14,7 @@ export type SelectReviewState = {
 };
 
 export type SelectPanelActions = {
+  acceptSize(): Promise<void>;
   selectFile(file: File): Promise<void>;
   start(): Promise<void>;
   showSettings(): void;
@@ -24,6 +26,8 @@ export type SelectPanelActions = {
 };
 
 export type SelectPanelProps = {
+  pageSize: PageSizeConfig;
+  tiffPixelFormat: TiffPixelFormat;
   maxFileSizeBytes: number;
   dropTarget: HTMLElement;
   actions: IntakeShellActions;
@@ -31,6 +35,7 @@ export type SelectPanelProps = {
 };
 
 export type SelectFormProps = {
+  selectRef: Ref<HTMLButtonElement>;
   maxFileSizeBytes: number;
   dropTarget: HTMLElement;
   status: SelectUploadStatus;
@@ -64,6 +69,8 @@ export type SelectService = {
 };
 
 export type UseSelectPanelOptions = {
+  pageSize: PageSizeConfig;
+  tiffPixelFormat: TiffPixelFormat;
   maxFileSizeBytes: number;
   actions: IntakeContainerActions;
   service: SelectService;
@@ -71,6 +78,7 @@ export type UseSelectPanelOptions = {
 };
 
 export type UseSelectPanelResult = {
+  sizeFailure: PageSizeFailure | null;
   mode: "pending" | "select" | "review";
   uploadStatus: SelectUploadStatus;
   loading: boolean;

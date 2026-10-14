@@ -40,7 +40,7 @@
     "lint:boundary": "node scripts/check-boundary.cjs"
   },
   "dependencies": {
-    "@tabulariumai/aurora-lens": "file:../aurora_lens_workspace/packages/aurora-lens",
+    "@tabulariumai/aurora-lens": "file:../aurora-lens",
     "aurora-core": "file:../aurora_core",
     "fuse.js": "7.5.0",
     "pdfjs-dist": "6.3.289",

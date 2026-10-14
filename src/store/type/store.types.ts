@@ -1,4 +1,4 @@
-import type { WorkflowSettings } from "../../features/choices/type/choices.types";
+import type { ChoicesBackendData, WorkflowSettings } from "../../features/choices/type/choices.types";
 
 export type StoreValues = {
   settingsOpen: boolean;
@@ -14,7 +14,8 @@ export type StoreValues = {
   document: unknown;
   numOfPages: unknown;
   indexChoices: unknown;
-  choicesBySession: Record<string, unknown[] | null>;
+  jurisdiction: string | null;
+  choicesBySession: Record<string, ChoicesBackendData>;
   selectionResetVersion: number;
   sessionRequest: IntakeSessionRequest | null;
   workflow: WorkflowSettings;
@@ -47,6 +48,7 @@ export const SESSION_STATE_KEYS = [
 export const LOCAL_STATE_KEYS = [
   "userToken",
   "indexChoices",
+  "jurisdiction",
   "workflow",
 ] as const satisfies readonly StateKey[];
 

@@ -6,6 +6,7 @@ import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    jurisdiction: null,
     settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -44,6 +45,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
   const emit = vi.fn();
   const receive = vi.fn();
   const runtime: SessionRuntime = {
+    onCreated: vi.fn(async () => undefined),
     alert: { format: vi.fn((message) => `formatted:${message.code}`) },
     messages: {
       DOC_START_NO_DOCUMENT: { code: "DOC_START_NO_DOCUMENT" },
@@ -76,6 +78,28 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
 }
 
 describe("SessionService", () => {
+  it("registers the created session before allowing upload to start", async () => {
+    const { runtime, emit, receive } = createRuntime();
+    let commit!: () => void;
+    vi.mocked(runtime.onCreated!).mockImplementation(() => new Promise<void>(resolve => { commit = resolve; }));
+    const service = createSessionService(runtime);
+    const processing = service.process(new File(["pdf"], "document.pdf", { type: "application/pdf" }), "job");
+    await vi.waitFor(() => expect(runtime.onCreated).toHaveBeenCalledWith("session-1"));
+    expect(emit).not.toHaveBeenCalled();
+    expect(receive).not.toHaveBeenCalled();
+    commit();
+    await processing;
+    expect(emit).toHaveBeenCalledWith(runtime.events.reRoute, expect.objectContaining({ stage: "upload" }));
+  });
+
+  it("keeps the original session ID and stops upload when registration fails", async () => {
+    const { runtime, emit, receive, store } = createRuntime();
+    vi.mocked(runtime.onCreated!).mockRejectedValueOnce(new Error("Registration failed"));
+    await createSessionService(runtime).process(new File(["pdf"], "document.pdf", { type: "application/pdf" }), "job");
+    expect(store.get("session")).toBe("session-1");
+    expect(emit).not.toHaveBeenCalled();
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({ phase: "failed", error: "Registration failed" }));
+  });
   it("exposes only the used session operations", () => {
     const { runtime } = createRuntime();
 

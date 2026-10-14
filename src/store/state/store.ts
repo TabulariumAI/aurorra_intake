@@ -46,6 +46,7 @@ const DEFAULT_STATE: StoreValues = {
   document: null,
   numOfPages: 1,
   indexChoices: null,
+  jurisdiction: null,
   choicesBySession: {},
   selectionResetVersion: 0,
   sessionRequest: null,

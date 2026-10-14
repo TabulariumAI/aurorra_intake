@@ -84,6 +84,7 @@ function ViewerIcon({ name }: { name: ViewerIconName }) {
 }
 
 export function SelectViewer({
+  pageSize,
   allowEdit = false,
   onAddError,
   onError,
@@ -98,6 +99,7 @@ export function SelectViewer({
     showThumbnails,
     state,
   } = useSelectViewer({
+    pageSize,
     allowEdit,
     onAddError,
     onError,

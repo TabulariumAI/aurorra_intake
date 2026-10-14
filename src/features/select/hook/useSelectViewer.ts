@@ -15,6 +15,7 @@ function requireViewer(viewerRef: { current: ViewerApi | null }) {
 }
 
 export function useSelectViewer({
+  pageSize,
   allowEdit = false,
   onAddError,
   onError,
@@ -32,6 +33,7 @@ export function useSelectViewer({
     if (!lensHost) return undefined;
 
     const lens = new AuroraLens(lensHost, {
+      pageSize,
       allowEdit,
       sessionStore: new IndexedDbViewerSessionStore(),
       onAddError: (error) => onAddError?.(error),
@@ -54,7 +56,7 @@ export function useSelectViewer({
       viewerRef.current = null;
       onApiReady?.(null);
     };
-  }, [allowEdit, onAddError, onError, onStateChange, onStatusChange, onApiReady]);
+  }, [pageSize, allowEdit, onAddError, onError, onStateChange, onStatusChange, onApiReady]);
 
   const showThumbnails = () => requireViewer(viewerRef).showThumbnails();
   const previousPage = () => requireViewer(viewerRef).previousPage();

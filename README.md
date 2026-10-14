@@ -28,6 +28,8 @@ import { AurorraIntake } from "aurorra-intake";
   apiGatewayUrl={apiGatewayUrl}
   intervalMs={3500}
   intervalPageMs={500}
+  pageSize={appConfig.pageSize}
+  tiffPixelFormat={appConfig.tiffPixelFormat}
   maxFileSizeBytes={appConfig.maxFileSizeBytes}
   onIndexed={({ session, document }) => console.log(session, document)}
   onLoaderChange={() => {}}
@@ -36,12 +38,22 @@ import { AurorraIntake } from "aurorra-intake";
   renderPreview={({ children }) => children}
   renderProgress={({ children }) => children}
   renderSelect={({ children }) => children}
+  renderTolerance={renderIntakeCallout}
 />
 ```
 
 `intervalPageMs` controls each page update during refining, recognizing, identifying, and indexing. `intervalMs` controls enrichment, quality analysis, and retrieval delays. Page totals use the existing recognition selection; backend status determines completion.
 
+`tiffPixelFormat` sets TIFF export to `bw1` (bitonal), `gray8` (grayscale), or `rgb24` (RGB). Intake applies it before opening or restoring the Lens session and preserves saved resolution and compression settings.
+
+`renderTolerance` renders the host callout anchored to the Select document button. Its content shows the rejected page and explicit Process anyway / Cancel actions. Lens calculates the minimum tolerance using the configured formats; confirmation retries the same document with that tolerance only for the current selection. Cancel, clear, and a new Intake remove the override.
+
 The host is responsible for supplying valid credentials and a gateway that implements the required session, workflow-settings, provisioning, and indexing endpoints.
+
+`onCreated(session)` runs after the backend allocates the session ID and before
+upload starts. Intake awaits this callback so the host can persist the session
+and its queued batch membership. `onIndexed` remains the indexing completion
+callback; a failed `onCreated` prevents upload and preserves the allocated ID.
 
 ## Development
 

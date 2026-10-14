@@ -32,6 +32,7 @@ function SafetyIcon() {
 }
 
 export function SelectForm({
+  selectRef,
   maxFileSizeBytes,
   dropTarget,
   status,
@@ -108,6 +109,7 @@ export function SelectForm({
           <p style={selectFormStyles.separator}>or click to select a file</p>
           <span onClick={(event) => event.stopPropagation()}>
             <ConfButton
+              ref={selectRef}
               data-upload-select="true"
               label="Select document"
               variant="primary"

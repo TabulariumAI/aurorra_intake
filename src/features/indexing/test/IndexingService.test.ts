@@ -16,6 +16,7 @@ afterEach(() => {
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    jurisdiction: null,
     settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -109,13 +110,14 @@ describe("IndexingService", () => {
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", defaultChoices);
     expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
     expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
-      "session-1": defaultChoices,
+      "session-1": { items: defaultChoices, jurisdiction: null },
     });
     expect(runtime.indexingWorkerClient.start).toHaveBeenCalledWith(
       "token-1",
       "session-1",
       "session-1.pdf",
       createIndexingPayload(defaultChoices),
+      null,
     );
     expect(runtime.eventBus.emit).toHaveBeenCalledWith(
       runtime.events.reRoute,
@@ -162,6 +164,125 @@ describe("IndexingService", () => {
   });
 
   const stages = ["Refining document", "Recognizing document", "Identifying document", "Indexing document"];
+
+  it.each([
+    { intervalMs: 7500, pageMs: 2500, stepsPerCheck: 3 },
+    { intervalMs: 6000, pageMs: 2500, stepsPerCheck: 3 },
+    { intervalMs: 2500, pageMs: 2500, stepsPerCheck: 1 },
+    { intervalMs: 1000, pageMs: 2500, stepsPerCheck: 1 },
+  ])("accumulates $pageMs ms steps to $intervalMs ms and resets after each check", async ({ intervalMs, pageMs, stepsPerCheck }) => {
+    const { receive, runtime } = createRuntime();
+    runtime.baseIntervalMs = intervalMs;
+    runtime.intervalPageMs = pageMs;
+    runtime.choices.getActualPages = vi.fn(() => 5);
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
+    const run = createIndexingService(runtime).process();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledOnce();
+    for (let step = 0; step < 20; step++) {
+      const message = stages[Math.floor(step / 5)];
+      expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
+        message, phase: "started", progress: { completed: step % 5 + 1, total: 5, unit: "pages" },
+      }));
+      await vi.advanceTimersByTimeAsync(pageMs - 1);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(1 + Math.floor(step / stepsPerCheck));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(1 + Math.floor((step + 1) / stepsPerCheck));
+    }
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    for (const message of stages) {
+      const jobs = receive.mock.calls.map(([event]) => event).filter(event => event.message === message);
+      expect(new Set(jobs.map(event => event.jobId)).size).toBe(1);
+      expect(jobs.at(-1)).toMatchObject({ phase: "completed", progress: { completed: 5, total: 5, unit: "pages" } });
+    }
+    for (let check = 1; check <= 15; check++) {
+      await vi.advanceTimersByTimeAsync(intervalMs - 1);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(1 + Math.floor(20 / stepsPerCheck) + check - 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(1 + Math.floor(20 / stepsPerCheck) + check);
+    }
+    await run;
+    expect(receive.mock.calls.at(-2)?.[0]).toMatchObject({ message: "Retrieving processed data...", phase: "info", progress: null });
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Processing is taking longer than expected.", phase: "info" }));
+    const checks = vi.mocked(runtime.indexingWorkerClient.status).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(intervalMs * 2);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(checks);
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+  });
+
+  it.each(stages.flatMap(stage => [3, 6].flatMap(page => ["completed", "error"].map(status => ({ stage, page, status })))))
+  ("stops $stage at accumulated page $page on $status", async ({ stage, page, status }) => {
+    const { receive, runtime } = createRuntime();
+    runtime.baseIntervalMs = 7500;
+    runtime.intervalPageMs = 2500;
+    runtime.choices.getActualPages = vi.fn(() => 6);
+    const lastCheck = 1 + stages.indexOf(stage) * 2 + page / 3;
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === lastCheck ? status : "processing", data: "worker failed" }));
+    const run = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await run;
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(lastCheck);
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: stage, phase: status === "completed" ? "completed" : "failed",
+      progress: { completed: page, total: 6, unit: "pages" },
+    }));
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+    if (status === "completed") {
+      expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
+      expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+    } else {
+      expect(receive.mock.calls.at(-1)?.[0].error).toBe("formatted:document processing worker failed");
+      expect(runtime.onIndexed).not.toHaveBeenCalled();
+      expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    }
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(lastCheck);
+  });
+
+  it("starts each process with zero accumulated page time", async () => {
+    const { runtime } = createRuntime();
+    runtime.baseIntervalMs = 7500;
+    runtime.intervalPageMs = 2500;
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
+    const service = createIndexingService(runtime);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      vi.mocked(runtime.indexingWorkerClient.status).mockClear();
+      const run = service.process();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(2);
+      await vi.runAllTimersAsync();
+      await run;
+      expect(runtime.store.get("indexingStepStatus")).toBe(false);
+    }
+  });
+
+  it("restarts the step sum after a delayed pending status response", async () => {
+    const { runtime } = createRuntime();
+    runtime.baseIntervalMs = 7500;
+    runtime.intervalPageMs = 2500;
+    runtime.choices.getActualPages = vi.fn(() => 6);
+    let resolve!: (value: unknown) => void;
+    runtime.indexingWorkerClient.status = vi.fn()
+      .mockResolvedValueOnce({ status: "pending", data: "" })
+      .mockImplementationOnce(() => new Promise(ready => { resolve = ready; }))
+      .mockResolvedValue({ status: "completed", data: "" });
+    const run = createIndexingService(runtime).process();
+    await vi.advanceTimersByTimeAsync(7500);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(2);
+    resolve({ status: "pending", data: "" });
+    await vi.advanceTimersByTimeAsync(7499);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await run;
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(3);
+    expect(runtime.onIndexed).toHaveBeenCalledOnce();
+  });
 
   it.each(stages.flatMap(stage => [1, 2, 7].flatMap(page => ["completed", "error"].map(status => ({ stage, page, status })))))
   ("stops $stage at page $page when status returns $status", async ({ stage, page, status }) => {
@@ -293,18 +414,22 @@ describe("IndexingService", () => {
 
   it.each(stages)("keeps %s active while its status response is outstanding", async stage => {
     const { receive, runtime } = createRuntime();
+    runtime.baseIntervalMs = 7500;
+    runtime.intervalPageMs = 2500;
+    runtime.choices.getActualPages = vi.fn(() => 3);
     let resolve!: (value: unknown) => void;
     let checks = 0;
     runtime.indexingWorkerClient.status = vi.fn(() => ++checks === stages.indexOf(stage) + 2
       ? new Promise(ready => { resolve = ready; })
       : Promise.resolve({ status: "pending", data: "" }));
     const run = createIndexingService(runtime).process();
-    await vi.advanceTimersByTimeAsync((stages.indexOf(stage) + 1) * 500);
-    const event = { message: stage, phase: "started", progress: { completed: 1, total: 1, unit: "pages" } };
+    await vi.advanceTimersByTimeAsync((stages.indexOf(stage) + 1) * 7500);
+    const event = { message: stage, phase: "started", progress: { completed: 3, total: 3, unit: "pages" } };
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining(event));
     const calls = receive.mock.calls.length;
     await vi.advanceTimersByTimeAsync(5000);
     expect(receive).toHaveBeenCalledTimes(calls);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(stages.indexOf(stage) + 2);
     resolve({ status: "completed", data: "" });
     await run;
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ ...event, phase: "completed" }));
@@ -577,4 +702,12 @@ it("publishes the indexing session captured before polling", async () => {
   finish({ status: "completed", data: "" });
   await processing;
   expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
+});
+
+
+it.each(["Texas, Harris County", null])("passes jurisdiction %s through the indexing service", async (jurisdiction) => {
+  const { runtime, defaultChoices } = createRuntime({ jurisdiction });
+  const service = createIndexingService(runtime);
+  await service.start("session-1", "source.pdf", defaultChoices, jurisdiction);
+  expect(runtime.indexingWorkerClient.start).toHaveBeenCalledWith("token-1", "session-1", "source.pdf", defaultChoices, jurisdiction);
 });

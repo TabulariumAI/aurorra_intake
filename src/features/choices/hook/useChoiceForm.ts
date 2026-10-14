@@ -1,3 +1,4 @@
+import { JURISDICTIONS } from "../config/jurisdictions";
 import { DEFAULT_WORKFLOW_SETTINGS, workflowValue } from "../service/choicesData";
 import type {
   ChoiceFormSubmitPayload,
@@ -12,6 +13,8 @@ import { useMemo, useState } from "react";
 type Intent = 0 | 1;
 
 type ChoiceFormState = {
+  stateName: string;
+  county: string;
   radioLevels: Record<string, number>;
   intents: Record<string, Intent>;
   checked: Record<string, boolean>;
@@ -20,6 +23,9 @@ type ChoiceFormState = {
 
 type ChoiceFormController = ChoiceFormState & {
   dirty: boolean;
+  valid: boolean;
+  setStateName(value: string): void;
+  setCounty(value: string): void;
   setRadioLevel(choiceName: string, level: number): void;
   setCheckboxIntent(serviceId: string, checked: boolean): void;
   setWorkflowValue(name: WorkflowSettingName, checked: boolean): void;
@@ -112,6 +118,7 @@ function buildInitialState(
   structure: ChoiceStructure,
   choicesJson: unknown,
   initialWorkflow: WorkflowSettings,
+  initialJurisdiction: string | null,
 ): ChoiceFormState {
   const data = new ChoiceData(structure);
   const items = getItems(structure);
@@ -145,7 +152,10 @@ function buildInitialState(
       }
     }
   }
+  const [stateName, county] = initialJurisdiction === null ? ["", ""] : initialJurisdiction.split(", ");
   return {
+    stateName,
+    county,
     radioLevels,
     intents,
     checked: recomputeChecked(structure, intents),
@@ -199,13 +209,18 @@ export function useChoiceForm(
   structure: ChoiceStructure,
   initialChoices: unknown,
   initialWorkflow: WorkflowSettings,
+  initialJurisdiction: string | null,
 ): ChoiceFormController {
-  const initial = useMemo(() => buildInitialState(structure, initialChoices, initialWorkflow), [structure, initialChoices, initialWorkflow]);
+  const initial = useMemo(() => buildInitialState(structure, initialChoices, initialWorkflow, initialJurisdiction), [structure, initialChoices, initialWorkflow, initialJurisdiction]);
   const [state, setState] = useState<ChoiceFormState>(initial);
+  const jurisdiction = state.county ? `${state.stateName}, ${state.county}` : null;
 
   return {
     ...state,
-    dirty: JSON.stringify(extractChoices(structure, state)) !== JSON.stringify(extractChoices(structure, initial))
+    valid: !state.county || Boolean(JURISDICTIONS[state.stateName]?.includes(state.county)),
+    setStateName(value) { setState((current) => ({ ...current, stateName: value, county: "" })); },
+    setCounty(value) { setState((current) => ({ ...current, county: value })); },
+    dirty: jurisdiction !== initialJurisdiction || JSON.stringify(extractChoices(structure, state)) !== JSON.stringify(extractChoices(structure, initial))
       || JSON.stringify(extractWorkflow(state)) !== JSON.stringify(extractWorkflow(initial)),
     setRadioLevel(choiceName, level) {
       setState((current) => ({
@@ -240,6 +255,7 @@ export function useChoiceForm(
     },
     submit() {
       return {
+        jurisdiction,
         choices: extractChoices(structure, state),
         workflow: extractWorkflow(state),
       };

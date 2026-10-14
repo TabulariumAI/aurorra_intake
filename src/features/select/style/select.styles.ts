@@ -152,6 +152,18 @@ export const selectViewerStyle = {
 export const wrapperStyles = selectViewerStyle.wrapper;
 
 export const selectPanelStyles = {
+  sizePrompt: {
+    padding: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "1rem",
+    textAlign: "left",
+    overflowWrap: "anywhere",
+  },
+  sizeMessage: {
+    margin: 0,
+    lineHeight: 1.5,
+  },
   host: {
     width: "100%",
     height: "100%",

@@ -1,0 +1,47 @@
+
+ RUN  v4.1.9 C:/GitHub/Tabularium/aurorra_intake
+
+ ❯ src/features/progressview/test/ProgressView.test.tsx (13 tests | 2 failed) 2053ms
+     × renders connected processing updates as an assistant conversation 149ms
+     × renders screening details and confirmation actions in the timeline 60ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+
+ FAIL  src/features/progressview/test/ProgressView.test.tsx > ProgressView > renders connected processing updates as an assistant conversation
+ Test Files  1 failed | 29 passed (30)
+      Tests  2 failed | 278 passed (280)
+   Start at  23:56:29
+   Duration  129.17s (transform 5.83s, setup 16.14s, import 15.58s, tests 35.49s, environment 151.13s)
+
+Error: expect(element).toHaveStyle()
+
+- Expected
+
+- backgroundColor: transparent;
+ ❯ src/features/progressview/test/ProgressView.test.tsx:127:57
+    125|     });
+    126|     expect(rows).toHaveLength(3);
+    127|     expect(within(rows[0]).getByLabelText("Completed")).toHaveStyle({
+       |                                                         ^
+    128|
+    129|       backgroundColor: "transparent",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/features/progressview/test/ProgressView.test.tsx > ProgressView > renders screening details and confirmation actions in the timeline
+Error: expect(element).toHaveStyle()
+
+- Expected
+
+- backgroundColor: transparent;
+ ❯ src/features/progressview/test/ProgressView.test.tsx:263:53
+    261|     expect(within(row).getByText("Screening complete")).toBeVisible();
+    262|     expect(within(row).getByLabelText("Completed").querySelector("svg"…
+    263|     expect(within(row).getByLabelText("Completed")).toHaveStyle({
+       |                                                     ^
+    264|
+    265|       backgroundColor: "transparent",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

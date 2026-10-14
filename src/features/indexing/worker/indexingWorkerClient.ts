@@ -67,8 +67,8 @@ async function runWorker<T>(command: unknown): Promise<T> {
 export function createIndexingWorkerClient(config: IndexingWorkerConfig): IndexingWorkerClient {
   const { apiBaseUrl } = config;
   return {
-    async start(token, session, document, choices) {
-      return runWorker({ type: "start", token, apiBaseUrl, session, document, choices });
+    async start(token, session, document, choices, jurisdiction) {
+      return runWorker({ type: "start", token, apiBaseUrl, session, document, choices, jurisdiction });
     },
     async status(token, session) {
       return runWorker({ type: "status", token, apiBaseUrl, session });

@@ -26,3 +26,11 @@ export type IntakeContainerProps = Pick<IntakeContainerState, "panel"> & {
   settings: ReactNode;
   selectPanelRef?: Ref<HTMLElement>;
 };
+
+export type IntakeCalloutProps = {
+  anchor: HTMLElement;
+  children: ReactNode;
+  onClose(): void;
+};
+
+export type IntakeCalloutRenderer = (props: IntakeCalloutProps) => ReactNode;

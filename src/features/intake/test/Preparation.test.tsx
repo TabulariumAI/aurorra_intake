@@ -1,3 +1,6 @@
+import { pageSize } from "../../../test/pageSize";
+import { defaultViewerConfig } from "@tabulariumai/aurora-lens";
+import type { ViewerConfig } from "@tabulariumai/aurora-lens";
 import { useEffect } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -13,11 +16,16 @@ const mocks = vi.hoisted(() => ({
   route: vi.fn(async (_payload: IntakeRoutePayload) => undefined),
 }));
 
-vi.mock("@tabulariumai/aurora-lens", () => ({ IndexedDbViewerSessionStore: class {} }));
+vi.mock("@tabulariumai/aurora-lens", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@tabulariumai/aurora-lens")>(),
+  IndexedDbViewerSessionStore: class {},
+}));
 vi.mock("../../select/component/SelectViewer", () => ({
   SelectViewer: (props: SelectViewerProps) => {
     useEffect(() => {
       props.onApiReady?.({
+        readViewerConfig: async () => defaultViewerConfig(),
+        saveViewerConfig: async (config: ViewerConfig) => config,
         decodeDoc: async () => undefined,
         isDirty: () => true,
         exportTiff: mocks.exportTiff,
@@ -54,6 +62,8 @@ it.each(["success", "failure"])("renders preparation during export and handles %
   const { container } = render(<Container
     authToken="token"
     apiGatewayUrl="https://gateway.test"
+    pageSize={pageSize}
+    tiffPixelFormat="gray8"
     maxFileSizeBytes={20 * 1024 * 1024}
     intervalMs={4000}
     intervalPageMs={500}
@@ -62,6 +72,7 @@ it.each(["success", "failure"])("renders preparation during export and handles %
     onReadyChange={vi.fn()}
     onStarted={onStarted}
     onCanceled={onCanceled}
+    renderTolerance={({ children }) => <div role="dialog">{children}</div>}
     renderSelect={renderItem}
     renderPreview={renderItem}
     renderProgress={renderItem}

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useSelectPanel } from "../hook/useSelectPanel";
 import type { SelectPanelProps, SelectService } from "../type/select.types";
-import type { IntakeItemRenderer } from "../../intake/type/intake.types";
+import type { IntakeCalloutRenderer, IntakeItemRenderer } from "../../intake/type/intake.types";
 import { SelectPanelView } from "./SelectPanelView";
 
 type SelectPanelInternalProps = SelectPanelProps & {
@@ -11,11 +11,14 @@ type SelectPanelInternalProps = SelectPanelProps & {
   helper: string;
   renderPreview: IntakeItemRenderer;
   renderSelect: IntakeItemRenderer;
+  renderTolerance: IntakeCalloutRenderer;
   service: SelectService;
 };
 
 export function SelectPanel({
   active,
+  pageSize,
+  tiffPixelFormat,
   maxFileSizeBytes,
   dropTarget,
   actions,
@@ -24,11 +27,12 @@ export function SelectPanel({
   helper,
   renderPreview,
   renderSelect,
+  renderTolerance,
   service,
   selectionResetVersion,
 }: SelectPanelInternalProps) {
   const initializedRef = useRef(false);
-  const select = useSelectPanel({ maxFileSizeBytes, actions, service, selectionResetVersion });
+  const select = useSelectPanel({ pageSize, tiffPixelFormat, maxFileSizeBytes, actions, service, selectionResetVersion });
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -49,6 +53,7 @@ export function SelectPanel({
       helper={helper}
       renderPreview={renderPreview}
       renderSelect={renderSelect}
+      renderTolerance={renderTolerance}
       select={select}
     />
   );

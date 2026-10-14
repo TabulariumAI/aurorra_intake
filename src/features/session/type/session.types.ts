@@ -67,6 +67,7 @@ export type SessionEventBus = {
 };
 
 export type SessionRuntime = {
+  onCreated?: (session: string) => Promise<void>;
   alert: SessionAlert;
   messages: SessionAlertMessages;
   eventBus: SessionEventBus;

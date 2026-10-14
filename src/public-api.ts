@@ -1,6 +1,6 @@
 export { Container as AurorraIntake } from "./features/intake/component/Container";
 export type { ContainerProps as AurorraIntakeProps } from "./features/intake/component/Container";
-export type { IntakeItemProps, IntakeItemRenderer } from "./features/intake/type/intake.types";
+export type { IntakeCalloutProps, IntakeCalloutRenderer, IntakeItemProps, IntakeItemRenderer } from "./features/intake/type/intake.types";
 export type { IntakeCompletePayload, IntakeSessionData } from "./features/intake/service/intakeOrchestrator";
 export type { IntakeSessionRequest } from "./store/type/store.types";
 export type { SessionLoaded } from "./features/session/type/session.types";
@@ -12,6 +12,7 @@ export { createSessionDataWorkerClient } from "./features/choices/worker/choices
 export { ChoicesPanel } from "./features/choices/component/ChoicesPanel";
 export type {
   ChoiceFormSubmitPayload,
+  SessionChoices,
   ChoicesPanelProps,
   SessionDataLoadRuntime,
   WorkflowSetting,

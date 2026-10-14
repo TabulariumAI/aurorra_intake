@@ -87,8 +87,9 @@ class IndexingService implements IndexingServiceActions {
 
       const choices = normalizeChoices(runtime.store.get("indexChoices"), runtime);
       runtime.store.set("indexChoices", choices);
+      const jurisdiction = runtime.store.get("jurisdiction");
       const choicesBySession = runtime.store.get("choicesBySession");
-      runtime.store.set("choicesBySession", { ...choicesBySession, [String(session)]: choices });
+      runtime.store.set("choicesBySession", { ...choicesBySession, [String(session)]: { items: choices, jurisdiction } });
       const levels = new Map<string, number>();
       for (const choice of choices) {
         if (typeof choice !== "object" || choice === null) continue;
@@ -108,8 +109,9 @@ class IndexingService implements IndexingServiceActions {
 
       runtime.progress.receive(lastProgress);
       const indexedChoices = createIndexingPayload(choices);
-      await this.start(sessionId, documentName, indexedChoices);
+      await this.start(sessionId, documentName, indexedChoices, jurisdiction);
 
+      let elapsedMs = 0;
       for (const stage of PAGE_PROGRESS_STAGES) {
         if (isComplete) break;
         const jobId = stage === lastProgress.message ? lastProgress.jobId : crypto.randomUUID();
@@ -122,7 +124,11 @@ class IndexingService implements IndexingServiceActions {
           };
           runtime.progress.receive(lastProgress);
           await delay(runtime.intervalPageMs);
-          isComplete = await this.checkStatus(sessionId);
+          elapsedMs += runtime.intervalPageMs;
+          if (elapsedMs >= runtime.baseIntervalMs) {
+            isComplete = await this.checkStatus(sessionId);
+            elapsedMs = 0;
+          }
           if (isComplete) break;
         }
         if (!isComplete && pages > 0) runtime.progress.receive({ ...lastProgress, phase: "completed" });
@@ -202,7 +208,7 @@ class IndexingService implements IndexingServiceActions {
     }
   }
 
-  async start(session: string, name: unknown, choices: unknown) {
+  async start(session: string, name: unknown, choices: unknown, jurisdiction: string | null) {
     const runtime = this.#runtime;
     const token = runtime.getAuthToken();
     if (!token) {
@@ -213,7 +219,7 @@ class IndexingService implements IndexingServiceActions {
     if (!Array.isArray(choices)) {
       throw new Error("Index choices are not available.");
     }
-    await runtime.indexingWorkerClient.start(token, session, documentName, choices);
+    await runtime.indexingWorkerClient.start(token, session, documentName, choices, jurisdiction);
   }
 
   async checkStatus(session: string) {

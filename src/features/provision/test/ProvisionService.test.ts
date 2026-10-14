@@ -6,6 +6,7 @@ import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    jurisdiction: null,
     settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -66,6 +67,12 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
 }
 
 describe("ProvisionService", () => {
+  it.each(["Texas, Harris County", null])("passes jurisdiction %s to the provision worker", async (jurisdiction) => {
+    const { runtime } = createRuntime({ jurisdiction });
+    await createProvisionService(runtime).process();
+    expect(runtime.provisionWorkerClient.provision).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf", jurisdiction);
+  });
+
   it("exposes only the used process operation", () => {
     const { runtime } = createRuntime();
 
@@ -81,7 +88,7 @@ describe("ProvisionService", () => {
 
     await service.process();
 
-    expect(runtime.provisionWorkerClient.provision).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf");
+    expect(runtime.provisionWorkerClient.provision).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf", null);
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 4);
     expect(receive.mock.calls.map(([event]) => event.phase)).toEqual(["started", "completed", "started", "completed"]);
     expect(receive.mock.calls.map(([event]) => event.message)).toEqual([

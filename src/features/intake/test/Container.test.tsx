@@ -1,3 +1,4 @@
+import { pageSize } from "../../../test/pageSize";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { IntakeContainerActions, IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,8 +34,10 @@ function wrap(name: string) {
   );
 }
 
-function hostProps(): Pick<ContainerProps, "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect"> {
+function hostProps(): Pick<ContainerProps, "pageSize" | "tiffPixelFormat" | "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect" | "renderTolerance"> {
   return {
+    pageSize,
+    tiffPixelFormat: "gray8",
     maxFileSizeBytes: 20 * 1024 * 1024,
     intervalMs: 13000,
     intervalPageMs: 500,
@@ -43,6 +46,7 @@ function hostProps(): Pick<ContainerProps, "maxFileSizeBytes" | "intervalMs" | "
     renderPreview: wrap("preview"),
     renderProgress: wrap("progress"),
     renderSelect: wrap("select"),
+    renderTolerance: ({ children }) => <div role="dialog">{children}</div>,
   };
 }
 
@@ -120,12 +124,16 @@ vi.mock("../../indexing/service/IndexingService", () => ({
 }));
 
 vi.mock("../../select/component/SelectPanel", () => ({
-  SelectPanel: ({ active, actions, renderSelect, selectionResetVersion }: {
+  SelectPanel: ({ active, actions, renderSelect, selectionResetVersion, pageSize: config, tiffPixelFormat }: {
+    pageSize: typeof pageSize;
+    tiffPixelFormat: string;
     active: boolean;
     actions: IntakeContainerActions;
     renderSelect: IntakeItemRenderer;
     selectionResetVersion?: number;
   }) => {
+    expect(config).toEqual(pageSize);
+    expect(tiffPixelFormat).toBe("gray8");
     capturedActions = actions;
     return renderSelect({
       active,

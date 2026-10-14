@@ -203,13 +203,11 @@ export const progressPhaseStyles: Record<ProgressPhase, CSSProperties> = {
     color: "var(--primary-dark)",
   },
   completed: {
-    backgroundColor: "#ECFDF3",
-    border: "1px solid #15803D",
-    color: "#15803D",
+    backgroundColor: "transparent",
   },
   failed: {
-    backgroundColor: "#B42318",
-    color: "var(--white)",
+    backgroundColor: "transparent",
+    color: "#B42318",
   },
   info: {
     backgroundColor: "var(--accent-surface)",

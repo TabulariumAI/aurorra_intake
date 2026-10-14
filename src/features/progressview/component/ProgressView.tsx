@@ -1,4 +1,4 @@
-import { ConfButton } from "aurora-core";
+import { ConfButton, SuccessIcon } from "aurora-core";
 import { useEffect, useRef } from "react";
 import {
   progressMessageStyles,
@@ -17,13 +17,7 @@ function ProgressIcon({ phase }: { phase: ProgressPhase }) {
       </svg>
     );
   }
-  if (phase === "completed") {
-    return (
-      <svg aria-hidden="true" data-testid="progress-completed-check" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <path d="m7.5 12.2 3 3 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-      </svg>
-    );
-  }
+  if (phase === "completed") return <SuccessIcon />;
   if (phase === "info") {
     return (
       <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
@@ -33,8 +27,8 @@ function ProgressIcon({ phase }: { phase: ProgressPhase }) {
     );
   }
   return (
-    <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-      <path d="m8.5 8.5 7 7m0-7-7 7" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
+    <svg aria-hidden="true" fill="currentColor" height="0.7rem" viewBox="0 0 24 24" width="0.7rem">
+      <circle cx="12" cy="12" r="12" />
     </svg>
   );
 }

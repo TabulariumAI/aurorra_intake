@@ -6,7 +6,7 @@ import { ChoiceData, DEFAULT_WORKFLOW_SETTINGS, CHOICESTRUCTURE } from "../servi
 describe("ChoicesPanel", () => {
   it("disables unchanged actions and supports manually reverted settings without closing", () => {
     const onSave = vi.fn();
-    render(<ChoicesPanel onCancel={vi.fn()} initialWorkflow={DEFAULT_WORKFLOW_SETTINGS} choicesEditable initialChoices={[{ service: "Recognition", level: 4 }]} onSave={onSave} structure={CHOICESTRUCTURE} />);
+    render(<ChoicesPanel initialJurisdiction={null} onCancel={vi.fn()} initialWorkflow={DEFAULT_WORKFLOW_SETTINGS} choicesEditable initialChoices={[{ service: "Recognition", level: 4 }]} onSave={onSave} structure={CHOICESTRUCTURE} />);
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Update", "Cancel"]);
     const original = screen.getByRole("radio", { name: /4 -/ });
@@ -25,7 +25,7 @@ describe("ChoicesPanel", () => {
   it("renders Intake choices with the host Preview action", () => {
 
     render(
-        <ChoicesPanel onCancel={vi.fn()}
+        <ChoicesPanel initialJurisdiction={null} onCancel={vi.fn()}
           disabledGroups={[]}
           initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
           choicesEditable
@@ -58,7 +58,7 @@ describe("ChoicesPanel", () => {
     ]);
 
     render(
-      <ChoicesPanel onCancel={vi.fn()}
+      <ChoicesPanel initialJurisdiction={null} onCancel={vi.fn()}
         initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
         choicesEditable={false}
         initialChoices={choices}

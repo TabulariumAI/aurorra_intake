@@ -1,3 +1,4 @@
+import { JurisdictionField } from "./JurisdictionField";
 import { ConfButton } from "aurora-core";
 import { getChoiceItemDependants, getChoiceItemSum, humanizeName, useChoiceForm } from "../hook/useChoiceForm";
 import { choiceFormStyles } from "../style/form.styles";
@@ -20,18 +21,21 @@ export function ChoiceForm({
   structure,
   initialChoices,
   initialWorkflow,
+  initialJurisdiction,
   choicesEditable,
   disabledGroups = [],
   onSave,
   onCancel,
 }: ChoiceFormProps) {
-  const form = useChoiceForm(structure, initialChoices, initialWorkflow);
+  const form = useChoiceForm(structure, initialChoices, initialWorkflow, initialJurisdiction);
   const data = new ChoiceData(structure);
   const disabledGroupSet = new Set(disabledGroups.filter((name) => typeof name === "string" && name.trim()));
 
   return (
     <div style={choiceFormStyles.container}>
       <form style={choiceFormStyles.form} onSubmit={(event) => event.preventDefault()}>
+        <JurisdictionField stateName={form.stateName} county={form.county}
+          disabled={!choicesEditable} setStateName={form.setStateName} setCounty={form.setCounty} />
         {structure.choices.map((choice) => {
           const groupDisabled = disabledGroupSet.has(choice.name);
           const readOnlyChoiceGroup = groupDisabled || !choicesEditable;
@@ -121,11 +125,11 @@ export function ChoiceForm({
       </form>
       <div style={choiceFormStyles.footer}>
         <ConfButton
-          disabled={!form.dirty}
+          disabled={!form.dirty || !form.valid}
           label="Update"
           variant="primary"
           requireConfirmation={false}
-          onConfirm={() => { if (form.dirty) onSave(form.submit()); }}
+          onConfirm={() => { if (form.dirty && form.valid) onSave(form.submit()); }}
         />
         <ConfButton label="Cancel" variant="secondary" requireConfirmation={false} onConfirm={onCancel} />
       </div>

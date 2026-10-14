@@ -58,10 +58,13 @@ export class ChoicesWorker {
     }
 
     if (response.ok) {
-      return {
-        ok: true,
-        data: payload as ChoicesBackendData,
-      };
+      if (isObject(payload) && "status" in payload) {
+        return {
+          ok: true,
+          data: payload.status === "completed" ? JSON.parse(String(payload.data)) as ChoicesBackendData : null,
+        };
+      }
+      return { ok: true, data: payload as ChoicesBackendData };
     }
 
     let error = `HTTP ${response.status}`;

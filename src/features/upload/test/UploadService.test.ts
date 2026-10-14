@@ -12,6 +12,7 @@ function withReview(workflowValue: boolean): typeof DEFAULT_WORKFLOW_SETTINGS {
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    jurisdiction: null,
     settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,

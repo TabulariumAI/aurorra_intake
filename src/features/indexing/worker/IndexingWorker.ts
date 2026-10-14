@@ -103,6 +103,7 @@ export class IndexingWorker {
           body: JSON.stringify({
             doc_name: command.document,
             choices: command.choices,
+            jurisdiction: command.jurisdiction,
           }),
         };
       case "status":

@@ -1,0 +1,13 @@
+
+> aurorra-intake@0.0.0 test
+> vitest run
+
+
+ RUN  v4.1.9 C:/GitHub/Tabularium/aurorra_intake
+
+
+ Test Files  30 passed (30)
+      Tests  280 passed (280)
+   Start at  21:16:05
+   Duration  54.52s (transform 73.33s, setup 40.69s, import 120.32s, tests 50.95s, environment 364.42s)
+

@@ -16,13 +16,13 @@ function openSettings() {
     events: { showChoices: {}, updateChoices: {} },
     dataWorkerClient: { load: vi.fn() },
   });
-  return render(<ChoicesPanel
+  return render(<ChoicesPanel initialJurisdiction={null}
     structure={CHOICESTRUCTURE}
     initialChoices={store.get("indexChoices")}
     initialWorkflow={store.get("workflow")}
     choicesEditable
     onCancel={vi.fn()}
-    onSave={({ choices, workflow }) => service.save(choices, workflow)}
+    onSave={({ choices, workflow, jurisdiction }) => service.save(choices, workflow, jurisdiction)}
   />);
 }
 

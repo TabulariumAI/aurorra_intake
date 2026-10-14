@@ -1,6 +1,7 @@
-import type { AuroraLens, DecodeDocOptions, ViewerState, ViewerStatus } from "@tabulariumai/aurora-lens";
+import type { AuroraLens, DecodeDocOptions, PageSizeConfig, ViewerState, ViewerStatus } from "@tabulariumai/aurora-lens";
 
 export type SelectViewerOptions = {
+  pageSize: PageSizeConfig;
   allowEdit?: boolean;
   onAddError?: (error: Error) => void;
   onError?: (error: Error) => void;

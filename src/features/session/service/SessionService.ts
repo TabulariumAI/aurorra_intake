@@ -81,6 +81,7 @@ export class SessionService implements SessionServiceActions {
 
       const data: SessionStartData = await sessionWorkerClient.newSession(token);
       storeSession(runtime, data.session, data.sas_token, data.base_url, `${data.session}.${ext}`);
+      await runtime.onCreated?.(data.session);
       runtime.progress.receive({ jobId, message: "Creating a session", phase: "completed" });
       runtime.eventBus.emit(runtime.events.reRoute, {
         [runtime.events.reRoute.detail.stage]: "upload",

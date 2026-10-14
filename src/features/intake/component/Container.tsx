@@ -1,3 +1,4 @@
+import type { PageSizeConfig, TiffPixelFormat } from "@tabulariumai/aurora-lens";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChoiceForm } from "../../choices/component/ChoiceForm";
 import { createChoicesService } from "../../choices/service/ChoicesService";
@@ -25,7 +26,7 @@ import { useIntakeShell } from "../hook/useIntakeShell";
 import { intakeAlert, intakeMessages } from "../service/intakeMessages";
 import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
 import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "../service/intakeOrchestrator";
-import type { IntakeItemRenderer } from "../type/intake.types";
+import type { IntakeCalloutRenderer, IntakeItemRenderer } from "../type/intake.types";
 import { ProgressView } from "../../progressview/component/ProgressView";
 import { useProgress } from "../../progressview/hook/useProgress";
 
@@ -39,10 +40,13 @@ export type ContainerProps = {
   apiGatewayUrl: string;
   intervalMs: number;
   intervalPageMs: number;
+  pageSize: PageSizeConfig;
+  tiffPixelFormat: TiffPixelFormat;
   maxFileSizeBytes: number;
   onAlert?: (message: string) => void;
   onCanceled?: () => void;
   onComplete?: (payload: IntakeCompletePayload) => void;
+  onCreated?: (session: string) => Promise<void>;
   onIndexed(result: { session: string; document: string }): void;
   onFailure?: (message: string) => void;
   onLoaderChange(lines: readonly string[] | null): void;
@@ -51,6 +55,7 @@ export type ContainerProps = {
   renderPreview: IntakeItemRenderer;
   renderProgress: IntakeItemRenderer;
   renderSelect: IntakeItemRenderer;
+  renderTolerance: IntakeCalloutRenderer;
   onSessionLoaded?: (session: SessionLoaded) => void;
   onStarted?: () => void;
 };
@@ -66,10 +71,13 @@ export function Container({
   apiGatewayUrl,
   intervalMs,
   intervalPageMs,
+  pageSize,
+  tiffPixelFormat,
   maxFileSizeBytes,
   onAlert,
   onCanceled,
   onComplete,
+  onCreated,
   onIndexed,
   onFailure,
   onLoaderChange,
@@ -78,6 +86,7 @@ export function Container({
   renderPreview,
   renderProgress,
   renderSelect,
+  renderTolerance,
   onSessionLoaded,
   onStarted,
 }: ContainerProps) {
@@ -180,12 +189,13 @@ export function Container({
   }), [apiGatewayUrl, eventBus, store]);
 
   const sessionService = useMemo(() => createSessionService({
+    onCreated,
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
     },
     sessionWorkerClient: createSessionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [apiGatewayUrl, commonRuntime]);
+  }), [apiGatewayUrl, commonRuntime, onCreated]);
 
   const uploadService = useMemo(() => createUploadService({
     ...commonRuntime,
@@ -248,6 +258,8 @@ export function Container({
   const panel = settingsOpen ? "settings" : state.container.panel;
   const selectContent = selectHost ? (
     <SelectPanel
+      pageSize={pageSize}
+      tiffPixelFormat={tiffPixelFormat}
       maxFileSizeBytes={maxFileSizeBytes}
       active={panel === "select"}
       dropTarget={selectHost}
@@ -257,6 +269,7 @@ export function Container({
       helper={panel === "select" ? state.container.helper : ""}
       renderPreview={renderPreview}
       renderSelect={renderSelect}
+      renderTolerance={renderTolerance}
       service={selectService}
       selectionResetVersion={selectionResetVersion}
     />
@@ -281,10 +294,11 @@ export function Container({
           structure={CHOICESTRUCTURE}
           initialChoices={initialChoices}
           initialWorkflow={initialWorkflow}
+          initialJurisdiction={store.get("jurisdiction")}
           choicesEditable
           onCancel={closeSettings}
           onSave={(payload) => {
-            choicesService.save(payload.choices, payload.workflow);
+            choicesService.save(payload.choices, payload.workflow, payload.jurisdiction);
             closeSettings();
           }}
         />

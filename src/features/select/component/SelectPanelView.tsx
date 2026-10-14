@@ -1,7 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { ConfButton } from "aurora-core";
 import { selectPanelStyles } from "../style/select.styles";
-import type { IntakeItemRenderer } from "../../intake/type/intake.types";
+import type { IntakeCalloutRenderer, IntakeItemRenderer } from "../../intake/type/intake.types";
 import type { UseSelectPanelResult } from "../type/select.types";
 import { SelectForm } from "./SelectForm";
 
@@ -17,12 +17,15 @@ type SelectPanelViewProps = {
   helper: string;
   renderPreview: IntakeItemRenderer;
   renderSelect: IntakeItemRenderer;
+  renderTolerance: IntakeCalloutRenderer;
   select: UseSelectPanelResult;
 };
 
-export function SelectPanelView({ active, maxFileSizeBytes, dropTarget, helper, renderPreview, renderSelect, select }: SelectPanelViewProps) {
+export function SelectPanelView({ active, maxFileSizeBytes, dropTarget, helper, renderPreview, renderSelect, renderTolerance, select }: SelectPanelViewProps) {
+  const [selectAnchor, setSelectAnchor] = useState<HTMLButtonElement | null>(null);
   const selectContent = select.mode === "select" ? (
     <SelectForm
+      selectRef={setSelectAnchor}
       maxFileSizeBytes={maxFileSizeBytes}
       dropTarget={dropTarget}
       status={select.uploadStatus}
@@ -78,6 +81,25 @@ export function SelectPanelView({ active, maxFileSizeBytes, dropTarget, helper, 
 
   return (
     <div style={selectPanelStyles.host}>
+      {active && selectAnchor && select.sizeFailure ? renderTolerance({
+        anchor: selectAnchor,
+        onClose: select.actions.cancel,
+        children: (
+          <section style={selectPanelStyles.sizePrompt}>
+            <p style={selectPanelStyles.sizeMessage}><strong>{select.sizeFailure.sourceName}</strong></p>
+            <p style={selectPanelStyles.sizeMessage}>Page {select.sizeFailure.pageNumber}: {select.sizeFailure.width} × {select.sizeFailure.height} px</p>
+            <p style={selectPanelStyles.sizeMessage}>
+              This page exceeds the configured size tolerance of {Number((select.sizeFailure.tolerance * 100).toFixed(2))}%.
+              Processing requires a higher tolerance of {Number((select.sizeFailure.requiredTolerance * 100).toFixed(2))}%.
+              This change applies only to this Intake.
+            </p>
+            <div style={selectPanelStyles.actions}>
+              <ConfButton label="Cancel" variant="secondary" requireConfirmation={false} onConfirm={select.actions.cancel} />
+              <ConfButton label="Process anyway" variant="primary" requireConfirmation={false} onConfirm={select.actions.acceptSize} />
+            </div>
+          </section>
+        ),
+      }) : null}
       {select.mode === "review"
         ? renderPreview({ active, children: previewContent, helper })
         : renderSelect({ active, children: selectContent, helper })}

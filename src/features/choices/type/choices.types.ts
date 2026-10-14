@@ -1,8 +1,10 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
+import type { PageScope } from "aurora-core";
 
 export type ChoiceOption = {
   level: string;
   description: string;
+  scope?: PageScope;
 };
 
 export type ChoiceItem = {
@@ -47,8 +49,14 @@ export type ChoiceResult = {
   workflow: WorkflowSettings;
 };
 
+export type SessionChoices = {
+  items: ChoiceValue[];
+  jurisdiction: string | null;
+};
+
 export type ChoicesBackendData = {
   items?: unknown[];
+  jurisdiction?: string | null;
 } | unknown[] | null;
 
 export type ChoicesWorkerConfig = {
@@ -99,22 +107,20 @@ export type ChoicesRuntime = {
 
 export type SessionDataLoadRuntime = Pick<ChoicesRuntime, "dataWorkerClient" | "store">;
 
-export type ChoicesSaveResult = {
-  choices: ChoiceValue[];
-  workflow: WorkflowSettings;
-  changed: boolean;
-};
+export type ChoicesSaveResult = ChoiceFormSubmitPayload & { changed: boolean };
 
 export type ChoiceFormViewOptions = {
   disabledGroups?: string[];
 };
 
 export type ChoiceFormSubmitPayload = {
+  jurisdiction: string | null;
   choices: ChoiceValue[];
   workflow: WorkflowSettings;
 };
 
 export type ChoiceFormProps = {
+  initialJurisdiction: string | null;
   structure: ChoiceStructure;
   initialChoices: unknown;
   initialWorkflow: WorkflowSettings;

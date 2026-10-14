@@ -9,6 +9,7 @@ export type IndexingWorkerCommand =
       session: string;
       document: string;
       choices: unknown;
+      jurisdiction: string | null;
     }
   | {
       type: "status";
@@ -33,7 +34,7 @@ export type IndexingWorkerFailure = {
 export type IndexingWorkerResult<T> = IndexingWorkerSuccess<T> | IndexingWorkerFailure;
 
 export type IndexingWorkerClient = {
-  start(token: string, session: string, document: string, choices: unknown): Promise<unknown>;
+  start(token: string, session: string, document: string, choices: unknown, jurisdiction: string | null): Promise<unknown>;
   status(token: string, session: string): Promise<unknown>;
 };
 
@@ -50,7 +51,7 @@ export type IndexingStatusResponse = {
 
 export type IndexingServiceActions = {
   process(): Promise<void>;
-  start(session: string, name: unknown, choices: unknown): Promise<void>;
+  start(session: string, name: unknown, choices: unknown, jurisdiction: string | null): Promise<void>;
   checkStatus(session: string): Promise<boolean>;
 };
 

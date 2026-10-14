@@ -13,6 +13,7 @@ export type ProvisionWorkerCommand = {
   apiBaseUrl: string;
   session: string;
   document: string;
+  jurisdiction: string | null;
 };
 
 export type ProvisionWorkerSuccess<T> = {
@@ -31,7 +32,7 @@ export type ProvisionWorkerFailure = {
 export type ProvisionWorkerResult<T> = ProvisionWorkerSuccess<T> | ProvisionWorkerFailure;
 
 export type ProvisionWorkerClient = {
-  provision(token: string, session: string, document: string): Promise<unknown>;
+  provision(token: string, session: string, document: string, jurisdiction: string | null): Promise<unknown>;
 };
 
 export type ProvisionWorkerConfig = {

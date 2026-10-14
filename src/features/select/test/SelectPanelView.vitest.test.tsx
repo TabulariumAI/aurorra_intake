@@ -9,6 +9,7 @@ function createSelect(needsConfirm: boolean) {
   const start = vi.fn();
   const refreshCancelConfirm = vi.fn(() => needsConfirm);
   const actions: SelectPanelActions = {
+    acceptSize: vi.fn(async () => undefined),
     selectFile: async () => undefined,
     start,
     showSettings: () => undefined,
@@ -19,6 +20,7 @@ function createSelect(needsConfirm: boolean) {
     refreshCancelConfirm,
   };
   const select: UseSelectPanelResult = {
+    sizeFailure: null,
     mode: "review",
     uploadStatus: { kind: "idle" },
     loading: false,
@@ -47,6 +49,7 @@ function view(select: UseSelectPanelResult) {
       active={true}
       dropTarget={document.createElement("section")}
       helper={select.mode === "review" ? "Review helper" : "Select helper"}
+      renderTolerance={({ children }) => <div role="dialog">{children}</div>}
       renderPreview={renderPreview}
       renderSelect={renderSelect}
       select={select}
@@ -115,7 +118,7 @@ it.each(["select", "review"] as const)("reports activation changes for %s withou
   select.mode = mode;
   const renderSelect = vi.fn(() => <span>Select</span>);
   const renderPreview = vi.fn(() => <span>Review</span>);
-  const props = { maxFileSizeBytes: 20 * 1024 * 1024, dropTarget: document.createElement("section"), helper: "Helper", renderSelect, renderPreview, select };
+  const props = { renderTolerance: () => null, maxFileSizeBytes: 20 * 1024 * 1024, dropTarget: document.createElement("section"), helper: "Helper", renderSelect, renderPreview, select };
   const { rerender } = render(<SelectPanelView {...props} active={true} />);
   const renderer = mode === "select" ? renderSelect : renderPreview;
   const inactive = mode === "select" ? renderPreview : renderSelect;
@@ -125,4 +128,26 @@ it.each(["select", "review"] as const)("reports activation changes for %s withou
   rerender(<SelectPanelView {...props} active={true} />);
   expect(renderer).toHaveBeenLastCalledWith(expect.objectContaining({ active: true }));
   expect(inactive).not.toHaveBeenCalled();
+});
+
+
+it("shows the rejected page and both explicit decisions through the host callout renderer", () => {
+  const { select } = createSelect(false);
+  select.mode = "select";
+  select.sizeFailure = { sourceName: "16859820.pdf", pageNumber: 1, width: 1275, height: 1739, tolerance: 0.02, requiredTolerance: 0.035 };
+  const anchor = document.createElement("section");
+  const renderTolerance = vi.fn(({ children }) => <div role="dialog">{children}</div>);
+  const { rerender } = render(<SelectPanelView active maxFileSizeBytes={20 * 1024 * 1024} dropTarget={anchor} helper="" renderPreview={renderPreview} renderSelect={renderSelect} renderTolerance={renderTolerance} select={select} />);
+  expect(renderTolerance).toHaveBeenCalledWith(expect.objectContaining({ anchor: screen.getByRole("button", { name: "Select document" }), onClose: select.actions.cancel }));
+  expect(screen.getByRole("dialog")).toHaveTextContent("16859820.pdf");
+  expect(screen.getByRole("dialog")).toHaveTextContent("Page 1: 1275 × 1739 px");
+  expect(screen.getByRole("dialog")).toHaveTextContent("2%");
+  expect(screen.getByRole("dialog")).toHaveTextContent("3.5%");
+  expect(screen.getByRole("dialog")).toHaveTextContent("only to this Intake");
+  fireEvent.click(screen.getByRole("button", { name: "Process anyway" }));
+  expect(select.actions.acceptSize).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(select.actions.cancel).toHaveBeenCalledTimes(1);
+  rerender(<SelectPanelView active={false} maxFileSizeBytes={20 * 1024 * 1024} dropTarget={anchor} helper="" renderPreview={renderPreview} renderSelect={renderSelect} renderTolerance={renderTolerance} select={select} />);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

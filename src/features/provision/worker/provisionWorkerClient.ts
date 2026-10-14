@@ -65,8 +65,8 @@ async function runWorker<T>(command: unknown): Promise<T> {
 export function createProvisionWorkerClient(config: ProvisionWorkerConfig): ProvisionWorkerClient {
   const { apiBaseUrl } = config;
   return {
-    async provision(token, session, document) {
-      return runWorker({ type: "provision", token, apiBaseUrl, session, document });
+    async provision(token, session, document, jurisdiction) {
+      return runWorker({ type: "provision", token, apiBaseUrl, session, document, jurisdiction });
     },
   };
 }

@@ -12,7 +12,8 @@ import type {
   UseSelectPanelResult,
 } from "../type/select.types";
 import type { ViewerApi } from "../type/selectViewer.types";
-import type { ExportProgress } from "@tabulariumai/aurora-lens";
+import { isLensError, LENS_ERROR_PAGE_SIZE } from "@tabulariumai/aurora-lens";
+import type { ExportProgress, PageSizeConfig, PageSizeFailure } from "@tabulariumai/aurora-lens";
 
 const SELECT_COPY = {
   helper: "Drag and drop a PDF or multi-page TIFF, or select a file to begin.",
@@ -27,9 +28,11 @@ function getPageCount(state: ReviewDocumentState) {
 }
 
 export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelResult {
-  const { maxFileSizeBytes, actions, service, selectionResetVersion } = options;
+  const { pageSize, tiffPixelFormat, maxFileSizeBytes, actions, service, selectionResetVersion } = options;
   const lensRef = useRef<ReviewDocumentLens | null>(null);
   const sourceFileRef = useRef<File | null>(null);
+  const sizeConfigRef = useRef(pageSize);
+  const [sizeFailure, setSizeFailure] = useState<PageSizeFailure | null>(null);
   const loadIdRef = useRef(0);
   const selectionResetVersionRef = useRef(0);
   const startingRef = useRef(false);
@@ -63,11 +66,13 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
 
   const resetReviewState = useCallback(() => {
     sourceFileRef.current = null;
+    sizeConfigRef.current = pageSize;
+    setSizeFailure(null);
     setViewerState(null);
     setViewerStatus("idle");
     startingRef.current = false;
     setStarting(false);
-  }, []);
+  }, [pageSize]);
 
   const resetStatus = useCallback(() => {
     setUploadStatus({ kind: "idle" });
@@ -78,17 +83,31 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setUploadStatus({ kind: "error", message });
   }, []);
 
-  const createViewer = useCallback((loadId: number): ReviewDocumentLens => {
+  const reportFailure = useCallback((error: unknown, message: string) => {
+    if (isLensError(error) && error.code === LENS_ERROR_PAGE_SIZE && error.details && sourceFileRef.current) {
+      setSizeFailure(error.details);
+      setUploadStatus({ kind: "idle" });
+      setViewerState(null);
+      setViewerStatus("idle");
+      setLoading(false);
+      setMode("select");
+      actions.showSelect(SELECT_COPY.helper);
+      service.setDocumentSelected(false);
+      return;
+    }
+    showFailureMessage(message);
+  }, [actions, service, showFailureMessage]);
+
+  const createViewer = useCallback((loadId: number, pageSize: PageSizeConfig): ReviewDocumentLens => {
     let viewerApi: ViewerApi | null = null;
     let release: "clear" | "close" | null = null;
-    let resolveViewerApi: (api: ViewerApi) => void = () => undefined;
-    let rejectViewerApi: (error: Error) => void = () => undefined;
+    let resolveViewerApi!: (api: ViewerApi) => void;
+    let rejectViewerApi!: (error: unknown) => void;
     const viewerApiReady = new Promise<ViewerApi>((resolve, reject) => {
       resolveViewerApi = resolve;
       rejectViewerApi = reject;
     });
 
-    const waitForViewerApi = () => viewerApi ? Promise.resolve(viewerApi) : viewerApiReady;
     const releaseViewer = (nextRelease: "clear" | "close") => {
       if (release !== null) return false;
       release = nextRelease;
@@ -96,41 +115,35 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       setViewerProps(null);
       return true;
     };
-    const clearViewer = async () => {
-      if (!releaseViewer("clear")) return;
-      if (viewerApi) {
-        viewerApi.clear();
-        return;
-      }
-      await clearViewerSession();
-    };
-    const closeViewer = () => {
-      if (!releaseViewer("close")) return;
-      viewerApi?.close();
-    };
 
     setViewerProps({
+      pageSize,
       allowEdit: true,
       onAddError(error: ErrorLike) {
         if (loadId !== loadIdRef.current) return;
         showFailureMessage(typeof error.message === "string" ? error.message : "Some pages could not be added.");
       },
-      onApiReady(api) {
+      async onApiReady(api) {
         if (api === null) return;
         viewerApi = api;
-        if (release === "clear") {
+        if (release !== null || loadId !== loadIdRef.current) {
           api.close();
           return;
         }
-        if (release === "close" || loadId !== loadIdRef.current) {
-          api.close();
-          return;
+        try {
+          const config = await api.readViewerConfig();
+          if (release !== null || loadId !== loadIdRef.current) return;
+          config.export.tiff.pixelFormat = tiffPixelFormat;
+          await api.saveViewerConfig(config);
+          if (release !== null || loadId !== loadIdRef.current) return;
+          resolveViewerApi(api);
+        } catch (error) {
+          rejectViewerApi(error);
         }
-        resolveViewerApi(api);
       },
       onError(error: ErrorLike) {
         if (loadId !== loadIdRef.current) return;
-        showFailureMessage(typeof error.message === "string" ? error.message : "Document could not be loaded.");
+        reportFailure(error, typeof error.message === "string" ? error.message : "Document could not be loaded.");
       },
       onStateChange(state) {
         if (loadId !== loadIdRef.current) return;
@@ -143,29 +156,35 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     });
 
     return {
-      clear() {
-        return clearViewer();
+      async clear() {
+        if (!releaseViewer("clear")) return;
+        if (viewerApi) {
+          viewerApi.clear();
+          return;
+        }
+        await clearViewerSession();
       },
       decodeDoc(file, decodeOptions) {
-        return waitForViewerApi().then((api) => api.decodeDoc(file, decodeOptions));
+        return viewerApiReady.then((api) => api.decodeDoc(file, decodeOptions));
       },
       restoreSession() {
-        return waitForViewerApi().then((api) => api.restoreSession());
+        return viewerApiReady.then((api) => api.restoreSession());
       },
       hasChanges() {
-        return typeof viewerApi?.isDirty === "function" ? viewerApi.isDirty() : false;
+        return viewerApi !== null && viewerApi.isDirty();
       },
       exportTiff(onProgress) {
-        return waitForViewerApi().then((api) => api.exportTiff(onProgress));
+        return viewerApiReady.then((api) => api.exportTiff(onProgress));
       },
       showThumbnails() {
-        return waitForViewerApi().then((api) => api.showThumbnails());
+        return viewerApiReady.then((api) => api.showThumbnails());
       },
       close() {
-        closeViewer();
+        if (!releaseViewer("close")) return;
+        viewerApi?.close();
       },
     };
-  }, [showFailureMessage]);
+  }, [reportFailure, showFailureMessage, tiffPixelFormat]);
 
   const mountSelectForm = useCallback(() => {
     resetReviewState();
@@ -185,6 +204,8 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   const restoreViewer = useCallback(async () => {
     disposeLens();
     sourceFileRef.current = null;
+    sizeConfigRef.current = pageSize;
+    setSizeFailure(null);
     setViewerState(null);
     setViewerStatus("loadingPage");
     setStarting(false);
@@ -194,7 +215,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
     try {
-      const lens = createViewer(loadId);
+      const lens = createViewer(loadId, sizeConfigRef.current);
       lensRef.current = lens;
       setMode("review");
       const restored = await lens.restoreSession();
@@ -211,7 +232,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       if (loadId !== loadIdRef.current) return;
       mountSelectForm();
     }
-  }, [actions, createViewer, disposeLens, mountSelectForm, service]);
+  }, [actions, createViewer, disposeLens, mountSelectForm, pageSize, service]);
 
   const initialize = useCallback(() => {
     setInitialized(true);
@@ -228,15 +249,11 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     service.clear();
     disposeLens();
     setLoading(false);
-    sourceFileRef.current = null;
-    setViewerState(null);
-    setViewerStatus("idle");
-    setStarting(false);
-    startingRef.current = false;
+    resetReviewState();
     setUploadStatus({ kind: "idle" });
     setMode("select");
     setInitialized(false);
-  }, [disposeLens, service]);
+  }, [disposeLens, resetReviewState, service]);
 
   const resetForNewSession = useCallback(async () => {
     service.clear();
@@ -255,16 +272,9 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     }
   }, [actions, clearLens, resetReviewState, service, showFailureMessage]);
 
-  const selectFile = useCallback(async (file: File) => {
-    const failure = validateSelectFile(file, maxFileSizeBytes);
-    if (failure) {
-      setUploadStatus({
-        kind: "error",
-        message: failure === "format" ? "Unsupported file format." : `File too large. Maximum ${maxFileSizeBytes / (1024 * 1024)}MB.`,
-      });
-      return;
-    }
-
+  const loadFile = useCallback(async (file: File, config: PageSizeConfig) => {
+    sizeConfigRef.current = config;
+    setSizeFailure(null);
     sourceFileRef.current = file;
     setViewerState(null);
     setViewerStatus("loadingPage");
@@ -278,25 +288,43 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
     try {
-      const lens = createViewer(loadId);
+      const lens = createViewer(loadId, sizeConfigRef.current);
       lensRef.current = lens;
-      await lens.decodeDoc(file, { page: 0, viewMode: "thumbnails" });
+      await lens.decodeDoc(file, { page: 1, viewMode: "thumbnails" });
       if (loadId !== loadIdRef.current) return;
-      lens.showThumbnails();
       service.setDocumentSelected(true);
       setMode("review");
     } catch (error) {
       if (loadId !== loadIdRef.current) return;
       const message = getSelectErrorMessage(error, "An error occurred while analyzing document.");
-      console.error("Selection analysis error:", message, error);
-      showFailureMessage(message);
+      if (!isLensError(error) || error.code !== LENS_ERROR_PAGE_SIZE) console.error("Selection analysis error:", message, error);
+      reportFailure(error, message);
       service.setDocumentSelected(false);
     } finally {
       if (loadId === loadIdRef.current) {
         setLoading(false);
       }
     }
-  }, [actions, createViewer, disposeLens, showFailureMessage, service, maxFileSizeBytes]);
+  }, [actions, createViewer, disposeLens, reportFailure, service]);
+
+  const selectFile = useCallback(async (file: File) => {
+    const failure = validateSelectFile(file, maxFileSizeBytes);
+    if (failure) {
+      setUploadStatus({
+        kind: "error",
+        message: failure === "format" ? "Unsupported file format." : `File too large. Maximum ${maxFileSizeBytes / (1024 * 1024)}MB.`,
+      });
+      return;
+    }
+
+    await loadFile(file, pageSize);
+  }, [loadFile, maxFileSizeBytes, pageSize]);
+
+  const acceptSize = useCallback(async () => {
+    const file = sourceFileRef.current;
+    if (!file || !sizeFailure) return;
+    await loadFile(file, { ...sizeConfigRef.current, tolerance: sizeFailure.requiredTolerance });
+  }, [loadFile, sizeFailure]);
 
   const getFile = useCallback(async (onProgress: (progress: ExportProgress) => void) => {
     const lens = lensRef.current;
@@ -354,6 +382,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
   }, [resetForNewSession, selectionResetVersion]);
 
   return useMemo(() => ({
+    sizeFailure,
     mode: initialized ? mode : "pending",
     uploadStatus,
     loading,
@@ -366,6 +395,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       cancelDisabled: starting,
     },
     actions: {
+      acceptSize,
       selectFile,
       start,
       showSettings,
@@ -375,5 +405,5 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       resetStatus,
       refreshCancelConfirm,
     },
-  }), [cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, resetStatus, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
+  }), [acceptSize, sizeFailure, cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, resetStatus, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
 }

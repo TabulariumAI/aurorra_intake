@@ -6,6 +6,7 @@ import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/st
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
+    jurisdiction: null,
     settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
@@ -48,12 +49,12 @@ describe("ChoicesService", () => {
     });
 
     expect(normalizeBackendChoices(null)).toBeNull();
-    expect(normalized).toHaveLength(17);
-    expect(normalized).toContainEqual({ service: "Recognition", level: 3 });
-    expect(normalized).toContainEqual({ service: "EndorsementIndexing", level: 1 });
-    expect(normalized).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
-    expect(normalized).toContainEqual({ service: "RecitalIndexing", level: 1 });
-    expect(normalized?.every((choice) => typeof choice.level === "number")).toBe(true);
+    expect(normalized?.items).toHaveLength(17);
+    expect(normalized?.items).toContainEqual({ service: "Recognition", level: 3 });
+    expect(normalized?.items).toContainEqual({ service: "EndorsementIndexing", level: 1 });
+    expect(normalized?.items).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
+    expect(normalized?.items).toContainEqual({ service: "RecitalIndexing", level: 1 });
+    expect(normalized?.items.every((choice) => typeof choice.level === "number")).toBe(true);
   });
 
   it("loads and retains session choices with runtime auth token", async () => {
@@ -67,9 +68,9 @@ describe("ChoicesService", () => {
     };
     const loaded = await loadSessionData(runtime, "session-1");
     await expect(loadSessionData(runtime, "session-1")).resolves.toEqual(loaded);
-    expect(loaded).toHaveLength(17);
-    expect(loaded).toContainEqual({ service: "Recognition", level: 4 });
-    expect(loaded).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
+    expect(loaded?.items).toHaveLength(17);
+    expect(loaded?.items).toContainEqual({ service: "Recognition", level: 4 });
+    expect(loaded?.items).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
     expect(runtime.dataWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
     expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(1);
     expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
@@ -92,8 +93,8 @@ describe("ChoicesService", () => {
     const sessionB = await loadSessionData(runtime, "session-b");
     await expect(loadSessionData(runtime, "session-a")).resolves.toEqual(sessionA);
 
-    expect(sessionA).toContainEqual({ service: "Recognition", level: 2 });
-    expect(sessionB).toContainEqual({ service: "Recognition", level: 4 });
+    expect(sessionA?.items).toContainEqual({ service: "Recognition", level: 2 });
+    expect(sessionB?.items).toContainEqual({ service: "Recognition", level: 4 });
 
     expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(1, "token-1", "session-a");
     expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(2, "token-1", "session-b");
@@ -121,10 +122,10 @@ describe("ChoicesService", () => {
 
     const choices = await loadSessionData(runtime, "session-1");
 
-    expect(choices).toHaveLength(17);
-    expect(choices).toContainEqual({ service: "Recognition", level: 2 });
-    expect(choices).toContainEqual({ service: "TransactionIndexing", level: 0 });
-    expect(choices).toContainEqual({ service: "EndorsementIndexing", level: 1 });
+    expect(choices?.items).toHaveLength(17);
+    expect(choices?.items).toContainEqual({ service: "Recognition", level: 2 });
+    expect(choices?.items).toContainEqual({ service: "TransactionIndexing", level: 0 });
+    expect(choices?.items).toContainEqual({ service: "EndorsementIndexing", level: 1 });
     expect(runtime.dataWorkerClient.load).not.toHaveBeenCalled();
     expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", { "session-1": choices });
   });
@@ -149,9 +150,10 @@ describe("ChoicesService", () => {
       { name: "Abstract", label: "Analyze document", value: true },
     ];
 
-    expect(service.save(choices, workflow)).toEqual({
+    expect(service.save(choices, workflow, null)).toEqual({
       choices,
       workflow,
+      jurisdiction: null,
       changed: true,
     });
     expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", choices);

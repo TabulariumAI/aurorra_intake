@@ -124,13 +124,9 @@ describe("ProgressView", () => {
       textAlign: "left",
     });
     expect(rows).toHaveLength(3);
-    expect(within(rows[0]).getByLabelText("Completed")).toHaveStyle({
-      backgroundColor: "#ECFDF3",
-      border: "1px solid #15803D",
-      color: "#15803D",
-    });
+    expect(within(rows[0]).getByLabelText("Completed").style.backgroundColor).toBe("transparent");
     expect(within(rows[0]).getByText("Creating a session").parentElement).toHaveStyle({ backgroundColor: "#ECFDF3" });
-    expect(within(rows[0]).getByTestId("progress-completed-check")).toBeVisible();
+    expect(within(rows[0]).getByLabelText("Completed").querySelector("svg")!).toBeVisible();
     expect(within(rows[0]).getByTestId("progress-connector")).toHaveStyle({
       borderLeftColor: "var(--gray-300)",
       borderLeftStyle: "dotted",
@@ -152,6 +148,11 @@ describe("ProgressView", () => {
     expect(within(rows[1]).getByText("Uploading your document").parentElement).toHaveStyle({ backgroundColor: "var(--accent-surface)" });
     expect(within(rows[2]).queryByTestId("progress-connector")).not.toBeInTheDocument();
     expect(within(rows[2]).getByLabelText("Failed")).toBeVisible();
+    expect(within(rows[2]).getByLabelText("Failed").style.backgroundColor).toBe("transparent");
+    expect(within(rows[2]).getByLabelText("Failed")).toHaveStyle({ color: "#B42318" });
+    expect(within(rows[2]).getByLabelText("Failed").querySelector("svg")).toHaveAttribute("fill", "currentColor");
+    expect(within(rows[2]).getByLabelText("Failed").querySelector("svg circle")).toHaveAttribute("r", "12");
+    expect(within(rows[2]).getByLabelText("Failed").querySelector("svg path")).toBeNull();
     expect(within(rows[2]).getByRole("alert")).toHaveTextContent("Index service unavailable");
     expect(within(rows[2]).getByRole("alert")).toHaveStyle({ overflowWrap: "anywhere" });
     const recovery = within(rows[2]).getByRole("button", { name: "Cancel and Restart" });
@@ -220,8 +221,7 @@ describe("ProgressView", () => {
       />,
     );
 
-    expect(screen.getByTestId("progress-completed-check")).toBeVisible();
-    expect(screen.queryByTestId("progress-success-star")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Completed").querySelector("svg")!).toBeVisible();
 
     view.rerender(
       <ProgressView
@@ -234,8 +234,7 @@ describe("ProgressView", () => {
     );
 
     const upload = screen.getAllByRole("listitem")[0];
-    expect(within(upload).getByTestId("progress-completed-check")).toBeVisible();
-    expect(within(upload).queryByTestId("progress-success-star")).not.toBeInTheDocument();
+    expect(within(upload).getByLabelText("Completed").querySelector("svg")!).toBeVisible();
   });
 
   it("renders screening details and confirmation actions in the timeline", () => {
@@ -262,13 +261,8 @@ describe("ProgressView", () => {
 
     const row = screen.getByRole("listitem");
     expect(within(row).getByText("Screening complete")).toBeVisible();
-    expect(within(row).getByTestId("progress-completed-check")).toBeVisible();
-    expect(within(row).queryByTestId("progress-success-star")).not.toBeInTheDocument();
-    expect(within(row).getByLabelText("Completed")).toHaveStyle({
-      backgroundColor: "#ECFDF3",
-      border: "1px solid #15803D",
-      color: "#15803D",
-    });
+    expect(within(row).getByLabelText("Completed").querySelector("svg")!).toBeVisible();
+    expect(within(row).getByLabelText("Completed").style.backgroundColor).toBe("transparent");
     expect(within(row).getByText("Screening complete").parentElement?.style.backgroundColor).toBe("transparent");
     expect(within(row).getByText("Screening complete").parentElement).toHaveStyle({ paddingLeft: "0.9rem" });
     expect(within(row).getByText("Your document has successfully passed the initial review.")).toBeVisible();
@@ -299,6 +293,6 @@ describe("ProgressView", () => {
     expect(screen.getByText("Document accepted")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
     expect(screen.getByTestId("progress-spinner")).toBeVisible();
-    expect(screen.getByTestId("progress-completed-check")).toBeVisible();
+    expect(screen.getByLabelText("Completed").querySelector("svg")!).toBeVisible();
   });
 });

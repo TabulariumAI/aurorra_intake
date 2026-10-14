@@ -1,9 +1,10 @@
+import { pageSize } from "../../../test/pageSize";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const configurePdfWorker = vi.hoisted(() => vi.fn());
 const auroraLensCtor = vi.hoisted(() =>
-  vi.fn(function AuroraLensMock(this: unknown) {
+  vi.fn(function AuroraLensMock(this: unknown, _container: HTMLElement, _options: unknown) {
     return {
       close: vi.fn(),
       exportTiff: vi.fn(),
@@ -29,10 +30,11 @@ import { SelectViewer } from "../component/SelectViewer";
 
 describe("SelectViewer", () => {
   it("configures the pdf worker before creating the viewer", () => {
-    const { unmount } = render(<SelectViewer />);
+    const { unmount } = render(<SelectViewer pageSize={pageSize} />);
 
     expect(configurePdfWorker).toHaveBeenCalledWith("pdf-worker-url");
     expect(auroraLensCtor).toHaveBeenCalledTimes(1);
+    expect(auroraLensCtor.mock.calls[0][1]).toMatchObject({ pageSize });
 
     unmount();
   });

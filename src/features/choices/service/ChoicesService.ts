@@ -1,6 +1,7 @@
 import { ChoiceData, CHOICESTRUCTURE } from "./choicesData";
 import type {
   ChoiceValue,
+  SessionChoices,
   ChoicesBackendData,
   SessionDataLoadRuntime,
   ChoicesRuntime,
@@ -16,14 +17,17 @@ function getAuthToken(runtime: Pick<ChoicesRuntime, "store">): string {
     : "";
 }
 
-export function normalizeBackendChoices(choices: ChoicesBackendData): ChoiceValue[] | null {
+export function normalizeBackendChoices(choices: ChoicesBackendData): SessionChoices | null {
   if (choices == null) {
     return null;
   }
-  return new ChoiceData(CHOICESTRUCTURE).normalizeChoiceValues(choices);
+  return {
+    items: new ChoiceData(CHOICESTRUCTURE).normalizeChoiceValues(choices),
+    jurisdiction: Array.isArray(choices) ? null : choices.jurisdiction ?? null,
+  };
 }
 
-export async function loadSessionData(runtime: SessionDataLoadRuntime, session: string): Promise<ChoiceValue[] | null> {
+export async function loadSessionData(runtime: SessionDataLoadRuntime, session: string): Promise<SessionChoices | null> {
   const cached = runtime.store.get("choicesBySession");
   if (Object.hasOwn(cached, session)) {
     const choices = normalizeBackendChoices(cached[session] ?? null);
@@ -31,7 +35,7 @@ export async function loadSessionData(runtime: SessionDataLoadRuntime, session: 
     return choices;
   }
   const choices = normalizeBackendChoices(await runtime.dataWorkerClient.load(getAuthToken(runtime), session));
-  runtime.store.set("choicesBySession", { ...cached, [session]: choices });
+  runtime.store.set("choicesBySession", { ...runtime.store.get("choicesBySession"), [session]: choices });
   return choices;
 }
 
@@ -42,15 +46,17 @@ export class ChoicesService {
     this.#runtime = runtime;
   }
 
-  save(choiceJson: ChoiceValue[], workflow: WorkflowSettings): ChoicesSaveResult {
+  save(choiceJson: ChoiceValue[], workflow: WorkflowSettings, jurisdiction: string | null): ChoicesSaveResult {
     const runtime = this.#runtime;
+    const previousJurisdiction = runtime.store.get("jurisdiction");
     const previousChoices = JSON.stringify(runtime.store.get("indexChoices"));
     const previousWorkflow = JSON.stringify(runtime.store.get("workflow"));
     const normalizedWorkflow = normalizeWorkflowSettings(workflow);
 
+    runtime.store.set("jurisdiction", jurisdiction);
     runtime.store.set("workflow", normalizedWorkflow);
     runtime.store.set("indexChoices", choiceJson);
-    const changed =
+    const changed = jurisdiction !== previousJurisdiction ||
       JSON.stringify(runtime.store.get("indexChoices")) !== previousChoices ||
       JSON.stringify(runtime.store.get("workflow")) !== previousWorkflow;
 
@@ -60,6 +66,7 @@ export class ChoicesService {
 
     return {
       choices: choiceJson,
+      jurisdiction,
       workflow: normalizedWorkflow,
       changed,
     };

@@ -1,3 +1,4 @@
+import type { PageScope } from "aurora-core";
 import type {
   ChoiceResult,
   ChoiceStructure,
@@ -6,6 +7,8 @@ import type {
   WorkflowSettingName,
   WorkflowSettings,
 } from "../type/choices.types";
+
+const RECOGNITION = "Recognition";
 
 export const DEFAULT_WORKFLOW_SETTINGS: WorkflowSettings = [
   { name: "Review", label: "Review Before Index", value: false },
@@ -75,32 +78,32 @@ export function createIndexingPayload(choiceValues: unknown): ChoiceValue[] {
 export const CHOICESTRUCTURE: ChoiceStructure = {
   choices: [
     {
-      name: "Recognition",
+      name: RECOGNITION,
       label: "Recognition Scope",
       default: "5",
       dependency: "",
       options: [
-        { level: "Level1", description: "First Page Only" },
-        { level: "Level2", description: "First 2 and Last Pages" },
-        { level: "Level3", description: "First 5 and Last 3 Pages" },
-        { level: "Level4", description: "First 8 and Last 5 Pages" },
-        { level: "Level5", description: "First 12 and Last 8 Pages" },
-        { level: "Level6", description: "All Pages" },
+        { level: "Level1", description: "First Page Only", scope: { first: 1, last: 0 } },
+        { level: "Level2", description: "First 2 and Last Pages", scope: { first: 2, last: 1 } },
+        { level: "Level3", description: "First 5 and Last 3 Pages", scope: { first: 5, last: 3 } },
+        { level: "Level4", description: "First 8 and Last 5 Pages", scope: { first: 8, last: 5 } },
+        { level: "Level5", description: "First 12 and Last 8 Pages", scope: { first: 12, last: 8 } },
+        { level: "Level6", description: "All Pages", scope: { all: true } },
       ],
     },
     {
       name: "Indexing",
       items: [
         { name: "ConfidentialIndexing", label: "Confidential Indexing", dependency: "", default: true },
-        { name: "TransactionIndexing", label: "Transaction Indexing", dependency: "Recognition:1", default: true },
-        { name: "EndorsementIndexing", label: "Endorsement Indexing", dependency: "Recognition:1", default: true },
-        { name: "PartyClauseIndexing", label: "Party Indexing", dependency: "Recognition:1", default: true },
-        { name: "RecitalIndexing", label: "Reference Indexing", dependency: "Recognition:1", default: true },
-        { name: "ExhibitIndexing", label: "Property & Legal Indexing", dependency: "Recognition:1", default: true },
-        { name: "MonetaryInfoIndexing", label: "Monetary Indexing", dependency: "Recognition:1", default: false },
-        { name: "AcknowledgmentIndexing", label: "Acknowledgment Indexing", dependency: "Recognition:1", default: true },
-        { name: "CourtIndexing", label: "Court Indexing", dependency: "Recognition:1", default: false },
-        { name: "VitalIndexing", label: "Vital Indexing", dependency: "Recognition:1", default: false },
+        { name: "TransactionIndexing", label: "Transaction Indexing", dependency: `${RECOGNITION}:1`, default: true },
+        { name: "EndorsementIndexing", label: "Endorsement Indexing", dependency: `${RECOGNITION}:1`, default: true },
+        { name: "PartyClauseIndexing", label: "Party Indexing", dependency: `${RECOGNITION}:1`, default: true },
+        { name: "RecitalIndexing", label: "Reference Indexing", dependency: `${RECOGNITION}:1`, default: true },
+        { name: "ExhibitIndexing", label: "Property & Legal Indexing", dependency: `${RECOGNITION}:1`, default: true },
+        { name: "MonetaryInfoIndexing", label: "Monetary Indexing", dependency: `${RECOGNITION}:1`, default: false },
+        { name: "AcknowledgmentIndexing", label: "Acknowledgment Indexing", dependency: `$/*  */{RECOGNITION}:1`, default: true },
+        { name: "CourtIndexing", label: "Judgment Indexing", dependency: `${RECOGNITION}:1`, default: false },
+        { name: "VitalIndexing", label: "Vital Indexing", dependency: `${RECOGNITION}:1`, default: false },
       ],
     },
     {
@@ -248,29 +251,18 @@ function parseChoices(choices: unknown): unknown {
 }
 
 export class Choices {
+  static getPageScope(choices: unknown): PageScope | null {
+    const level = dataLevel(choices, RECOGNITION);
+    const data = new ChoiceData(CHOICESTRUCTURE);
+    return CHOICESTRUCTURE.choices.find(choice => choice.name === RECOGNITION)?.options?.find(option => data.getNumericValue(option.level) === level)?.scope ?? null;
+  }
+
   static getActualPages(choices: unknown, pages: number): number {
-    let parsed = choices;
-    if (typeof parsed === "string") {
-      try {
-        parsed = JSON.parse(parsed);
-      } catch {
-        return 0;
-      }
-    }
-    const pagesLevel = dataLevel(parsed, "Recognition");
-    switch (pagesLevel) {
-      case 1:
-        return Math.min(pages, 1);
-      case 2:
-        return Math.min(pages, 3);
-      case 3:
-        return Math.min(pages, 8);
-      case 4:
-        return Math.min(pages, 13);
-      case 5:
-        return Math.min(pages, 20);
-      default:
-        return pages;
+    try {
+      const scope = Choices.getPageScope(parseChoices(choices));
+      return !scope || "all" in scope ? pages : Math.min(pages, scope.first + scope.last);
+    } catch {
+      return 0;
     }
   }
 }

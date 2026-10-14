@@ -94,7 +94,7 @@ export class ProvisionWorker {
     const apiBaseUrl = command.apiBaseUrl.replace(/\/+$/, "");
     return {
       url: `${apiBaseUrl}/v1/session/${encodeURIComponent(command.session)}/provision`,
-      body: JSON.stringify({ doc_name: command.document }),
+      body: JSON.stringify({ doc_name: command.document, jurisdiction: command.jurisdiction }),
     };
   }
 }

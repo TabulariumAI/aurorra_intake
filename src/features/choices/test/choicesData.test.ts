@@ -2,6 +2,41 @@ import { describe, expect, it } from "vitest";
 import { ChoiceData, Choices, CHOICESTRUCTURE, createIndexingPayload } from "../service/choicesData";
 
 describe("choicesData", () => {
+  it.each([
+    [1, { first: 1, last: 0 }],
+    [2, { first: 2, last: 1 }],
+    [3, { first: 5, last: 3 }],
+    [4, { first: 8, last: 5 }],
+    [5, { first: 12, last: 8 }],
+    [6, { all: true }],
+  ])("returns numeric page scope for level %s", (level, scope) => {
+    expect(Choices.getPageScope([{ service: "Recognition", level }])).toEqual(scope);
+  });
+
+  it("resolves stored choices inside Intake and returns no raw text to preview", () => {
+    expect(Choices.getPageScope(JSON.stringify([{ service: "Recognition", level: "5" }]))).toEqual({ first: 12, last: 8 });
+    expect(Choices.getPageScope(null)).toBeNull();
+    expect(Choices.getPageScope([{ service: "Recognition", level: 7 }])).toBeNull();
+    expect(Choices.getPageScope([{ service: "Recognition", level: 1.5 }])).toBeNull();
+  });
+
+  it("preserves indexing counts for unavailable and malformed stored choices", () => {
+    expect(Choices.getActualPages([{ service: "Recognition", level: 0 }], 27)).toBe(27);
+    expect(Choices.getActualPages("{bad json", 27)).toBe(0);
+  });
+
+  it("uses the configured level identity when options are reordered or relabeled", () => {
+    const group = CHOICESTRUCTURE.choices.find(choice => choice.name === "Recognition")!;
+    const options = group.options;
+    try {
+      group.options = [...options!].reverse().map(option => ({ ...option, description: "Changed label" }));
+      expect(Choices.getPageScope([{ service: "Recognition", level: 5 }])).toEqual({ first: 12, last: 8 });
+      expect(Choices.getActualPages([{ service: "Recognition", level: 5 }], 27)).toBe(20);
+    } finally {
+      group.options = options;
+    }
+  });
+
   it("generates default choices for every configured visible service", () => {
     const choices = new ChoiceData(CHOICESTRUCTURE).generateDefaultJson();
 
