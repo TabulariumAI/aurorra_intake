@@ -42,7 +42,7 @@ import { AurorraIntake } from "aurorra-intake";
 />
 ```
 
-`intervalPageMs` controls each page update during refining, recognizing, identifying, and indexing. `intervalMs` controls enrichment, quality analysis, and retrieval delays. Page totals use the existing recognition selection; backend status determines completion.
+`intervalPageMs` controls each page update during refining, recognizing, identifying, and indexing. `intervalMs` controls enrichment, quality analysis, and retrieval checks. The host supplies 500 ms. Each enrichment and quality step retains a 7.5-second waiting budget; the eleven retrieval steps retain 82.5 seconds, independently of the polling interval. Page totals use the existing recognition selection; backend status determines completion.
 
 `tiffPixelFormat` sets TIFF export to `bw1` (bitonal), `gray8` (grayscale), or `rgb24` (RGB). Intake applies it before opening or restoring the Lens session and preserves saved resolution and compression settings.
 

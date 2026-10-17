@@ -67,7 +67,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       normalizeChoices: vi.fn((choices) => new ChoiceData(CHOICESTRUCTURE).normalizeChoiceValues(choices)),
     },
     choiceStructure: CHOICESTRUCTURE,
-    baseIntervalMs: 1,
+    baseIntervalMs: 500,
     intervalPageMs: 500,
     indexingWorkerClient: {
       start: vi.fn(async () => undefined),
@@ -84,22 +84,9 @@ describe("IndexingService", () => {
   it("shows the required indexing and enabled enrichment sequence", async () => {
     const { defaultChoices, receive, runtime } = createRuntime({ indexChoices: "null" });
     runtime.choices.getActualPages = vi.fn(() => 2);
-    runtime.baseIntervalMs = 7;
-    runtime.indexingWorkerClient.status = vi.fn()
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "processing", data: "" })
-      .mockResolvedValueOnce({ status: "completed", data: "" });
+    runtime.baseIntervalMs = 500;
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === 70 ? "completed" : "pending", data: "" }));
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     const service = createIndexingService(runtime);
 
@@ -149,7 +136,7 @@ describe("IndexingService", () => {
       ["Retrieving processed data...", "started"],
       ["Retrieving processed data...", "completed"],
     ]);
-    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([500, 500, 500, 500, 500, 500, 500, 500, 7, 7, 7, 7, 7]);
+    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual(Array(69).fill(500));
     setTimeoutSpy.mockRestore();
     const events = receive.mock.calls.map(([event]) => event);
     for (const stage of ["Refining document", "Recognizing document", "Identifying document", "Indexing document"]) {
@@ -196,11 +183,16 @@ describe("IndexingService", () => {
       expect(new Set(jobs.map(event => event.jobId)).size).toBe(1);
       expect(jobs.at(-1)).toMatchObject({ phase: "completed", progress: { completed: 5, total: 5, unit: "pages" } });
     }
-    for (let check = 1; check <= 15; check++) {
-      await vi.advanceTimersByTimeAsync(intervalMs - 1);
-      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(1 + Math.floor(20 / stepsPerCheck) + check - 1);
-      await vi.advanceTimersByTimeAsync(1);
+    const waits = [7500, 7500, 7500, 7500, 82500].flatMap(budget => {
+      const waits = Array(Math.floor(budget / intervalMs)).fill(intervalMs);
+      if (budget % intervalMs) waits.push(budget % intervalMs);
+      return waits;
+    });
+    for (const [check, waitMs] of waits.entries()) {
+      await vi.advanceTimersByTimeAsync(waitMs - 1);
       expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(1 + Math.floor(20 / stepsPerCheck) + check);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(2 + Math.floor(20 / stepsPerCheck) + check);
     }
     await run;
     expect(receive.mock.calls.at(-2)?.[0]).toMatchObject({ message: "Retrieving processed data...", phase: "info", progress: null });
@@ -472,19 +464,10 @@ describe("IndexingService", () => {
       ].includes(choice.service) ? 1 : 0,
     }));
     const { receive, runtime } = createRuntime({ indexChoices: choices });
-    runtime.baseIntervalMs = 7;
+    runtime.baseIntervalMs = 500;
     runtime.choices.getActualPages = vi.fn(() => 1);
-    runtime.indexingWorkerClient.status = vi.fn()
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "completed", data: "" });
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === 66 ? "completed" : "pending", data: "" }));
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
 
     const processing = createIndexingService(runtime).process();
@@ -513,8 +496,8 @@ describe("IndexingService", () => {
       "Retrieving processed data...",
       "Retrieving processed data...",
     ]);
-    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual([500, 500, 500, 500, 7, 7, 7, 7, 7]);
-    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(10);
+    expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual(Array(65).fill(500));
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(66);
     setTimeoutSpy.mockRestore();
   });
 
@@ -539,7 +522,7 @@ describe("IndexingService", () => {
     expect(receive.mock.calls.map(([event]) => event.message)).not.toContain("Calculating fees");
   });
 
-  it("stops after eleven retrieval attempts with a neutral delay message", async () => {
+  it("stops after eleven retrieval steps with a neutral delay message", async () => {
     const { receive, runtime } = createRuntime();
     runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
     const service = createIndexingService(runtime);
@@ -552,7 +535,7 @@ describe("IndexingService", () => {
       event.message === "Retrieving processed data..." && event.phase === "started"
     ));
     const lastRetrieval = retrievals.at(-1)?.[0];
-    expect(retrievals).toHaveLength(12);
+    expect(retrievals).toHaveLength(166);
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
       message: "Processing is taking longer than expected.",
       phase: "info",
@@ -570,9 +553,9 @@ describe("IndexingService", () => {
       progress: null,
     });
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
-    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(20);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(230);
     await vi.advanceTimersByTimeAsync(35000);
-    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(20);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(230);
     expect(receive.mock.calls.at(-1)?.[0].jobId).not.toBe(lastRetrieval?.jobId);
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     await receive.mock.calls.at(-1)?.[0].actions[0].onConfirm();
@@ -583,14 +566,14 @@ describe("IndexingService", () => {
   it.each(["pending", "processing", "completed", "error"] as const)("handles %s on the final retrieval attempt", async status => {
     const { receive, runtime } = createRuntime();
     let checks = 0;
-    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === 20 ? status : "pending", data: status === "error" ? "Retrieval failed" : "" }));
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === 230 ? status : "pending", data: status === "error" ? "Retrieval failed" : "" }));
     const run = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await run;
     const events = receive.mock.calls.map(([event]) => event);
     const retrieval = events.filter(event => event.message === "Retrieving processed data...");
     expect(new Set(retrieval.map(event => event.jobId)).size).toBe(1);
-    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(20);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(230);
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
     if (status === "completed" || status === "error") {
       expect(retrieval.at(-1)).toMatchObject({ phase: status === "completed" ? "completed" : "failed", progress: { completed: 11, total: 11, unit: "steps" } });
@@ -638,17 +621,8 @@ describe("IndexingService", () => {
   it("does not route to metadata when indexing fails", async () => {
     const { receive, runtime } = createRuntime();
     runtime.choices.getActualPages = vi.fn(() => 1);
-    runtime.indexingWorkerClient.status = vi.fn()
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "pending", data: "" })
-      .mockResolvedValueOnce({ status: "error", data: "worker failed" });
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: ++checks === 66 ? "error" : "pending", data: "worker failed" }));
     const service = createIndexingService(runtime);
 
     const processing = service.process();
@@ -710,4 +684,30 @@ it.each(["Texas, Harris County", null])("passes jurisdiction %s through the inde
   const service = createIndexingService(runtime);
   await service.start("session-1", "source.pdf", defaultChoices, jurisdiction);
   expect(runtime.indexingWorkerClient.start).toHaveBeenCalledWith("token-1", "session-1", "source.pdf", defaultChoices, jurisdiction);
+});
+
+
+it.each([500, 7500].flatMap(intervalMs => (["pending", "completed", "error"] as const).map(terminal => ({ intervalMs, terminal }))))("preserves the indexing waiting budget at $intervalMs ms; terminal=$terminal", async ({ intervalMs, terminal }) => {
+  const { receive, runtime } = createRuntime();
+  runtime.baseIntervalMs = intervalMs;
+  runtime.intervalPageMs = 2500;
+  const started = Date.now();
+  runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: Date.now() - started >= 122500 ? terminal : "processing", data: terminal === "error" ? "Indexing failed" : "" }));
+  const run = createIndexingService(runtime).process();
+  await vi.advanceTimersByTimeAsync(122000);
+  expect(runtime.store.get("indexingStepStatus")).toBe(true);
+  expect(runtime.onIndexed).not.toHaveBeenCalled();
+  expect(receive.mock.calls.some(([event]) => event.phase === "info")).toBe(false);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(runtime.store.get("indexingStepStatus")).toBe(false);
+  await run;
+  expect(runtime.indexingWorkerClient.start).toHaveBeenCalledOnce();
+  expect(runtime.onIndexed).toHaveBeenCalledTimes(terminal === "completed" ? 1 : 0);
+  expect(runtime.store.get("indexingStepStatus")).toBe(false);
+  expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(intervalMs === 500 ? 230 : 17);
+  const events = receive.mock.calls.map(([event]) => event);
+  expect(events.some(event => event.phase === "info")).toBe(terminal === "pending");
+  for (const event of events) {
+    if (event.progress) expect(event.progress.completed).toBeLessThanOrEqual(event.progress.total);
+  }
 });

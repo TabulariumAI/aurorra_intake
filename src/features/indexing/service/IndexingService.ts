@@ -53,6 +53,17 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function* pollSteps(intervalMs: number, steps: number) {
+  const stepMs = 7500;
+  const budgetMs = steps * stepMs;
+  for (let elapsedMs = 0; elapsedMs < budgetMs;) {
+    const waitMs = Math.min(intervalMs, budgetMs - elapsedMs);
+    await delay(waitMs);
+    yield Math.floor(elapsedMs / stepMs);
+    elapsedMs += waitMs;
+  }
+}
+
 function normalizeChoices(value: unknown, runtime: IndexingRuntime): unknown[] {
   const choices = runtime.choices.normalizeChoices(value, runtime.choiceStructure);
   if (!Array.isArray(choices)) {
@@ -138,8 +149,10 @@ class IndexingService implements IndexingServiceActions {
         if (isComplete || (levels.get(service) ?? 0) <= 0) continue;
         lastProgress = { jobId: crypto.randomUUID(), message, phase: "started" };
         runtime.progress.receive(lastProgress);
-        await delay(runtime.baseIntervalMs);
-        isComplete = await this.checkStatus(sessionId);
+        for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
+          isComplete = await this.checkStatus(sessionId);
+          if (isComplete) break;
+        }
         if (!isComplete) {
           runtime.progress.receive({ ...lastProgress, phase: "completed" });
         }
@@ -148,8 +161,10 @@ class IndexingService implements IndexingServiceActions {
       if (!isComplete) {
         lastProgress = { jobId: crypto.randomUUID(), message: "Analyzing Index Quality", phase: "started" };
         runtime.progress.receive(lastProgress);
-        await delay(runtime.baseIntervalMs);
-        isComplete = await this.checkStatus(sessionId);
+        for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
+          isComplete = await this.checkStatus(sessionId);
+          if (isComplete) break;
+        }
         if (!isComplete) {
           runtime.progress.receive({ ...lastProgress, phase: "completed" });
         }
@@ -163,13 +178,11 @@ class IndexingService implements IndexingServiceActions {
           progress: { completed: 0, total: 11, unit: "steps" },
         };
         runtime.progress.receive(lastProgress);
-        let attempts = 0;
-        while (!isComplete && attempts < 11) {
-          await delay(runtime.baseIntervalMs);
-          lastProgress = { ...lastProgress, progress: { completed: attempts + 1, total: 11, unit: "steps" } };
+        for await (const step of pollSteps(runtime.baseIntervalMs, 11)) {
+          lastProgress = { ...lastProgress, progress: { completed: step + 1, total: 11, unit: "steps" } };
           runtime.progress.receive(lastProgress);
           isComplete = await this.checkStatus(sessionId);
-          attempts += 1;
+          if (isComplete) break;
         }
       }
 
