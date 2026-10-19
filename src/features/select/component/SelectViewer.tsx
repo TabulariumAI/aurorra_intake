@@ -28,9 +28,7 @@ function ViewerNav({
         size="icon"
         variant="secondary"
         requireConfirmation={false}
-        onConfirm={() => {
-          void onShowThumbnails();
-        }}
+        onConfirm={onShowThumbnails}
       />
       <ConfButton
         title="Previous page"
@@ -41,9 +39,7 @@ function ViewerNav({
         size="icon"
         variant="secondary"
         requireConfirmation={false}
-        onConfirm={() => {
-          void onPreviousPage();
-        }}
+        onConfirm={onPreviousPage}
       />
       <ConfButton
         title="Next page"
@@ -54,9 +50,7 @@ function ViewerNav({
         size="icon"
         variant="secondary"
         requireConfirmation={false}
-        onConfirm={() => {
-          void onNextPage();
-        }}
+        onConfirm={onNextPage}
       />
     </div>
   );

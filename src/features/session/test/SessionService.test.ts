@@ -159,6 +159,73 @@ describe("SessionService", () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
+  it("offers the original failure to the host before displaying progress errors", async () => {
+    const { runtime, receive, emit, store } = createRuntime();
+    const error = Object.assign(new Error("JWT decode error: ExpiredSignature"), {
+      status: 401,
+      code: "expired_token",
+      details: { source: "session" },
+    });
+    runtime.onError = vi.fn(() => true);
+    vi.mocked(runtime.sessionWorkerClient.newSession).mockRejectedValueOnce(error);
+
+    const service = createSessionService(runtime);
+    const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
+    await service.process(file, "expired-job");
+
+    expect(runtime.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(vi.mocked(runtime.onError).mock.calls[0][0]).toBe(error);
+    expect(receive).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+    expect(runtime.onCreated).not.toHaveBeenCalled();
+    expect(store.get("session")).toBeNull();
+    expect(store.get("isSessionInProcess")).toBe(false);
+
+    await service.process(file, "next-job");
+
+    expect(runtime.sessionWorkerClient.newSession).toHaveBeenCalledTimes(2);
+    expect(runtime.onError).toHaveBeenCalledTimes(1);
+    expect(receive).toHaveBeenCalledExactlyOnceWith({ jobId: "next-job", message: "Creating a session", phase: "completed" });
+    expect(emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "upload", file });
+  });
+
+  it("keeps unhandled failures in the original progress job", async () => {
+    const { runtime, receive, emit, store } = createRuntime();
+    const error = Object.assign(new Error("The session service is unavailable."), { status: 503 });
+    runtime.onError = vi.fn(() => {
+      expect(receive).not.toHaveBeenCalled();
+      return false;
+    });
+    vi.mocked(runtime.sessionWorkerClient.newSession).mockRejectedValueOnce(error);
+
+    await createSessionService(runtime).process(new File(["pdf"], "document.pdf", { type: "application/pdf" }), "failed-job");
+
+    expect(runtime.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(receive).toHaveBeenCalledExactlyOnceWith({
+      error: "The session service is unavailable.",
+      jobId: "failed-job",
+      message: "Creating a session",
+      phase: "failed",
+    });
+    expect(emit).not.toHaveBeenCalled();
+    expect(store.get("isSessionInProcess")).toBe(false);
+  });
+
+  it("routes registration failures to the same host handler without starting upload", async () => {
+    const { runtime, receive, emit, store } = createRuntime();
+    const error = Object.assign(new Error("Sign-in required"), { status: 401 });
+    runtime.onError = vi.fn(() => true);
+    vi.mocked(runtime.onCreated!).mockRejectedValueOnce(error);
+
+    await createSessionService(runtime).process(new File(["pdf"], "document.pdf", { type: "application/pdf" }), "registration-job");
+
+    expect(runtime.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(receive).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+    expect(store.get("session")).toBe("session-1");
+    expect(store.get("isSessionInProcess")).toBe(false);
+  });
+
   it("stores existing session data", async () => {
     const { receive, runtime, store } = createRuntime();
     const service = createSessionService(runtime);

@@ -89,6 +89,7 @@ export class SessionService implements SessionServiceActions {
       });
     } catch (error) {
       console.error("[Intake:session]", error);
+      if (runtime.onError?.(error)) return;
       const jobMessage = getErrorMessage(error, "Session creation failed.");
       runtime.progress.receive({ error: jobMessage, jobId, message: "Creating a session", phase: "failed" });
     } finally {

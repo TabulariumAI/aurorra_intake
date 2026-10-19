@@ -55,6 +55,13 @@ upload starts. Intake awaits this callback so the host can persist the session
 and its queued batch membership. `onIndexed` remains the indexing completion
 callback; a failed `onCreated` prevents upload and preserves the allocated ID.
 
+`onError(error)` offers session-creation failures to the host
+with their original status, code, and details. Return `true` when host recovery
+handles the failure; Intake then suppresses its local error presentation. Return
+`false` to retain the progress error. Session-loading failures use
+`onFailure(error)` with the original error object; `onAlert(message)` retains its
+text notification. The host owns sign-in recovery.
+
 ## Development
 
 ```sh

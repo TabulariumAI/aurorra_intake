@@ -1,18 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { AuroraLens, IndexedDbViewerSessionStore, configurePdfWorker } from "@tabulariumai/aurora-lens";
+import { AuroraLens, IndexedDbViewerSessionStore } from "@tabulariumai/aurora-lens";
 import type { ViewerState, ViewerStatus } from "@tabulariumai/aurora-lens";
 import type { ViewerApi, SelectViewerProps } from "../type/selectViewer.types";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 
-configurePdfWorker(pdfWorkerUrl);
-
-function requireViewer(viewerRef: { current: ViewerApi | null }) {
-  const viewer = viewerRef.current;
-  if (viewer === null) {
-    throw new Error("SelectViewer is not initialized.");
-  }
-  return viewer;
-}
 
 export function useSelectViewer({
   pageSize,
@@ -58,23 +48,11 @@ export function useSelectViewer({
     };
   }, [pageSize, allowEdit, onAddError, onError, onStateChange, onStatusChange, onApiReady]);
 
-  const showThumbnails = () => requireViewer(viewerRef).showThumbnails();
-  const previousPage = () => requireViewer(viewerRef).previousPage();
-  const nextPage = () => requireViewer(viewerRef).nextPage();
-  const hasChanges = () => {
-    const viewer = viewerRef.current;
-    if (typeof viewer?.isDirty !== "function") {
-      return false;
-    }
-    return viewer.isDirty();
-  };
-
   return {
-    hasChanges,
     lensHostRef,
-    nextPage,
-    previousPage,
-    showThumbnails,
+    nextPage: () => viewerRef.current?.nextPage().catch(() => undefined),
+    previousPage: () => viewerRef.current?.previousPage().catch(() => undefined),
+    showThumbnails: () => viewerRef.current?.showThumbnails().catch(() => undefined),
     state,
     status,
   };

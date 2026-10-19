@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import type { IntakeContainerActions, IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createIndexingService } from "../../indexing/service/IndexingService";
+import { createSessionService } from "../../session/service/SessionService";
 import { Container } from "../component/Container";
 import type { ContainerProps } from "../component/Container";
 import { storeApi } from "../../../store/state/store";
@@ -159,6 +160,50 @@ describe("Container", () => {
     expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 500 }));
     rerender(<Container {...props} intervalPageMs={137} />);
     expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 137 }));
+  });
+
+  it("passes the host error handler to session creation and refreshes it", () => {
+    const props = { ...hostProps(), authToken: "token", apiGatewayUrl: "https://user.example.com", onReadyChange: vi.fn(), onIndexed: vi.fn() };
+    const onError = vi.fn(() => true);
+    const { rerender } = render(<Container {...props} onError={onError} />);
+    expect(createSessionService).toHaveBeenLastCalledWith(expect.objectContaining({ onError }));
+
+    const updated = vi.fn(() => false);
+    rerender(<Container {...props} onError={updated} />);
+    expect(createSessionService).toHaveBeenLastCalledWith(expect.objectContaining({ onError: updated }));
+  });
+
+  it.each([401, 503])("reports the original session-loading failure once through onFailure: status=%s", async status => {
+    const error = Object.assign(new Error("Session request failed"), { status, code: "session_failure", details: { source: "session" } });
+    setSession.mockRejectedValueOnce(error);
+    const onError = vi.fn(() => true);
+    const onFailure = vi.fn();
+    const onAlert = vi.fn();
+    const onSessionLoaded = vi.fn();
+    storeApi.getState().requestSession("expired-session");
+
+    render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()}
+      onError={onError} onFailure={onFailure} onAlert={onAlert} onSessionLoaded={onSessionLoaded} />);
+
+    await waitFor(() => expect(onFailure).toHaveBeenCalledExactlyOnceWith(error));
+    expect(onFailure.mock.calls[0][0]).toBe(error);
+    expect(onError).not.toHaveBeenCalled();
+    expect(onSessionLoaded).not.toHaveBeenCalled();
+    expect(onAlert).toHaveBeenCalledExactlyOnceWith(error.message);
+  });
+
+  it("keeps session-loading error reporting when no host error handler is supplied", async () => {
+    const error = new Error("Session service unavailable");
+    setSession.mockRejectedValueOnce(error);
+    const onFailure = vi.fn();
+    const onAlert = vi.fn();
+    storeApi.getState().requestSession("failed-session");
+
+    render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()}
+      onFailure={onFailure} onAlert={onAlert} />);
+
+    await waitFor(() => expect(onFailure).toHaveBeenCalledExactlyOnceWith(error));
+    expect(onAlert).toHaveBeenCalledExactlyOnceWith("Session service unavailable");
   });
 
   it("handles typed host requests and reports the loaded session", async () => {

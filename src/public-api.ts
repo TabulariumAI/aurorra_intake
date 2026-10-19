@@ -42,3 +42,5 @@ export type {
   StoreAdapter,
   StoreValues,
 } from "./store/type/store.types";
+
+export { jurisdictionCode } from "./features/choices/service/jurisdictionCode";

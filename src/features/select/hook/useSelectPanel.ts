@@ -197,7 +197,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
 
   const mountViewer = useCallback(() => {
     actions.showSelect(REVIEW_COPY.helper);
-    void lensRef.current?.showThumbnails();
+    void Promise.resolve(lensRef.current?.showThumbnails()).catch(() => undefined);
     setMode("review");
   }, [actions]);
 
@@ -224,7 +224,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
         mountSelectForm();
         return;
       }
-      lens.showThumbnails();
+      await lens.showThumbnails();
       service.setDocumentSelected(true);
       setMode("review");
       setLoading(false);

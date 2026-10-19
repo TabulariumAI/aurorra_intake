@@ -47,8 +47,9 @@ export type ContainerProps = {
   onCanceled?: () => void;
   onComplete?: (payload: IntakeCompletePayload) => void;
   onCreated?: (session: string) => Promise<void>;
+  onError?: (error: unknown) => boolean;
   onIndexed(result: { session: string; document: string }): void;
-  onFailure?: (message: string) => void;
+  onFailure?: (error: unknown) => void;
   onLoaderChange(lines: readonly string[] | null): void;
   onReadyChange(ready: boolean): void;
   renderChoices: IntakeItemRenderer;
@@ -78,6 +79,7 @@ export function Container({
   onCanceled,
   onComplete,
   onCreated,
+  onError,
   onIndexed,
   onFailure,
   onLoaderChange,
@@ -190,12 +192,13 @@ export function Container({
 
   const sessionService = useMemo(() => createSessionService({
     onCreated,
+    onError,
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
     },
     sessionWorkerClient: createSessionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [apiGatewayUrl, commonRuntime, onCreated]);
+  }), [apiGatewayUrl, commonRuntime, onCreated, onError]);
 
   const uploadService = useMemo(() => createUploadService({
     ...commonRuntime,
@@ -249,9 +252,8 @@ export function Container({
     setRuntimeAuthToken(authToken);
     void sessionService.setSession(sessionRequest.session).then(onSessionLoaded).catch((error: unknown) => {
       console.error("[Intake:load-session]", error);
-      const message = error instanceof Error ? error.message : String(error);
-      onFailure?.(message);
-      onAlert?.(message);
+      onFailure?.(error);
+      onAlert?.(error instanceof Error ? error.message : String(error));
     });
   }, [authToken, onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService, setStoreValue]);
 
