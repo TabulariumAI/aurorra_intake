@@ -6,8 +6,6 @@ type SessionWorkerError = Error & {
   details?: unknown;
 };
 
-const workerUrl = new URL("./SessionWorker.ts", import.meta.url);
-
 function resolveError(message: string, error: unknown): SessionWorkerError {
   const err = new Error(message) as SessionWorkerError;
   if (typeof error === "object" && error !== null) {
@@ -27,7 +25,7 @@ function resolveError(message: string, error: unknown): SessionWorkerError {
 
 async function runWorker<T>(command: unknown): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const worker = new Worker(workerUrl, { type: "module" });
+    const worker = new Worker(new URL("./SessionWorker.ts", import.meta.url), { type: "module" });
     let settled = false;
     const cleanup = () => {
       worker.terminate();

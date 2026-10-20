@@ -6,8 +6,6 @@ type UploadWorkerError = Error & {
   details?: unknown;
 };
 
-const workerUrl = new URL("./UploadWorker.ts", import.meta.url);
-
 function resolveError(message: string, error: unknown): UploadWorkerError {
   const err = new Error(message) as UploadWorkerError;
   if (typeof error === "object" && error !== null) {
@@ -27,7 +25,7 @@ function resolveError(message: string, error: unknown): UploadWorkerError {
 
 async function runWorker<T>(command: unknown): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const worker = new Worker(workerUrl, { type: "module" });
+    const worker = new Worker(new URL("./UploadWorker.ts", import.meta.url), { type: "module" });
     let settled = false;
     const cleanup = () => {
       try {
