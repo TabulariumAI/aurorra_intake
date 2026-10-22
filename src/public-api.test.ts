@@ -3,13 +3,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AurorraIntake,
-  CHOICESTRUCTURE,
-  ChoiceData,
   Choices,
   createSessionDataWorkerClient,
   createSessionWorkerClient,
-  createStoreAdapter,
-  dataLevel,
+  getIntakeState,
+  useIntakeState,
+  intakeActions,
   loadSessionData,
   loadSession,
 } from "./public-api";
@@ -42,13 +41,12 @@ describe("public-api", () => {
 
   it("exports the used intake surface", () => {
     expect(AurorraIntake).toBeTypeOf("function");
-    expect(CHOICESTRUCTURE).toBeTypeOf("object");
-    expect(ChoiceData).toBeTypeOf("function");
     expect(Choices).toBeTypeOf("function");
     expect(createSessionDataWorkerClient).toBeTypeOf("function");
     expect(createSessionWorkerClient).toBeTypeOf("function");
-    expect(createStoreAdapter).toBeTypeOf("function");
-    expect(dataLevel).toBeTypeOf("function");
+    expect(getIntakeState).toBeTypeOf("function");
+    expect(useIntakeState).toBeTypeOf("function");
+    expect(intakeActions.openSettings).toBeTypeOf("function");
     expect(loadSessionData).toBeTypeOf("function");
     expect(loadSession).toBeTypeOf("function");
   });

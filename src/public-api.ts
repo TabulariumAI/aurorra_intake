@@ -11,7 +11,6 @@ export { loadSessionData } from "./features/choices/service/ChoicesService";
 export { createSessionDataWorkerClient } from "./features/choices/worker/choicesWorkerClient";
 export { ChoicesPanel } from "./features/choices/component/ChoicesPanel";
 export type {
-  ChoiceFormSubmitPayload,
   SessionChoices,
   ChoicesPanelProps,
   SessionDataLoadRuntime,
@@ -19,28 +18,9 @@ export type {
   WorkflowSettingName,
   WorkflowSettings,
 } from "./features/choices/type/choices.types";
-export {
-  CHOICESTRUCTURE,
-  ChoiceData,
-  Choices,
-  DEFAULT_WORKFLOW_SETTINGS,
-  createIndexingPayload,
-  dataLevel,
-  normalizeWorkflowSettings,
-  workflowValue,
-} from "./features/choices/service/choicesData";
-export { storeApi as intakeStoreApi, useStore } from "./store/state/store";
-export {
-  clearStorage,
-  createStoreAdapter,
-  getStoredInformation,
-  setRuntimeAuthToken,
-} from "./store/adapter/storeAdapter";
-export type {
-  StateKey,
-  StoredInformation,
-  StoreAdapter,
-  StoreValues,
-} from "./store/type/store.types";
+export { Choices } from "./features/choices/service/choicesData";
+export { getIntakeState, useIntakeState, intakeActions } from "./store/state/intakeState";
+export type { IntakeState } from "./store/state/intakeState";
+export { clearStorage } from "./store/adapter/storeAdapter";
 
 export { jurisdictionCode } from "./features/choices/service/jurisdictionCode";

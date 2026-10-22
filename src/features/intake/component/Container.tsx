@@ -4,7 +4,6 @@ import { ChoiceForm } from "../../choices/component/ChoiceForm";
 import { createChoicesService } from "../../choices/service/ChoicesService";
 import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choicesData";
 import type { ChoiceStructure } from "../../choices/type/choices.types";
-import { createSessionDataWorkerClient } from "../../choices/worker/choicesWorkerClient";
 import { createIndexingService } from "../../indexing/service/IndexingService";
 import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
@@ -64,7 +63,6 @@ export type ContainerProps = {
 const events = {
   reRoute: { name: "reRoute", detail: { stage: "stage", file: "file", jobId: "jobId" } },
   showChoices: { name: "showChoices" },
-  updateChoices: { name: "updateChoices" },
 } satisfies Record<string, EventConfig> & { reRoute: IntakeRouteEvent };
 
 export function Container({
@@ -182,13 +180,7 @@ export function Container({
 
   const choicesService = useMemo(() => createChoicesService({
     store,
-    eventBus,
-    events: {
-      showChoices: events.showChoices,
-      updateChoices: events.updateChoices,
-    },
-    dataWorkerClient: createSessionDataWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [apiGatewayUrl, eventBus, store]);
+  }), [store]);
 
   const sessionService = useMemo(() => createSessionService({
     onCreated,

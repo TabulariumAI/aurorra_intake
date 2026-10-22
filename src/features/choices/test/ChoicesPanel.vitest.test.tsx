@@ -1,12 +1,16 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { storeApi } from "../../../store/state/store";
 import { ChoicesPanel } from "../component/ChoicesPanel";
-import { ChoiceData, DEFAULT_WORKFLOW_SETTINGS, CHOICESTRUCTURE } from "../service/choicesData";
+import { ChoiceData, CHOICESTRUCTURE } from "../service/choicesData";
+
+beforeEach(() => storeApi.getState().resetAllState());
 
 describe("ChoicesPanel", () => {
   it("disables unchanged actions and supports manually reverted settings without closing", () => {
     const onSave = vi.fn();
-    render(<ChoicesPanel initialJurisdiction={null} onCancel={vi.fn()} initialWorkflow={DEFAULT_WORKFLOW_SETTINGS} choicesEditable initialChoices={[{ service: "Recognition", level: 4 }]} onSave={onSave} structure={CHOICESTRUCTURE} />);
+    storeApi.getState().setValue("indexChoices", [{ service: "Recognition", level: 4 }]);
+    render(<ChoicesPanel onCancel={vi.fn()} choicesEditable onSave={onSave} />);
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Update", "Cancel"]);
     const original = screen.getByRole("radio", { name: /4 -/ });
@@ -23,15 +27,14 @@ describe("ChoicesPanel", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
   it("renders Intake choices with the host Preview action", () => {
+    storeApi.getState().setValue("indexChoices", [{ service: "Recognition", level: 4 }]);
 
     render(
-        <ChoicesPanel initialJurisdiction={null} onCancel={vi.fn()}
-          disabledGroups={[]}
-          initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
-          choicesEditable
-          initialChoices={[{ service: "Recognition", level: 4 }]}
+      <ChoicesPanel
+        onCancel={vi.fn()}
+        disabledGroups={[]}
+        choicesEditable
         onSave={vi.fn()}
-        structure={CHOICESTRUCTURE}
       />,
     );
 
@@ -57,13 +60,12 @@ describe("ChoicesPanel", () => {
       { service: "PartyEnrichment", level: 0 },
     ]);
 
+    storeApi.getState().setValue("indexChoices", choices);
     render(
-      <ChoicesPanel initialJurisdiction={null} onCancel={vi.fn()}
-        initialWorkflow={DEFAULT_WORKFLOW_SETTINGS}
+      <ChoicesPanel
+        onCancel={vi.fn()}
         choicesEditable={false}
-        initialChoices={choices}
         onSave={vi.fn()}
-        structure={CHOICESTRUCTURE}
       />,
     );
 

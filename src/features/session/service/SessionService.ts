@@ -9,6 +9,7 @@ import type {
   SessionWorkerClient,
   SessionServiceActions,
 } from "../type/session.types";
+import { createStoreAdapter, setRuntimeAuthToken } from "../../../store/adapter/storeAdapter";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
@@ -98,14 +99,14 @@ export class SessionService implements SessionServiceActions {
   }
 
   async setSession(session: string): Promise<SessionLoaded> {
-    return loadSession(this.#runtime, session);
+    return loadSession({ authToken: getAuthToken(this.#runtime), sessionWorkerClient: this.#sessionWorkerClient }, session);
   }
 
 }
 
 export async function loadSession(runtime: SessionLoadRuntime, session: string): Promise<SessionLoaded> {
   const sessionWorkerClient = runtime.sessionWorkerClient;
-  const token = getAuthToken(runtime);
+  const token = runtime.authToken;
   if (!token) {
     throw new Error("Missing auth token");
   }
@@ -117,7 +118,8 @@ export async function loadSession(runtime: SessionLoadRuntime, session: string):
     sasToken: data.sas_token,
     session: data.session,
   } satisfies SessionLoaded;
-  storeSession(runtime, loaded.session, loaded.sasToken, loaded.baseUrl, loaded.document);
+  setRuntimeAuthToken(token);
+  storeSession({ store: createStoreAdapter() }, loaded.session, loaded.sasToken, loaded.baseUrl, loaded.document);
   return loaded;
 }
 

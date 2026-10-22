@@ -234,9 +234,7 @@ describe("Container", () => {
       expect(onReadyChange).toHaveBeenNthCalledWith(1, false);
       expect(onReadyChange).toHaveBeenLastCalledWith(true);
     });
-    expect(workerMocks.createSessionDataWorkerClient).toHaveBeenCalledWith({
-      apiBaseUrl: "https://user.example.com",
-    });
+    expect(workerMocks.createSessionDataWorkerClient).not.toHaveBeenCalled();
     expect(workerMocks.createSessionWorkerClient).toHaveBeenCalledWith({
       apiBaseUrl: "https://user.example.com",
     });

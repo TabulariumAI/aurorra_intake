@@ -1,28 +1,16 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createStoreAdapter } from "../../../store/adapter/storeAdapter";
 import { storeApi } from "../../../store/state/store";
 import { ChoicesPanel } from "../component/ChoicesPanel";
-import { createChoicesService } from "../service/ChoicesService";
 import { ChoiceData, CHOICESTRUCTURE, createIndexingPayload, DEFAULT_WORKFLOW_SETTINGS } from "../service/choicesData";
 
 const items = CHOICESTRUCTURE.choices.flatMap((choice) => choice.items ?? []);
 
 function openSettings() {
-  const store = createStoreAdapter();
-  const service = createChoicesService({
-    store,
-    eventBus: { emit: vi.fn() },
-    events: { showChoices: {}, updateChoices: {} },
-    dataWorkerClient: { load: vi.fn() },
-  });
-  return render(<ChoicesPanel initialJurisdiction={null}
-    structure={CHOICESTRUCTURE}
-    initialChoices={store.get("indexChoices")}
-    initialWorkflow={store.get("workflow")}
+  return render(<ChoicesPanel
     choicesEditable
     onCancel={vi.fn()}
-    onSave={({ choices, workflow, jurisdiction }) => service.save(choices, workflow, jurisdiction)}
+    onSave={vi.fn()}
   />);
 }
 

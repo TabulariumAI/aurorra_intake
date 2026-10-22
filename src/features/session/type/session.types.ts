@@ -78,7 +78,10 @@ export type SessionRuntime = {
   sessionWorkerClient: SessionWorkerClient;
 };
 
-export type SessionLoadRuntime = Pick<SessionRuntime, "sessionWorkerClient" | "store">;
+export type SessionLoadRuntime = {
+  authToken: string;
+  sessionWorkerClient: SessionWorkerClient;
+};
 
 export type SessionLoaded = {
   baseUrl: string;

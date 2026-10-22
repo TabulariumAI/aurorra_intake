@@ -3,6 +3,7 @@ import { createSessionService, loadSession, validateSessionDocument } from "../s
 import type { SessionRuntime } from "../type/session.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
+import { storeApi } from "../../../store/state/store";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
@@ -227,7 +228,7 @@ describe("SessionService", () => {
   });
 
   it("stores existing session data", async () => {
-    const { receive, runtime, store } = createRuntime();
+    const { receive, runtime } = createRuntime();
     const service = createSessionService(runtime);
 
     await expect(service.setSession("session-2")).resolves.toEqual({
@@ -238,14 +239,14 @@ describe("SessionService", () => {
     });
 
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
-    expect(store.set).toHaveBeenCalledWith("document", "session-2.pdf");
+    expect(storeApi.getState().document).toBe("session-2.pdf");
     expect(receive).not.toHaveBeenCalled();
   });
 
   it("loads existing session data through the package API", async () => {
-    const { runtime, store } = createRuntime();
+    const { runtime } = createRuntime();
 
-    await expect(loadSession(runtime, "session-2")).resolves.toEqual({
+    await expect(loadSession({ authToken: "token-1", sessionWorkerClient: runtime.sessionWorkerClient }, "session-2")).resolves.toEqual({
       baseUrl: "https://storage-2.test",
       document: "session-2.pdf",
       sasToken: "sas-2",
@@ -253,7 +254,7 @@ describe("SessionService", () => {
     });
 
     expect(runtime.sessionWorkerClient.sessionData).toHaveBeenCalledWith("token-1", "session-2");
-    expect(store.set).toHaveBeenCalledWith("session", "session-2");
+    expect(storeApi.getState().session).toBe("session-2");
   });
 
 });

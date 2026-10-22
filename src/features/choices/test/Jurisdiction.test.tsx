@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ChoicesPanel } from "../component/ChoicesPanel";
+import { ChoiceForm } from "../component/ChoiceForm";
 import { ChoiceData, CHOICESTRUCTURE, DEFAULT_WORKFLOW_SETTINGS } from "../service/choicesData";
 import { createChoicesService, loadSessionData } from "../service/ChoicesService";
 import { createStoreAdapter } from "../../../store/adapter/storeAdapter";
@@ -11,7 +11,7 @@ const choices = new ChoiceData(CHOICESTRUCTURE).generateDefaultJson();
 function openSettings(jurisdiction: string | null = null, editable = true) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
-  const view = render(<ChoicesPanel structure={CHOICESTRUCTURE} initialChoices={choices}
+  const view = render(<ChoiceForm structure={CHOICESTRUCTURE} initialChoices={choices}
     initialWorkflow={DEFAULT_WORKFLOW_SETTINGS} initialJurisdiction={jurisdiction}
     choicesEditable={editable} onSave={onSave} onCancel={onCancel} />);
   return { ...view, onSave, onCancel };
@@ -104,7 +104,7 @@ describe("jurisdiction settings", () => {
     fireEvent.focus(input);
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Settings" })).toBeVisible();
+    expect(screen.getByLabelText("State", { exact: true })).toBeVisible();
     fireEvent.change(input, { target: { value: "Travis" } });
     fireEvent.click(screen.getByRole("option", { name: "Travis County" }));
     fireEvent.change(input, { target: { value: "Harris" } });
@@ -115,33 +115,31 @@ describe("jurisdiction settings", () => {
 
 describe("jurisdiction persistence", () => {
   it("saves jurisdiction through Intake storage and reports only actual changes", () => {
-    const runtime = { store: createStoreAdapter(), eventBus: { emit: vi.fn() },
-      events: { showChoices: {}, updateChoices: {} }, dataWorkerClient: { load: vi.fn() } };
+    const runtime = { store: createStoreAdapter() };
     const service = createChoicesService(runtime);
     service.save(choices, DEFAULT_WORKFLOW_SETTINGS, "Texas, Harris County");
     expect(storeApi.getState().jurisdiction).toBe("Texas, Harris County");
     expect(JSON.parse(localStorage.getItem(LOCAL_STATE_STORAGE_KEY)!).state.jurisdiction).toBe("Texas, Harris County");
-    runtime.eventBus.emit.mockClear();
     expect(service.save(choices, DEFAULT_WORKFLOW_SETTINGS, "Texas, Harris County").changed).toBe(false);
-    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     expect(service.save(choices, DEFAULT_WORKFLOW_SETTINGS, null).changed).toBe(true);
     expect(storeApi.getState().jurisdiction).toBeNull();
   });
 
-  it("keeps jurisdictions with their sessions on network and cache loads", async () => {
-    const runtime = { store: createStoreAdapter(), dataWorkerClient: { load: vi.fn()
+  it("keeps jurisdictions with their sessions on repeated backend loads", async () => {
+    const runtime = { authToken: "token-1", dataWorkerClient: { load: vi.fn()
       .mockResolvedValueOnce({ items: choices, jurisdiction: "Texas, Harris County" })
-      .mockResolvedValueOnce({ items: choices, jurisdiction: null }) } };
+      .mockResolvedValueOnce({ items: choices, jurisdiction: null })
+      .mockResolvedValueOnce({ items: choices, jurisdiction: "Texas, Harris County" }) } };
     const first = await loadSessionData(runtime, "first");
     expect(first).toEqual({ items: choices, jurisdiction: "Texas, Harris County" });
     expect(await loadSessionData(runtime, "second")).toEqual({ items: choices, jurisdiction: null });
     expect(await loadSessionData(runtime, "first")).toEqual(first);
-    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(2);
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(3);
   });
 
   it("retains concurrently loaded session entries", async () => {
     let finish!: (value: { items: typeof choices; jurisdiction: string }) => void;
-    const runtime = { store: createStoreAdapter(), dataWorkerClient: { load: vi.fn()
+    const runtime = { authToken: "token-1", dataWorkerClient: { load: vi.fn()
       .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
       .mockResolvedValueOnce({ items: choices, jurisdiction: null }) } };
     const first = loadSessionData(runtime, "first");

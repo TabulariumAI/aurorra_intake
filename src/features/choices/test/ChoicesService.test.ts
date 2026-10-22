@@ -1,42 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createChoicesService, loadSessionData, normalizeBackendChoices } from "../service/ChoicesService";
-import { DEFAULT_WORKFLOW_SETTINGS } from "../service/choicesData";
-import type { ChoicesRuntime, WorkflowSettings } from "../type/choices.types";
-import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
+import type { WorkflowSettings } from "../type/choices.types";
+import { createStoreAdapter } from "../../../store/adapter/storeAdapter";
+import { storeApi } from "../../../store/state/store";
 
-function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
-  const values: StoreValues = {
-    jurisdiction: null,
-    settingsOpen: false,
-    selectionResetVersion: 0,
-    sessionRequest: null,
-    isSessionInProcess: false,
-    uploadingStepStatus: false,
-    documentSelected: false,
-    provisionStepStatus: false,
-    indexingStepStatus: false,
-    userToken: { token: "token-1" },
-    session: null,
-    sasToken: null,
-    baseUrl: null,
-    document: null,
-    numOfPages: 1,
-    indexChoices: null,
-    choicesBySession: {},
-    workflow: DEFAULT_WORKFLOW_SETTINGS,
-    ...seed,
-  };
-
-  return {
-    clearStorage: vi.fn(),
-    get: vi.fn((key: StateKey) => values[key]),
-    getStoredInformation: vi.fn(),
-    reset: vi.fn(),
-    set: vi.fn(<Key extends StateKey>(key: Key, value: StoreValues[Key]) => {
-      values[key] = value;
-    }),
-  } as unknown as StoreAdapter;
-}
+beforeEach(() => storeApi.getState().resetAllState());
 
 describe("ChoicesService", () => {
   it("normalizes backend choice payloads", () => {
@@ -58,10 +26,8 @@ describe("ChoicesService", () => {
   });
 
   it("loads and retains session choices with runtime auth token", async () => {
-    const runtime: ChoicesRuntime = {
-      store: createStore(),
-      eventBus: { emit: vi.fn() },
-      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
+    const runtime = {
+      authToken: "token-1",
       dataWorkerClient: {
         load: vi.fn(async () => ({ items: [{ service: "Recognition", level: "Level4" }] })),
       },
@@ -72,17 +38,15 @@ describe("ChoicesService", () => {
     expect(loaded?.items).toContainEqual({ service: "Recognition", level: 4 });
     expect(loaded?.items).toContainEqual({ service: "MonetaryInfoIndexing", level: 0 });
     expect(runtime.dataWorkerClient.load).toHaveBeenCalledWith("token-1", "session-1");
-    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(1);
-    expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", {
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(2);
+    expect(storeApi.getState().choicesBySession).toEqual({
       "session-1": loaded,
     });
   });
 
-  it("keeps cached choices with their session", async () => {
-    const runtime: ChoicesRuntime = {
-      store: createStore(),
-      eventBus: { emit: vi.fn() },
-      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
+  it("refreshes choices while keeping other sessions", async () => {
+    const runtime = {
+      authToken: "token-1",
       dataWorkerClient: {
         load: vi.fn(async (_token: string, session: string) => ({
           items: [{ service: "Recognition", level: session === "session-a" ? "Level2" : "Level4" }],
@@ -98,46 +62,87 @@ describe("ChoicesService", () => {
 
     expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(1, "token-1", "session-a");
     expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(2, "token-1", "session-b");
-    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(2);
-    expect(runtime.store.set).toHaveBeenLastCalledWith("choicesBySession", {
+    expect(runtime.dataWorkerClient.load).toHaveBeenNthCalledWith(3, "token-1", "session-a");
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(3);
+    expect(storeApi.getState().choicesBySession).toEqual({
       "session-a": sessionA,
       "session-b": sessionB,
     });
   });
 
-  it("normalizes stored session choices before providing them", async () => {
-    const runtime: ChoicesRuntime = {
-      store: createStore({
-        choicesBySession: {
-          "session-1": [
-            { service: "Recognition", level: "Level2" },
-            { service: "TransactionIndexing", level: 0 },
-          ],
-        },
-      }),
-      eventBus: { emit: vi.fn() },
-      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
-      dataWorkerClient: { load: vi.fn() },
+  it.each([
+    { cached: null },
+    { cached: [{ service: "Recognition", level: 5 }] },
+    { cached: { items: [{ service: "Recognition", level: 5 }], jurisdiction: "California, Los Angeles County" } },
+  ])("replaces cached choices $cached with normalized backend values", async ({ cached }) => {
+    const runtime = {
+      authToken: "token-1",
+      dataWorkerClient: { load: vi.fn(async () => ({
+        items: [
+          { service: "Recognition", level: "Level2" },
+          { service: "TransactionIndexing", level: 0 },
+        ],
+        jurisdiction: "Texas, Harris County",
+      })) },
     };
 
+    storeApi.getState().setValue("choicesBySession", { "session-1": cached });
     const choices = await loadSessionData(runtime, "session-1");
 
     expect(choices?.items).toHaveLength(17);
     expect(choices?.items).toContainEqual({ service: "Recognition", level: 2 });
     expect(choices?.items).toContainEqual({ service: "TransactionIndexing", level: 0 });
     expect(choices?.items).toContainEqual({ service: "EndorsementIndexing", level: 1 });
-    expect(runtime.dataWorkerClient.load).not.toHaveBeenCalled();
-    expect(runtime.store.set).toHaveBeenCalledWith("choicesBySession", { "session-1": choices });
+    expect(choices?.jurisdiction).toBe("Texas, Harris County");
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
+    expect(storeApi.getState().choicesBySession).toEqual({ "session-1": choices });
   });
 
-  it("saves choices, workflow, and emits update only when values change", () => {
-    const runtime: ChoicesRuntime = {
-      store: createStore(),
-      eventBus: { emit: vi.fn() },
-      events: { showChoices: { name: "showChoices" }, updateChoices: { name: "updateChoices" } },
-      dataWorkerClient: {
-        load: vi.fn(),
-      },
+  it("reloads backend changes for the same session", async () => {
+    const runtime = {
+      authToken: "token-1",
+      dataWorkerClient: { load: vi.fn()
+        .mockResolvedValueOnce({ items: [{ service: "Recognition", level: 2 }], jurisdiction: "Texas, Harris County" })
+        .mockResolvedValueOnce({ items: [{ service: "Recognition", level: 6 }], jurisdiction: null }) },
+    };
+
+    await loadSessionData(runtime, "session-1");
+    const latest = await loadSessionData(runtime, "session-1");
+
+    expect(latest?.items).toContainEqual({ service: "Recognition", level: 6 });
+    expect(latest?.jurisdiction).toBeNull();
+    expect(storeApi.getState().choicesBySession).toEqual({ "session-1": latest });
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns missing backend choices instead of cached defaults", async () => {
+    const runtime = {
+      authToken: "token-1",
+      dataWorkerClient: { load: vi.fn(async () => null) },
+    };
+
+    storeApi.getState().setValue("choicesBySession", { "session-1": [{ service: "Recognition", level: 5 }] });
+    await expect(loadSessionData(runtime, "session-1")).resolves.toBeNull();
+    expect(storeApi.getState().choicesBySession).toEqual({ "session-1": null });
+    expect(runtime.dataWorkerClient.load).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
+  });
+
+  it("propagates backend failure without returning or replacing cached choices", async () => {
+    const cached = { "session-1": [{ service: "Recognition", level: 5 }] };
+    const error = new Error("Choices request failed");
+    const runtime = {
+      authToken: "token-1",
+      dataWorkerClient: { load: vi.fn().mockRejectedValue(error) },
+    };
+
+    storeApi.getState().setValue("choicesBySession", cached);
+    await expect(loadSessionData(runtime, "session-1")).rejects.toBe(error);
+    expect(storeApi.getState().choicesBySession).toEqual(cached);
+  });
+
+  it("saves choices and workflow and reports actual changes", () => {
+    const runtime = {
+      store: createStoreAdapter(),
     };
     const service = createChoicesService(runtime);
     const choices = [{ service: "Recognition", level: 4 }];
@@ -156,9 +161,8 @@ describe("ChoicesService", () => {
       jurisdiction: null,
       changed: true,
     });
-    expect(runtime.store.set).toHaveBeenCalledWith("indexChoices", choices);
-    expect(runtime.store.set).toHaveBeenCalledWith("workflow", workflow);
-    expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.updateChoices);
-    expect(runtime.eventBus.emit).toHaveBeenCalledTimes(1);
+    expect(storeApi.getState().indexChoices).toEqual(choices);
+    expect(storeApi.getState().workflow).toEqual(workflow);
+    expect(service.save(choices, workflow, null).changed).toBe(false);
   });
 });

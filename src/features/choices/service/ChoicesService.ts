@@ -1,4 +1,4 @@
-import { ChoiceData, CHOICESTRUCTURE } from "./choicesData";
+import { ChoiceData, CHOICESTRUCTURE, normalizeWorkflowSettings } from "./choicesData";
 import type {
   ChoiceValue,
   SessionChoices,
@@ -8,14 +8,7 @@ import type {
   ChoicesSaveResult,
   WorkflowSettings,
 } from "../type/choices.types";
-import { normalizeWorkflowSettings } from "./choicesData";
-
-function getAuthToken(runtime: Pick<ChoicesRuntime, "store">): string {
-  const userToken = runtime.store.get("userToken");
-  return typeof userToken === "object" && userToken !== null
-    ? String((userToken as { token?: unknown }).token ?? "")
-    : "";
-}
+import { createStoreAdapter, setRuntimeAuthToken } from "../../../store/adapter/storeAdapter";
 
 export function normalizeBackendChoices(choices: ChoicesBackendData): SessionChoices | null {
   if (choices == null) {
@@ -28,14 +21,15 @@ export function normalizeBackendChoices(choices: ChoicesBackendData): SessionCho
 }
 
 export async function loadSessionData(runtime: SessionDataLoadRuntime, session: string): Promise<SessionChoices | null> {
-  const cached = runtime.store.get("choicesBySession");
-  if (Object.hasOwn(cached, session)) {
-    const choices = normalizeBackendChoices(cached[session] ?? null);
-    runtime.store.set("choicesBySession", { ...cached, [session]: choices });
-    return choices;
+  setRuntimeAuthToken(runtime.authToken);
+  const choices = normalizeBackendChoices(await runtime.dataWorkerClient.load(runtime.authToken, session));
+  const store = createStoreAdapter();
+  const stored = structuredClone(choices);
+  store.set("choicesBySession", { ...store.get("choicesBySession"), [session]: stored });
+  if (stored !== null && store.get("session") === session) {
+    store.set("indexChoices", stored.items);
+    store.set("jurisdiction", stored.jurisdiction);
   }
-  const choices = normalizeBackendChoices(await runtime.dataWorkerClient.load(getAuthToken(runtime), session));
-  runtime.store.set("choicesBySession", { ...runtime.store.get("choicesBySession"), [session]: choices });
   return choices;
 }
 
@@ -55,14 +49,18 @@ export class ChoicesService {
 
     runtime.store.set("jurisdiction", jurisdiction);
     runtime.store.set("workflow", normalizedWorkflow);
-    runtime.store.set("indexChoices", choiceJson);
+    const choices = structuredClone(choiceJson);
+    runtime.store.set("indexChoices", choices);
+    const session = runtime.store.get("session");
+    if (typeof session === "string" && session) {
+      runtime.store.set("choicesBySession", {
+        ...runtime.store.get("choicesBySession"),
+        [session]: { items: choices, jurisdiction },
+      });
+    }
     const changed = jurisdiction !== previousJurisdiction ||
       JSON.stringify(runtime.store.get("indexChoices")) !== previousChoices ||
       JSON.stringify(runtime.store.get("workflow")) !== previousWorkflow;
-
-    if (changed) {
-      runtime.eventBus.emit(runtime.events.updateChoices);
-    }
 
     return {
       choices: choiceJson,

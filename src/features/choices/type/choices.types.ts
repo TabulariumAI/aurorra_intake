@@ -89,23 +89,14 @@ export type ChoicesWorkerClient = {
   load(token: string, session: string): Promise<ChoicesBackendData>;
 };
 
-export type ChoicesEventBus = {
-  emit(eventConfig: unknown, payload?: Record<string, unknown>): void;
-};
-
-export type ChoicesEvents = {
-  showChoices: unknown;
-  updateChoices: { name?: string } | unknown;
-};
-
 export type ChoicesRuntime = {
   store: StoreAdapter;
-  eventBus: ChoicesEventBus;
-  events: ChoicesEvents;
-  dataWorkerClient: ChoicesWorkerClient;
 };
 
-export type SessionDataLoadRuntime = Pick<ChoicesRuntime, "dataWorkerClient" | "store">;
+export type SessionDataLoadRuntime = {
+  authToken: string;
+  dataWorkerClient: ChoicesWorkerClient;
+};
 
 export type ChoicesSaveResult = ChoiceFormSubmitPayload & { changed: boolean };
 
@@ -130,4 +121,9 @@ export type ChoiceFormProps = {
   onCancel(): void;
 };
 
-export type ChoicesPanelProps = ChoiceFormProps;
+export type ChoicesPanelProps = {
+  choicesEditable: boolean;
+  disabledGroups?: string[];
+  onSave(choices: ChoiceValue[]): void;
+  onCancel?(): void;
+};
