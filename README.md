@@ -48,12 +48,17 @@ import { AurorraIntake } from "aurorra-intake";
 
 `renderTolerance` renders the host callout anchored to the Select document button. Its content shows the rejected page and explicit Process anyway / Cancel actions. Lens calculates the minimum tolerance using the configured formats; confirmation retries the same document with that tolerance only for the current selection. Cancel, clear, and a new Intake remove the override.
 
-The host is responsible for supplying valid credentials and a gateway that implements the required session, workflow-settings, provisioning, and indexing endpoints.
+The host is responsible for supplying valid credentials and a gateway that implements the required session, workflow-settings, provisioning, indexing, and IQ endpoints.
 
 `onCreated(session)` runs after the backend allocates the session ID and before
 upload starts. Intake awaits this callback so the host can persist the session
-and its queued batch membership. `onIndexed` remains the indexing completion
-callback; a failed `onCreated` prevents upload and preserves the allocated ID.
+and its queued batch membership. After indexing completes, Intake shows
+“Generating IQ report” and awaits generation and download through
+`GET /v1/iq/{session}/data` before calling `onIndexed` and opening metadata.
+Intake owns this IQ request and does not depend on `aurorra-index` or a host
+generation callback. IQ failure keeps the progress view open without emitting
+completion. The indexing timeout does not start the IQ step.
+A failed `onCreated` prevents upload and preserves the allocated ID.
 
 `onError(error)` offers session-creation failures to the host
 with their original status, code, and details. Return `true` when host recovery

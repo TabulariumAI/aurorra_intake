@@ -1,6 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SelectForm } from "../component/SelectForm";
+
+afterEach(() => vi.useRealTimers());
 
 describe("SelectForm", () => {
   it("fills the available panel height above the safety section", () => {
@@ -11,7 +13,6 @@ describe("SelectForm", () => {
         dropTarget={document.createElement("section")}
         status={{ kind: "idle" }}
         onFileSelected={vi.fn()}
-        onStatusReset={vi.fn()}
       />,
     );
 
@@ -22,10 +23,29 @@ describe("SelectForm", () => {
   });
 });
 
+it.each(["Unsupported file format.", "File too large. Maximum 20MB.", "Unreadable PDF"])("announces %s and retains it until the selection state changes", message => {
+  vi.useFakeTimers();
+  const props = { selectRef: null, maxFileSizeBytes: 20 * 1024 * 1024, dropTarget: document.createElement("section"), onFileSelected: vi.fn() };
+  const view = render(<SelectForm {...props} status={{ kind: "error", message }} />);
+  const alert = screen.getByRole("alert");
+  expect(alert).toHaveTextContent(`${message} Please try again.`);
+  expect(alert).toHaveAttribute("aria-live", "assertive");
+  expect(alert).toHaveAttribute("aria-atomic", "true");
+  act(() => vi.advanceTimersByTime(6000));
+  expect(alert).toHaveTextContent(`${message} Please try again.`);
+  view.rerender(<SelectForm {...props} status={{ kind: "error", message: "Another document failed." }} />);
+  expect(screen.getByRole("alert")).toBe(alert);
+  expect(alert).toHaveTextContent("Another document failed. Please try again.");
+  view.rerender(<SelectForm {...props} status={{ kind: "idle" }} />);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByText("PDF or multi-page TIFF, up to 20 MB.")).toHaveAttribute("aria-live", "assertive");
+  expect(props.onFileSelected).not.toHaveBeenCalled();
+});
+
 
 it("supplies the actual Select document button as the callout anchor", () => {
   const selectRef = vi.fn();
-  const { unmount } = render(<SelectForm selectRef={selectRef} maxFileSizeBytes={20 * 1024 * 1024} dropTarget={document.createElement("section")} status={{ kind: "idle" }} onFileSelected={vi.fn()} onStatusReset={vi.fn()} />);
+  const { unmount } = render(<SelectForm selectRef={selectRef} maxFileSizeBytes={20 * 1024 * 1024} dropTarget={document.createElement("section")} status={{ kind: "idle" }} onFileSelected={vi.fn()} />);
   expect(selectRef).toHaveBeenLastCalledWith(screen.getByRole("button", { name: "Select document" }));
   unmount();
   expect(selectRef.mock.lastCall?.[0]).toBeNull();
@@ -34,7 +54,7 @@ it("supplies the actual Select document button as the callout anchor", () => {
 it("keeps file selection and drop handling intact with the button anchor", () => {
   const onFileSelected = vi.fn();
   const dropTarget = document.createElement("section");
-  render(<SelectForm selectRef={null} maxFileSizeBytes={20 * 1024 * 1024} dropTarget={dropTarget} status={{ kind: "idle" }} onFileSelected={onFileSelected} onStatusReset={vi.fn()} />);
+  render(<SelectForm selectRef={null} maxFileSizeBytes={20 * 1024 * 1024} dropTarget={dropTarget} status={{ kind: "idle" }} onFileSelected={onFileSelected} />);
   const input = screen.getByTestId("select-upload-input");
   const click = vi.spyOn(input, "click").mockImplementation(() => undefined);
   fireEvent.click(screen.getByRole("button", { name: "Select document" }));

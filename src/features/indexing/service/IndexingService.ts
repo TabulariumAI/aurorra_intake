@@ -88,7 +88,6 @@ class IndexingService implements IndexingServiceActions {
     const session = runtime.store.get("session");
     const documentName = runtime.store.get("document");
     runtime.store.set("indexingStepStatus", true);
-    let isComplete = false;
     let lastProgress: ProgressJob = { jobId: crypto.randomUUID(), message: PAGE_PROGRESS_STAGES[0], phase: "started" };
 
     try {
@@ -115,109 +114,111 @@ class IndexingService implements IndexingServiceActions {
         runtime.store.get("numOfPages"),
       );
       const sessionId = String(session);
-      isComplete = await this.checkStatus(sessionId);
-      if (isComplete) return;
+      let isComplete = await this.checkStatus(sessionId);
+      if (!isComplete) {
+        runtime.progress.receive(lastProgress);
+        const indexedChoices = createIndexingPayload(choices);
+        await this.start(sessionId, documentName, indexedChoices, jurisdiction);
 
-      runtime.progress.receive(lastProgress);
-      const indexedChoices = createIndexingPayload(choices);
-      await this.start(sessionId, documentName, indexedChoices, jurisdiction);
+        let elapsedMs = 0;
+        for (const stage of PAGE_PROGRESS_STAGES) {
+          if (isComplete) break;
+          const jobId = stage === lastProgress.message ? lastProgress.jobId : crypto.randomUUID();
+          for (let page = 1; page <= pages; page++) {
+            lastProgress = {
+              jobId,
+              message: stage,
+              phase: "started",
+              progress: { completed: page, total: pages, unit: "pages" },
+            };
+            runtime.progress.receive(lastProgress);
+            await delay(runtime.intervalPageMs);
+            elapsedMs += runtime.intervalPageMs;
+            if (elapsedMs >= runtime.baseIntervalMs) {
+              isComplete = await this.checkStatus(sessionId);
+              elapsedMs = 0;
+            }
+            if (isComplete) break;
+          }
+          if (!isComplete && pages > 0) runtime.progress.receive({ ...lastProgress, phase: "completed" });
+        }
 
-      let elapsedMs = 0;
-      for (const stage of PAGE_PROGRESS_STAGES) {
-        if (isComplete) break;
-        const jobId = stage === lastProgress.message ? lastProgress.jobId : crypto.randomUUID();
-        for (let page = 1; page <= pages; page++) {
+        for (const [service, message] of ENRICHMENT_STEPS) {
+          if (isComplete || (levels.get(service) ?? 0) <= 0) continue;
+          lastProgress = { jobId: crypto.randomUUID(), message, phase: "started" };
+          runtime.progress.receive(lastProgress);
+          for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
+            isComplete = await this.checkStatus(sessionId);
+            if (isComplete) break;
+          }
+          if (!isComplete) {
+            runtime.progress.receive({ ...lastProgress, phase: "completed" });
+          }
+        }
+
+        if (!isComplete) {
+          lastProgress = { jobId: crypto.randomUUID(), message: "Analyzing Index Quality", phase: "started" };
+          runtime.progress.receive(lastProgress);
+          for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
+            isComplete = await this.checkStatus(sessionId);
+            if (isComplete) break;
+          }
+          if (!isComplete) {
+            runtime.progress.receive({ ...lastProgress, phase: "completed" });
+          }
+        }
+
+        if (!isComplete) {
           lastProgress = {
-            jobId,
-            message: stage,
+            jobId: crypto.randomUUID(),
+            message: "Retrieving processed data...",
             phase: "started",
-            progress: { completed: page, total: pages, unit: "pages" },
+            progress: { completed: 0, total: 11, unit: "steps" },
           };
           runtime.progress.receive(lastProgress);
-          await delay(runtime.intervalPageMs);
-          elapsedMs += runtime.intervalPageMs;
-          if (elapsedMs >= runtime.baseIntervalMs) {
+          for await (const step of pollSteps(runtime.baseIntervalMs, 11)) {
+            lastProgress = { ...lastProgress, progress: { completed: step + 1, total: 11, unit: "steps" } };
+            runtime.progress.receive(lastProgress);
             isComplete = await this.checkStatus(sessionId);
-            elapsedMs = 0;
+            if (isComplete) break;
           }
-          if (isComplete) break;
         }
-        if (!isComplete && pages > 0) runtime.progress.receive({ ...lastProgress, phase: "completed" });
-      }
 
-      for (const [service, message] of ENRICHMENT_STEPS) {
-        if (isComplete || (levels.get(service) ?? 0) <= 0) continue;
-        lastProgress = { jobId: crypto.randomUUID(), message, phase: "started" };
-        runtime.progress.receive(lastProgress);
-        for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
-          isComplete = await this.checkStatus(sessionId);
-          if (isComplete) break;
-        }
         if (!isComplete) {
-          runtime.progress.receive({ ...lastProgress, phase: "completed" });
+          runtime.progress.receive({ ...lastProgress, phase: "info", progress: null });
+          runtime.progress.receive({
+            jobId: crypto.randomUUID(),
+            message: "Processing is taking longer than expected.",
+            phase: "info",
+            actions: [{
+              label: "View metadata",
+              onConfirm: () => {
+                runtime.eventBus.emit(runtime.events.reRoute, {
+                  [runtime.events.reRoute.detail.stage]: "metadata",
+                });
+              },
+              requireConfirmation: false,
+              variant: "primary",
+            }],
+          });
+          return;
         }
+        runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
-
-      if (!isComplete) {
-        lastProgress = { jobId: crypto.randomUUID(), message: "Analyzing Index Quality", phase: "started" };
-        runtime.progress.receive(lastProgress);
-        for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
-          isComplete = await this.checkStatus(sessionId);
-          if (isComplete) break;
-        }
-        if (!isComplete) {
-          runtime.progress.receive({ ...lastProgress, phase: "completed" });
-        }
-      }
-
-      if (!isComplete) {
-        lastProgress = {
-          jobId: crypto.randomUUID(),
-          message: "Retrieving processed data...",
-          phase: "started",
-          progress: { completed: 0, total: 11, unit: "steps" },
-        };
-        runtime.progress.receive(lastProgress);
-        for await (const step of pollSteps(runtime.baseIntervalMs, 11)) {
-          lastProgress = { ...lastProgress, progress: { completed: step + 1, total: 11, unit: "steps" } };
-          runtime.progress.receive(lastProgress);
-          isComplete = await this.checkStatus(sessionId);
-          if (isComplete) break;
-        }
-      }
-
-      if (!isComplete) {
-        runtime.progress.receive({ ...lastProgress, phase: "info", progress: null });
-        runtime.progress.receive({
-          jobId: crypto.randomUUID(),
-          message: "Processing is taking longer than expected.",
-          phase: "info",
-          actions: [{
-            label: "View metadata",
-            onConfirm: () => {
-              runtime.eventBus.emit(runtime.events.reRoute, {
-                [runtime.events.reRoute.detail.stage]: "metadata",
-              });
-            },
-            requireConfirmation: false,
-            variant: "primary",
-          }],
-        });
-        return;
-      }
+      lastProgress = { jobId: crypto.randomUUID(), message: "Generating IQ report", phase: "started" };
+      runtime.progress.receive(lastProgress);
+      await runtime.iqWorkerClient.generateReport(runtime.getAuthToken(), sessionId);
       runtime.progress.receive({ ...lastProgress, phase: "completed" });
+      runtime.onIndexed({ session: sessionId, document: String(documentName) });
+      runtime.eventBus.emit(runtime.events.reRoute, {
+        [runtime.events.reRoute.detail.stage]: "metadata",
+      });
     } catch (error) {
       console.error("[Intake:indexing]", error);
       const message = getErrorMessage(error, "document processing", runtime);
       runtime.progress.receive({ ...lastProgress, error: message, phase: "failed" });
     } finally {
       runtime.store.set("indexingStepStatus", false);
-      if (isComplete) {
-        runtime.onIndexed({ session: String(session), document: String(documentName) });
-        runtime.eventBus.emit(runtime.events.reRoute, {
-          [runtime.events.reRoute.detail.stage]: "metadata",
-        });
-      }
     }
   }
 

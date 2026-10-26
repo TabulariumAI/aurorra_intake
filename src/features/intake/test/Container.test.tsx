@@ -17,6 +17,7 @@ let capturedActions: IntakeContainerActions;
 let capturedProgress: ((event: { error?: string; jobId: string; message: string; phase: "started" | "completed" | "failed" }) => void) | null = null;
 const setSession = vi.fn();
 const workerMocks = vi.hoisted(() => ({
+  createIqWorkerClient: vi.fn(() => ({ generateReport: vi.fn() })),
   createSessionDataWorkerClient: vi.fn(() => ({ load: vi.fn() })),
   createSessionWorkerClient: vi.fn(() => ({
     newSession: vi.fn(),
@@ -25,6 +26,14 @@ const workerMocks = vi.hoisted(() => ({
     summary: vi.fn(),
   })),
 }));
+
+vi.mock("../../iq/worker/iqWorkerClient", () => ({ createIqWorkerClient: workerMocks.createIqWorkerClient }));
+
+it("wires the intake-owned IQ client with the configured gateway", () => {
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+  expect(workerMocks.createIqWorkerClient).toHaveBeenCalledWith({ apiBaseUrl: "https://user.example.com" });
+  expect(vi.mocked(createIndexingService).mock.calls.at(-1)![0].iqWorkerClient).toBe(workerMocks.createIqWorkerClient.mock.results.at(-1)!.value);
+});
 
 function wrap(name: string) {
   return ({ active, children, helper }: IntakeItemProps) => (

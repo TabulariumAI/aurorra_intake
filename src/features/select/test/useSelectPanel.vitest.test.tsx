@@ -7,6 +7,8 @@ import { useSelectPanel } from "../hook/useSelectPanel";
 import type { IntakeContainerActions } from "../../intake/type/intake.types";
 import type { SelectService } from "../type/select.types";
 import type { ViewerApi } from "../type/selectViewer.types";
+import { intakeActions } from "../../../store/state/intakeState";
+import { storeApi, useStore } from "../../../store/state/store";
 
 const deleteStoredViewerSession = vi.hoisted(() => vi.fn());
 
@@ -99,6 +101,64 @@ function deferred<Value>() {
 }
 
 describe("useSelectPanel", () => {
+  it.each([false, true])("unlocks selection after repeated clearSession(%s) calls on the mounted hook", async (preserveSettings) => {
+    storeApi.getState().resetAllState();
+    intakeActions.resetSelection();
+    const service = createService(false);
+    const actions = createActions();
+    const { result } = renderHook(() => useSelectPanel({
+      pageSize, tiffPixelFormat: "gray8", maxFileSizeBytes: 20 * 1024 * 1024,
+      actions, service, selectionResetVersion: useStore((state) => state.selectionResetVersion),
+    }));
+    await waitFor(() => expect(result.current.mode).toBe("select"));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const viewer = createViewerApi(false);
+      let selected!: Promise<void>;
+      act(() => { selected = result.current.actions.selectFile(new File(["pdf"], "document.pdf", { type: "application/pdf" })); });
+      await act(async () => {
+        result.current.viewer.props?.onApiReady?.(viewer);
+        result.current.viewer.props?.onStateChange?.(createViewerState(3));
+        result.current.viewer.props?.onStatusChange?.("ready");
+        await selected;
+      });
+      expect(result.current.review).toEqual({ startDisabled: false, cancelDisabled: false });
+      await act(async () => { await result.current.actions.start(); });
+      expect(result.current.review).toEqual({ startDisabled: true, cancelDisabled: true });
+      act(() => intakeActions.clearSession(preserveSettings));
+      await waitFor(() => expect(result.current.mode).toBe("select"));
+      expect(result.current.viewer.props).toBeNull();
+      expect(result.current.review).toEqual({ startDisabled: true, cancelDisabled: false });
+      expect(viewer.clear).toHaveBeenCalledTimes(1);
+    }
+    expect(service.start).toHaveBeenCalledTimes(3);
+  });
+
+  it("replaces rejection errors, clears them for a valid selection, and resets them for a new session", async () => {
+    const service = createService(false);
+    const actions = createActions();
+    const viewer = createViewerApi(false);
+    const { result, rerender } = renderHook(({ selectionResetVersion }) => useSelectPanel({ pageSize, tiffPixelFormat: "gray8", maxFileSizeBytes: 20 * 1024 * 1024, actions, service, selectionResetVersion }), { initialProps: { selectionResetVersion: 0 } });
+    act(() => result.current.actions.initialize());
+    await act(async () => { result.current.viewer.props?.onApiReady?.(viewer); });
+    await act(async () => result.current.actions.selectFile(new File(["text"], "document.txt")));
+    expect(result.current.uploadStatus).toEqual({ kind: "error", message: "Unsupported file format." });
+    const large = new File(["pdf"], "large.pdf");
+    Object.defineProperty(large, "size", { value: 20 * 1024 * 1024 + 1 });
+    await act(async () => result.current.actions.selectFile(large));
+    expect(result.current.uploadStatus).toEqual({ kind: "error", message: "File too large. Maximum 20MB." });
+    expect(viewer.decodeDoc).not.toHaveBeenCalled();
+    const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
+    let selected!: Promise<void>;
+    act(() => { selected = result.current.actions.selectFile(file); });
+    expect(result.current.uploadStatus).toEqual({ kind: "idle" });
+    await act(async () => { result.current.viewer.props?.onApiReady?.(viewer); await selected; });
+    expect(viewer.decodeDoc).toHaveBeenCalledWith(file, { page: 1, viewMode: "thumbnails" });
+    await act(async () => result.current.actions.selectFile(new File(["text"], "another.txt")));
+    expect(result.current.uploadStatus.kind).toBe("error");
+    rerender({ selectionResetVersion: 1 });
+    await waitFor(() => expect(result.current.uploadStatus).toEqual({ kind: "idle" }));
+  });
+
   it.each(["bw1", "gray8", "rgb24"] as const)("applies %s before restoring without changing other settings", async (tiffPixelFormat) => {
     const config = defaultViewerConfig();
     config.view.pdfRasterDpi = 125;

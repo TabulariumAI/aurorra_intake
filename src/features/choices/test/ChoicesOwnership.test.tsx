@@ -87,6 +87,8 @@ describe("choices ownership", () => {
   });
 
   it.each([true, false])("clears the active session while preserving settings=%s and saved choices", preserveSettings => {
+    api.intakeActions.resetSelection();
+    const resetVersion = storeApi.getState().selectionResetVersion;
     storeApi.getState().setValue("session", "selected");
     storeApi.getState().setValue("indexChoices", [{ service: "Recognition", level: 2 }]);
     storeApi.getState().setValue("indexingStepStatus", true);
@@ -95,6 +97,6 @@ describe("choices ownership", () => {
     expect(api.getIntakeState()).toMatchObject({ session: null, settingsOpen: preserveSettings });
     expect(storeApi.getState().indexingStepStatus).toBe(false);
     expect(storeApi.getState().indexChoices).toEqual([{ service: "Recognition", level: 2 }]);
-    expect(storeApi.getState().selectionResetVersion).toBe(1);
+    expect(storeApi.getState().selectionResetVersion).toBeGreaterThan(resetVersion);
   });
 });

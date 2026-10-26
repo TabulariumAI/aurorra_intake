@@ -73,6 +73,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
       start: vi.fn(async () => undefined),
       status: vi.fn(async () => ({ status: "completed", data: "" })),
     },
+    iqWorkerClient: { generateReport: vi.fn(async () => ({ iq_doc: 98 })) },
     progress: { receive, reset: vi.fn() },
     getAuthToken: vi.fn(() => "token-1"),
   };
@@ -135,6 +136,8 @@ describe("IndexingService", () => {
       ["Retrieving processed data...", "started"],
       ["Retrieving processed data...", "started"],
       ["Retrieving processed data...", "completed"],
+      ["Generating IQ report", "started"],
+      ["Generating IQ report", "completed"],
     ]);
     expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual(Array(69).fill(500));
     setTimeoutSpy.mockRestore();
@@ -147,7 +150,7 @@ describe("IndexingService", () => {
       ]);
       expect(jobs.at(-1)).toMatchObject({ phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } });
     }
-    expect(new Set(events.map((event) => event.jobId)).size).toBe(9);
+    expect(new Set(events.map((event) => event.jobId)).size).toBe(10);
   });
 
   const stages = ["Refining document", "Recognizing document", "Identifying document", "Indexing document"];
@@ -216,10 +219,10 @@ describe("IndexingService", () => {
     await vi.runAllTimersAsync();
     await run;
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(lastCheck);
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(receive.mock.calls.map(([event]) => event).filter(event => event.message === stage).at(-1)).toMatchObject({
       message: stage, phase: status === "completed" ? "completed" : "failed",
       progress: { completed: page, total: 6, unit: "pages" },
-    }));
+    });
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
     if (status === "completed") {
       expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
@@ -300,7 +303,7 @@ describe("IndexingService", () => {
       expect(new Set(jobs.map(event => event.jobId)).size).toBe(1);
       expect(jobs.at(-1)).toMatchObject({ phase: index === stageIndex && status === "error" ? "failed" : "completed" });
     }
-    expect(events.at(-1)).toMatchObject({ message: stage, phase: status === "error" ? "failed" : "completed", progress: { completed: page, total: 7, unit: "pages" } });
+    expect(events.filter(event => event.message === stage).at(-1)).toMatchObject({ message: stage, phase: status === "error" ? "failed" : "completed", progress: { completed: page, total: 7, unit: "pages" } });
     expect(runtime.indexingWorkerClient.start).toHaveBeenCalledOnce();
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(lastCheck);
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
@@ -329,7 +332,7 @@ describe("IndexingService", () => {
     else resolve();
     await vi.runAllTimersAsync();
     await run;
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ jobId, message: "Refining document", phase: status === "error" ? "failed" : "completed" }));
+    expect(receive.mock.calls.map(([event]) => event).filter(event => event.message === "Refining document").at(-1)).toMatchObject({ jobId, message: "Refining document", phase: status === "error" ? "failed" : "completed" });
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
     if (status === "error") {
       expect(receive.mock.calls.at(-1)?.[0].error).toContain("Start unavailable");
@@ -424,7 +427,7 @@ describe("IndexingService", () => {
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(stages.indexOf(stage) + 2);
     resolve({ status: "completed", data: "" });
     await run;
-    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ ...event, phase: "completed" }));
+    expect(receive.mock.calls.map(([job]) => job).filter(job => job.message === event.message).at(-1)).toMatchObject({ ...event, phase: "completed" });
     expect(runtime.onIndexed).toHaveBeenCalledOnce();
   });
 
@@ -445,7 +448,7 @@ describe("IndexingService", () => {
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await processing;
-    expect(receive).not.toHaveBeenCalled();
+    expect(receive.mock.calls.map(([event]) => [event.message, event.phase])).toEqual([["Generating IQ report", "started"], ["Generating IQ report", "completed"]]);
     expect(runtime.indexingWorkerClient.start).not.toHaveBeenCalled();
   });
 
@@ -495,6 +498,8 @@ describe("IndexingService", () => {
       "Retrieving processed data...",
       "Retrieving processed data...",
       "Retrieving processed data...",
+      "Generating IQ report",
+      "Generating IQ report",
     ]);
     expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual(Array(65).fill(500));
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(66);
@@ -651,6 +656,81 @@ describe("IndexingService", () => {
 
     expect(runtime.indexingWorkerClient.status).not.toHaveBeenCalled();
     expect(runtime.indexingWorkerClient.start).not.toHaveBeenCalled();
+  });
+});
+
+describe("IQ completion", () => {
+  it.each([true, false])("waits for the IQ report after indexing completes; already complete=%s", async alreadyComplete => {
+    const { receive, runtime } = createRuntime();
+    if (!alreadyComplete) runtime.indexingWorkerClient.status = vi.fn()
+      .mockResolvedValueOnce({ status: "pending", data: "" })
+      .mockResolvedValue({ status: "completed", data: "" });
+    let finish!: (report: Record<string, unknown>) => void;
+    runtime.iqWorkerClient.generateReport = vi.fn(() => new Promise<Record<string, unknown>>(resolve => { finish = resolve; }));
+    const service = createIndexingService(runtime);
+    const processing = service.process();
+    await vi.runAllTimersAsync();
+    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Generating IQ report", phase: "started" }));
+    const job = receive.mock.calls.at(-1)![0];
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    expect(runtime.store.get("indexingStepStatus")).toBe(true);
+    await service.process();
+    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledOnce();
+    finish({ iq_doc: 98 });
+    await processing;
+    expect(receive).toHaveBeenLastCalledWith({ ...job, phase: "completed" });
+    expect(receive.mock.invocationCallOrder.at(-1)).toBeLessThan(vi.mocked(runtime.onIndexed).mock.invocationCallOrder[0]);
+    expect(vi.mocked(runtime.onIndexed).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(runtime.eventBus.emit).mock.invocationCallOrder[0]);
+    expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf" });
+    expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+  });
+
+  it.each([true, false])("does not complete or navigate when IQ fails; already complete=%s", async alreadyComplete => {
+    const { receive, runtime } = createRuntime();
+    if (!alreadyComplete) runtime.indexingWorkerClient.status = vi.fn()
+      .mockResolvedValueOnce({ status: "pending", data: "" })
+      .mockResolvedValue({ status: "completed", data: "" });
+    runtime.iqWorkerClient.generateReport = vi.fn().mockRejectedValue(new Error("IQ report unavailable"));
+    const processing = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await processing;
+    const iq = receive.mock.calls.map(([event]) => event).filter(event => event.message === "Generating IQ report");
+    expect(iq).toHaveLength(2);
+    expect(iq[0]).toMatchObject({ phase: "started" });
+    expect(iq[1]).toMatchObject({ jobId: iq[0].jobId, phase: "failed", error: "formatted:document processing IQ report unavailable" });
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+  });
+
+  it.each(["pending", "processing", "error"])("never generates IQ for %s indexing", async status => {
+    const { receive, runtime } = createRuntime();
+    runtime.indexingWorkerClient.status = vi.fn(async () => ({ status, data: "Indexing failed" }));
+    const processing = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await processing;
+    expect(runtime.iqWorkerClient.generateReport).not.toHaveBeenCalled();
+    expect(receive.mock.calls.some(([event]) => event.message === "Generating IQ report")).toBe(false);
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+    if (status !== "error") {
+      await receive.mock.calls.at(-1)![0].actions[0].onConfirm();
+      expect(runtime.iqWorkerClient.generateReport).not.toHaveBeenCalled();
+      expect(runtime.onIndexed).not.toHaveBeenCalled();
+    }
+  });
+
+  it("uses the indexing session captured before polling for IQ generation", async () => {
+    const { runtime } = createRuntime();
+    let finish!: (value: { status: string; data: string }) => void;
+    runtime.indexingWorkerClient.status = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const processing = createIndexingService(runtime).process();
+    runtime.store.set("session", "session-2");
+    finish({ status: "completed", data: "" });
+    await processing;
+    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
   });
 });
 

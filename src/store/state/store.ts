@@ -31,6 +31,7 @@ export type StoreState = StoreValues & StoreActions;
 type JsonStorage = typeof sessionJsonStorage;
 
 let requestId = 0;
+let selectionVersion = 0;
 
 const DEFAULT_STATE: StoreValues = {
   settingsOpen: false,
@@ -138,7 +139,7 @@ export const useStore = create<StoreState>()((set, get) => ({
   closeSettings: () => set({ settingsOpen: false }),
   openSettings: () => set({ settingsOpen: true }),
   requestSession: (session) => set({ sessionRequest: { id: ++requestId, session } }),
-  resetSelection: () => set((state) => ({ selectionResetVersion: state.selectionResetVersion + 1 })),
+  resetSelection: () => set({ selectionResetVersion: ++selectionVersion }),
   setValue: (name, value) => {
     if (value === undefined) return;
     if (name === "workflow") {

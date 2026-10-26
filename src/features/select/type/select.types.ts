@@ -21,7 +21,6 @@ export type SelectPanelActions = {
   cancel(): void;
   clear(): void;
   initialize(): void;
-  resetStatus(): void;
   refreshCancelConfirm(): boolean;
 };
 
@@ -40,7 +39,6 @@ export type SelectFormProps = {
   dropTarget: HTMLElement;
   status: SelectUploadStatus;
   onFileSelected: (file: File) => void;
-  onStatusReset: () => void;
 };
 
 export type SelectFileValidationResult = "format" | "size" | null;

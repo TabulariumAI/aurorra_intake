@@ -7,6 +7,7 @@ import type { ChoiceStructure } from "../../choices/type/choices.types";
 import { createIndexingService } from "../../indexing/service/IndexingService";
 import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
+import { createIqWorkerClient } from "../../iq/worker/iqWorkerClient";
 import { createProvisionService } from "../../provision/service/ProvisionService";
 import type { ProvisionServiceActions } from "../../provision/type/provision.types";
 import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
@@ -225,6 +226,7 @@ export function Container({
     baseIntervalMs: intervalMs,
     intervalPageMs,
     indexingWorkerClient: createIndexingWorkerClient({ apiBaseUrl: apiGatewayUrl }),
+    iqWorkerClient: createIqWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     getAuthToken() {
       return authToken ?? "";
     },

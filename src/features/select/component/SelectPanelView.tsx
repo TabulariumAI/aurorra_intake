@@ -32,7 +32,6 @@ export function SelectPanelView({ active, maxFileSizeBytes, dropTarget, helper, 
       onFileSelected={(file) => {
         void select.actions.selectFile(file);
       }}
-      onStatusReset={select.actions.resetStatus}
     />
   ) : null;
   const previewContent = select.mode === "review" ? (

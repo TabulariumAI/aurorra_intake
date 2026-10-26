@@ -1,5 +1,6 @@
 import type { StoreAdapter } from "../../../store/type/store.types";
 import type { ProgressActions } from "../../progressview/type/progress.types";
+import type { IqWorkerClient } from "../../iq/type/iq.types";
 
 export type IndexingWorkerCommand =
   | {
@@ -79,6 +80,7 @@ export type IndexingRuntime = {
   baseIntervalMs: number;
   intervalPageMs: number;
   indexingWorkerClient: IndexingWorkerClient;
+  iqWorkerClient: IqWorkerClient;
   progress: ProgressActions;
   getAuthToken(): string;
 };

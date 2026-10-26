@@ -16,7 +16,6 @@ function createSelect(needsConfirm: boolean) {
     cancel,
     clear: () => undefined,
     initialize: () => undefined,
-    resetStatus: () => undefined,
     refreshCancelConfirm,
   };
   const select: UseSelectPanelResult = {

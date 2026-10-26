@@ -37,7 +37,6 @@ export function SelectForm({
   dropTarget,
   status,
   onFileSelected,
-  onStatusReset,
 }: SelectFormProps) {
   const dropZoneRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -73,12 +72,6 @@ export function SelectForm({
       dropTarget.removeEventListener("drop", handleDrop);
     };
   }, [dropTarget, onFileSelected]);
-
-  useEffect(() => {
-    if (status.kind !== "error") return undefined;
-    const timeout = window.setTimeout(onStatusReset, 5000);
-    return () => window.clearTimeout(timeout);
-  }, [onStatusReset, status.kind]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -131,8 +124,11 @@ export function SelectForm({
             onChange={handleChange}
           />
           <p
+            aria-atomic="true"
+            aria-live="assertive"
             className="fileInfo text-base mt-4 mb-2 text-gray-600 text-center"
             data-upload-info="true"
+            role={isError ? "alert" : undefined}
             style={getSelectInfoStyle(isError)}
           >
             {statusMessage}

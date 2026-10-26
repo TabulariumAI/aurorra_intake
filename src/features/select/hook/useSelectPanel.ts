@@ -74,10 +74,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     setStarting(false);
   }, [pageSize]);
 
-  const resetStatus = useCallback(() => {
-    setUploadStatus({ kind: "idle" });
-  }, []);
-
   const showFailureMessage = useCallback((message: string) => {
     setMode("select");
     setUploadStatus({ kind: "error", message });
@@ -402,8 +398,7 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       cancel,
       clear,
       initialize,
-      resetStatus,
       refreshCancelConfirm,
     },
-  }), [acceptSize, sizeFailure, cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, resetStatus, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
+  }), [acceptSize, sizeFailure, cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
 }
