@@ -1,7 +1,5 @@
-import type { ChoicesBackendData, WorkflowSettings } from "../../features/choices/type/choices.types";
 
 export type StoreValues = {
-  settingsOpen: boolean;
   isSessionInProcess: boolean;
   uploadingStepStatus: boolean;
   documentSelected: boolean;
@@ -13,12 +11,8 @@ export type StoreValues = {
   baseUrl: unknown;
   document: unknown;
   numOfPages: unknown;
-  indexChoices: unknown;
-  jurisdiction: string | null;
-  choicesBySession: Record<string, ChoicesBackendData>;
   selectionResetVersion: number;
   sessionRequest: IntakeSessionRequest | null;
-  workflow: WorkflowSettings;
 };
 
 export type IntakeSessionRequest = { id: number; session: string };
@@ -26,7 +20,6 @@ export type IntakeSessionRequest = { id: number; session: string };
 export type StateKey = keyof StoreValues;
 
 export const MEMORY_STATE_KEYS = [
-  "settingsOpen",
   "isSessionInProcess",
   "uploadingStepStatus",
   "provisionStepStatus",
@@ -42,14 +35,10 @@ export const SESSION_STATE_KEYS = [
   "baseUrl",
   "document",
   "numOfPages",
-  "choicesBySession",
 ] as const satisfies readonly StateKey[];
 
 export const LOCAL_STATE_KEYS = [
   "userToken",
-  "indexChoices",
-  "jurisdiction",
-  "workflow",
 ] as const satisfies readonly StateKey[];
 
 export type StoredInformation = {

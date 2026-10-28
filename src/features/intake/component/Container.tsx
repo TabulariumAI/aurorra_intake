@@ -1,12 +1,9 @@
 import type { PageSizeConfig, TiffPixelFormat } from "@tabulariumai/aurora-lens";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChoiceForm } from "../../choices/component/ChoiceForm";
-import { createChoicesService } from "../../choices/service/ChoicesService";
-import { CHOICESTRUCTURE, ChoiceData, Choices } from "../../choices/service/choicesData";
-import type { ChoiceStructure } from "../../choices/type/choices.types";
 import { createIndexingService } from "../../indexing/service/IndexingService";
-import type { IndexingServiceActions } from "../../indexing/type/indexing.types";
+import type { IndexingRuntime, IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
+import { createImageWorkerClient } from "../../image/worker/imageWorkerClient";
 import { createIqWorkerClient } from "../../iq/worker/iqWorkerClient";
 import { createProvisionService } from "../../provision/service/ProvisionService";
 import type { ProvisionServiceActions } from "../../provision/type/provision.types";
@@ -26,7 +23,7 @@ import { useIntakeShell } from "../hook/useIntakeShell";
 import { intakeAlert, intakeMessages } from "../service/intakeMessages";
 import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
 import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "../service/intakeOrchestrator";
-import type { IntakeCalloutRenderer, IntakeItemRenderer } from "../type/intake.types";
+import type { IntakeConfig, IntakeCalloutRenderer, IntakeItemRenderer } from "../type/intake.types";
 import { ProgressView } from "../../progressview/component/ProgressView";
 import { useProgress } from "../../progressview/hook/useProgress";
 
@@ -36,6 +33,7 @@ type EventConfig = {
 };
 
 export type ContainerProps = {
+  config: IntakeConfig;
   authToken: string | null;
   apiGatewayUrl: string;
   intervalMs: number;
@@ -48,11 +46,10 @@ export type ContainerProps = {
   onComplete?: (payload: IntakeCompletePayload) => void;
   onCreated?: (session: string) => Promise<void>;
   onError?: (error: unknown) => boolean;
-  onIndexed(result: { session: string; document: string }): void;
+  onIndexed: IndexingRuntime["onIndexed"];
   onFailure?: (error: unknown) => void;
   onLoaderChange(lines: readonly string[] | null): void;
   onReadyChange(ready: boolean): void;
-  renderChoices: IntakeItemRenderer;
   renderPreview: IntakeItemRenderer;
   renderProgress: IntakeItemRenderer;
   renderSelect: IntakeItemRenderer;
@@ -63,10 +60,10 @@ export type ContainerProps = {
 
 const events = {
   reRoute: { name: "reRoute", detail: { stage: "stage", file: "file", jobId: "jobId" } },
-  showChoices: { name: "showChoices" },
 } satisfies Record<string, EventConfig> & { reRoute: IntakeRouteEvent };
 
 export function Container({
+  config,
   authToken,
   apiGatewayUrl,
   intervalMs,
@@ -83,7 +80,6 @@ export function Container({
   onFailure,
   onLoaderChange,
   onReadyChange,
-  renderChoices,
   renderPreview,
   renderProgress,
   renderSelect,
@@ -101,9 +97,6 @@ export function Container({
   const provisionRef = useRef<ProvisionServiceActions | null>(null);
   const indexingRef = useRef<IndexingServiceActions | null>(null);
   const sessionRequestRef = useRef<number | null>(null);
-  const settingsOpen = useStore((state) => state.settingsOpen);
-  const closeSettings = useStore((state) => state.closeSettings);
-  const openSettings = useStore((state) => state.openSettings);
   const selectionResetVersion = useStore((state) => state.selectionResetVersion);
   const sessionRequest = useStore((state) => state.sessionRequest);
   const setStoreValue = useStore((state) => state.setValue);
@@ -145,10 +138,6 @@ export function Container({
         void orchestrator.route(payload as IntakeRoutePayload);
         return;
       }
-      if (event.name === events.showChoices.name) {
-        openSettings();
-        return;
-      }
     },
     async emitAsync(eventConfig: unknown, payload?: Record<string, unknown>) {
       const event = eventConfig as EventConfig;
@@ -161,7 +150,7 @@ export function Container({
       }
       this.emit(eventConfig, payload);
     },
-  }), [onStarted, openSettings, orchestrator]);
+  }), [onStarted, orchestrator]);
 
   const commonRuntime = useMemo(() => ({
     alert: intakeAlert,
@@ -175,13 +164,8 @@ export function Container({
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
-      showChoices: events.showChoices,
     },
   }), [commonRuntime]);
-
-  const choicesService = useMemo(() => createChoicesService({
-    store,
-  }), [store]);
 
   const sessionService = useMemo(() => createSessionService({
     onCreated,
@@ -198,8 +182,9 @@ export function Container({
     events: {
       reRoute: events.reRoute,
     },
+    config,
     uploadWorkerClient: createUploadWorkerClient(maxFileSizeBytes),
-  }), [commonRuntime, maxFileSizeBytes]);
+  }), [commonRuntime, config, maxFileSizeBytes]);
 
   const provisionService = useMemo(() => createProvisionService({
     ...commonRuntime,
@@ -207,30 +192,26 @@ export function Container({
       reRoute: events.reRoute,
     },
     restart,
+    config,
     provisionWorkerClient: createProvisionWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-  }), [apiGatewayUrl, commonRuntime, restart]);
+  }), [apiGatewayUrl, commonRuntime, config, restart]);
 
   const indexingService = useMemo(() => createIndexingService({
     onIndexed,
+    config,
     ...commonRuntime,
     events: {
       reRoute: events.reRoute,
     },
-    choices: {
-      getActualPages: Choices.getActualPages,
-      normalizeChoices(choices, structure) {
-        return new ChoiceData(structure as ChoiceStructure).normalizeChoiceValues(choices);
-      },
-    },
-    choiceStructure: CHOICESTRUCTURE,
     baseIntervalMs: intervalMs,
     intervalPageMs,
     indexingWorkerClient: createIndexingWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     iqWorkerClient: createIqWorkerClient({ apiBaseUrl: apiGatewayUrl }),
+    imageWorkerClient: createImageWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     getAuthToken() {
       return authToken ?? "";
     },
-  }), [apiGatewayUrl, authToken, commonRuntime, intervalMs, intervalPageMs, onIndexed]);
+  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onIndexed]);
 
   useEffect(() => {
     sessionRef.current = sessionService;
@@ -251,7 +232,7 @@ export function Container({
     });
   }, [authToken, onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService, setStoreValue]);
 
-  const panel = settingsOpen ? "settings" : state.container.panel;
+  const panel = state.container.panel;
   const selectContent = selectHost ? (
     <SelectPanel
       pageSize={pageSize}
@@ -270,8 +251,6 @@ export function Container({
       selectionResetVersion={selectionResetVersion}
     />
   ) : null;
-  const initialChoices = store.get("indexChoices");
-  const initialWorkflow = store.get("workflow");
 
   return (
     <IntakeContainer
@@ -282,24 +261,6 @@ export function Container({
         active: panel === "progress",
         children: <ProgressView jobs={progress.jobs} onBack={restart} />,
         helper: panel === "progress" ? state.container.helper : "",
-      })}
-      settings={renderChoices({
-        active: panel === "settings",
-        children: settingsOpen ? (
-        <ChoiceForm
-          structure={CHOICESTRUCTURE}
-          initialChoices={initialChoices}
-          initialWorkflow={initialWorkflow}
-          initialJurisdiction={store.get("jurisdiction")}
-          choicesEditable
-          onCancel={closeSettings}
-          onSave={(payload) => {
-            choicesService.save(payload.choices, payload.workflow, payload.jurisdiction);
-            closeSettings();
-          }}
-        />
-        ) : null,
-        helper: "",
       })}
     />
   );

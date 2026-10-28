@@ -39,8 +39,7 @@ function createService(documentSelected = true): SelectService {
     start: vi.fn(async (_pageCount, getDocument) => {
       await getDocument(vi.fn());
     }),
-    showSettings: vi.fn(),
-    createTiffFile: vi.fn((blob) => new File([blob], "review.tiff", { type: "image/tiff" })),
+      createTiffFile: vi.fn((blob) => new File([blob], "review.tiff", { type: "image/tiff" })),
   };
 }
 
@@ -82,6 +81,7 @@ function createViewerState(pageCount: number): ViewerState {
     pageCount,
     pageHeight: 1000,
     pageIndex: 0,
+    pageName: null,
     pageInfo: null,
     pageWidth: 800,
     selectionCounts: { context: 0, figures: 0, tokens: 0 },
@@ -101,7 +101,7 @@ function deferred<Value>() {
 }
 
 describe("useSelectPanel", () => {
-  it.each([false, true])("unlocks selection after repeated clearSession(%s) calls on the mounted hook", async (preserveSettings) => {
+  it("unlocks selection after repeated session clears on the mounted hook", async () => {
     storeApi.getState().resetAllState();
     intakeActions.resetSelection();
     const service = createService(false);
@@ -124,7 +124,7 @@ describe("useSelectPanel", () => {
       expect(result.current.review).toEqual({ startDisabled: false, cancelDisabled: false });
       await act(async () => { await result.current.actions.start(); });
       expect(result.current.review).toEqual({ startDisabled: true, cancelDisabled: true });
-      act(() => intakeActions.clearSession(preserveSettings));
+      act(() => intakeActions.clearSession());
       await waitFor(() => expect(result.current.mode).toBe("select"));
       expect(result.current.viewer.props).toBeNull();
       expect(result.current.review).toEqual({ startDisabled: true, cancelDisabled: false });

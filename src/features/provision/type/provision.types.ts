@@ -1,3 +1,4 @@
+import type { IntakeConfig } from "../../intake/type/intake.types";
 import type { StoreAdapter } from "../../../store/type/store.types";
 import type { ProgressActions } from "../../progressview/type/progress.types";
 
@@ -40,6 +41,7 @@ export type ProvisionWorkerConfig = {
 };
 
 export type ProvisionRuntime = {
+  config: IntakeConfig;
   alert: {
     format(message: unknown, args?: Record<string, unknown>): string;
   };

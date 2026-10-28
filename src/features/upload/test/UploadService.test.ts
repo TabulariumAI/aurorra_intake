@@ -1,19 +1,11 @@
+import { intakeConfig } from "../../../test/intakeConfig";
 import { describe, expect, it, vi } from "vitest";
 import { createUploadService, resolveUploadContext } from "../service/UploadService";
 import type { UploadRuntime } from "../type/upload.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
-import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
-
-function withReview(workflowValue: boolean): typeof DEFAULT_WORKFLOW_SETTINGS {
-  return DEFAULT_WORKFLOW_SETTINGS.map((setting) => (
-    setting.name === "Review" ? { ...setting, value: workflowValue } : setting
-  ));
-}
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    jurisdiction: null,
-    settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -27,9 +19,6 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     baseUrl: "https://storage.test",
     document: "session-1.pdf",
     numOfPages: 1,
-    indexChoices: null,
-    choicesBySession: {},
-    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 
@@ -44,9 +33,10 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   } as unknown as StoreAdapter;
 }
 
-function createRuntime(seed: Partial<StoreValues> = {}) {
+function createRuntime(seed: Partial<StoreValues> = {}, review = false) {
   const receive = vi.fn();
   const runtime: UploadRuntime = {
+    config: { ...intakeConfig, review, iq: true, document: true },
     alert: { format: vi.fn((message) => `formatted:${String(message)}`) },
     messages: {
       UPLOAD_TOKEN_MISSING: "token missing",
@@ -91,7 +81,7 @@ describe("UploadService", () => {
   });
 
   it("uploads the selected document and reroutes to provision when workflow is true", async () => {
-    const { receive, runtime } = createRuntime({ session: "session-1", workflow: withReview(true) });
+    const { receive, runtime } = createRuntime({ session: "session-1" }, true);
     const service = createUploadService(runtime);
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 
@@ -116,7 +106,7 @@ describe("UploadService", () => {
   });
 
   it.each([false])("bypasses provision when Review workflow is %s", async (workflow) => {
-    const { runtime } = createRuntime({ session: "session-1", workflow: withReview(workflow) });
+    const { runtime } = createRuntime({ session: "session-1" }, workflow);
     const service = createUploadService(runtime);
     const file = new File(["pdf"], "source.pdf", { type: "application/pdf" });
 

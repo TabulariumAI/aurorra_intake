@@ -52,9 +52,6 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
         throw error;
       }
     },
-    showSettings() {
-      runtime.eventBus.emit(runtime.events.showChoices);
-    },
     createTiffFile(blob) {
       return new File([blob], "document.tif", { type: "image/tiff" });
     },

@@ -358,9 +358,6 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
     mountSelectForm();
   }, [mountSelectForm]);
 
-  const showSettings = useCallback(() => {
-    service.showSettings();
-  }, [service]);
 
   const refreshCancelConfirm = useCallback(() => {
     return Boolean(lensRef.current?.hasChanges());
@@ -394,11 +391,10 @@ export function useSelectPanel(options: UseSelectPanelOptions): UseSelectPanelRe
       acceptSize,
       selectFile,
       start,
-      showSettings,
       cancel,
       clear,
       initialize,
       refreshCancelConfirm,
     },
-  }), [acceptSize, sizeFailure, cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, selectFile, showSettings, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
+  }), [acceptSize, sizeFailure, cancel, clear, initialized, initialize, loading, mode, refreshCancelConfirm, selectFile, start, starting, uploadStatus, viewerProps, viewerState, viewerStatus]);
 }

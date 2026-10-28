@@ -52,8 +52,9 @@ describe.each([
 
   it("rejects worker startup failures and uses a fresh worker on the next request", async () => {
     const first = request();
-    instances[0].onerror!({ message: `${name} worker failed` });
-    await expect(first).rejects.toThrow(`${name} worker failed`);
+    const event = new ErrorEvent("error", { message: `${name} startup failed` });
+    instances[0].onerror!(event);
+    await expect(first).rejects.toBe(event);
     expect(instances[0].terminate).toHaveBeenCalledOnce();
     const second = request();
     expect(instances).toHaveLength(2);

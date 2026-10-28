@@ -17,7 +17,6 @@ export type SelectPanelActions = {
   acceptSize(): Promise<void>;
   selectFile(file: File): Promise<void>;
   start(): Promise<void>;
-  showSettings(): void;
   cancel(): void;
   clear(): void;
   initialize(): void;
@@ -62,7 +61,6 @@ export type SelectService = {
   isDocumentSelected(): boolean;
   setDocumentSelected(selected: boolean): void;
   start(pageCount: number, getDocument: (onProgress: (progress: ExportProgress) => void) => Promise<File | null>): Promise<void>;
-  showSettings(): void;
   createTiffFile(blob: Blob): File;
 };
 

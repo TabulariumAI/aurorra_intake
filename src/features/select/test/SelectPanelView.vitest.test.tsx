@@ -12,7 +12,6 @@ function createSelect(needsConfirm: boolean) {
     acceptSize: vi.fn(async () => undefined),
     selectFile: async () => undefined,
     start,
-    showSettings: () => undefined,
     cancel,
     clear: () => undefined,
     initialize: () => undefined,

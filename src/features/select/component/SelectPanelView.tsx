@@ -54,14 +54,6 @@ export function SelectPanelView({ active, maxFileSizeBytes, dropTarget, helper, 
             onConfirm={select.actions.start}
           />
           <ConfButton
-            id="settingsButton"
-            data-select-settings="true"
-            label="Settings"
-            variant="secondary"
-            requireConfirmation={false}
-            onConfirm={select.actions.showSettings}
-          />
-          <ConfButton
             id="uploadCancelButton"
             data-upload-cancel="true"
             label="Cancel"

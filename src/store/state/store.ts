@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { DEFAULT_WORKFLOW_SETTINGS, normalizeWorkflowSettings } from "../../features/choices/service/choicesData";
 import { localJsonStorage, sessionJsonStorage } from "../adapter/storageAdapters";
 import {
   LOCAL_STATE_KEYS,
@@ -13,8 +12,6 @@ export const SESSION_STATE_STORAGE_KEY = "aurorra-intake.session-state";
 export const LOCAL_STATE_STORAGE_KEY = "aurorra-intake.local-state";
 
 export type StoreActions = {
-  closeSettings(): void;
-  openSettings(): void;
   requestSession(session: string): void;
   resetSelection(): void;
   setValue<Key extends StateKey>(name: Key, value: StoreValues[Key]): void;
@@ -34,7 +31,6 @@ let requestId = 0;
 let selectionVersion = 0;
 
 const DEFAULT_STATE: StoreValues = {
-  settingsOpen: false,
   isSessionInProcess: false,
   uploadingStepStatus: false,
   documentSelected: false,
@@ -46,18 +42,11 @@ const DEFAULT_STATE: StoreValues = {
   baseUrl: null,
   document: null,
   numOfPages: 1,
-  indexChoices: null,
-  jurisdiction: null,
-  choicesBySession: {},
   selectionResetVersion: 0,
   sessionRequest: null,
-  workflow: structuredClone(DEFAULT_WORKFLOW_SETTINGS),
 };
 
 function cloneDefault<Key extends StateKey>(name: Key): StoreValues[Key] {
-  if (name === "workflow") {
-    return structuredClone(DEFAULT_WORKFLOW_SETTINGS) as StoreValues[Key];
-  }
   return structuredClone(DEFAULT_STATE[name]);
 }
 
@@ -89,12 +78,14 @@ function removePersistedStore(name: string, storage: JsonStorage): void {
   }
 }
 
-function readPersistedValues(name: string, storage: JsonStorage): Partial<StoreValues> {
+function readPersistedValues(name: string, storage: JsonStorage, names: readonly StateKey[]): Partial<StoreValues> {
   try {
     const value = storage.getItem(name);
     if (!value || typeof value !== "object" || !("state" in value)) return {};
     const state = value.state;
-    return state && typeof state === "object" ? state as Partial<StoreValues> : {};
+    return state && typeof state === "object"
+      ? Object.fromEntries(names.filter(key => Object.hasOwn(state, key)).map(key => [key, (state as Record<string, unknown>)[key]])) as Partial<StoreValues>
+      : {};
   } catch {
     return {};
   }
@@ -119,14 +110,10 @@ function writePersistedValues(
 }
 
 function getInitialValues(): StoreValues {
-  const initialValues = {
-    ...DEFAULT_STATE,
-    ...readPersistedValues(SESSION_STATE_STORAGE_KEY, sessionJsonStorage),
-    ...readPersistedValues(LOCAL_STATE_STORAGE_KEY, localJsonStorage),
-  };
   return {
-    ...initialValues,
-    workflow: normalizeWorkflowSettings(initialValues.workflow),
+    ...DEFAULT_STATE,
+    ...readPersistedValues(SESSION_STATE_STORAGE_KEY, sessionJsonStorage, SESSION_STATE_KEYS),
+    ...readPersistedValues(LOCAL_STATE_STORAGE_KEY, localJsonStorage, LOCAL_STATE_KEYS),
   };
 }
 
@@ -136,16 +123,10 @@ function statePatch<Key extends StateKey>(name: Key, value: StoreValues[Key]): P
 
 export const useStore = create<StoreState>()((set, get) => ({
   ...getInitialValues(),
-  closeSettings: () => set({ settingsOpen: false }),
-  openSettings: () => set({ settingsOpen: true }),
   requestSession: (session) => set({ sessionRequest: { id: ++requestId, session } }),
   resetSelection: () => set({ selectionResetVersion: ++selectionVersion }),
   setValue: (name, value) => {
     if (value === undefined) return;
-    if (name === "workflow") {
-      set(statePatch("workflow", normalizeWorkflowSettings(value)));
-      return;
-    }
     set(statePatch(name, value));
   },
   resetValue: (name) => set(statePatch(name, cloneDefault(name))),

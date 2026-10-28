@@ -15,22 +15,22 @@ it.each(["resetMemoryState", "resetAllState"] as const)("keeps selection resets 
   }
 });
 
-it.each([false, true])("resets selection on every clearSession(%s) while retaining its settings contract", (preserveSettings) => {
+it("resets selection on every session clear", () => {
   intakeActions.resetSelection();
   let version = storeApi.getState().selectionResetVersion;
   for (let attempt = 0; attempt < 3; attempt++) {
     storeApi.setState({
       documentSelected: true, session: "session-1", document: "document.pdf",
       baseUrl: "https://storage.example.test", sasToken: "test-token", numOfPages: 3,
-      settingsOpen: true, isSessionInProcess: true, uploadingStepStatus: true,
+      isSessionInProcess: true, uploadingStepStatus: true,
       provisionStepStatus: true, indexingStepStatus: true,
       sessionRequest: { id: 1, session: "session-1" },
     });
-    intakeActions.clearSession(preserveSettings);
+    intakeActions.clearSession();
     expect(storeApi.getState().selectionResetVersion).toBeGreaterThan(version);
     expect(storeApi.getState()).toMatchObject({
       documentSelected: false, session: null, document: null, baseUrl: null,
-      sasToken: null, numOfPages: 1, settingsOpen: preserveSettings,
+      sasToken: null, numOfPages: 1,
       isSessionInProcess: false, uploadingStepStatus: false,
       provisionStepStatus: false, indexingStepStatus: false, sessionRequest: null,
     });

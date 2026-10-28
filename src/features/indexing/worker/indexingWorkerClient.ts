@@ -51,13 +51,13 @@ async function runWorker<T>(command: unknown): Promise<T> {
       reject(err);
     };
 
-    worker.onerror = () => {
+    worker.onerror = (event) => {
       if (settled) {
         return;
       }
       settled = true;
       cleanup();
-      reject(new Error("Indexing worker failed"));
+      reject(event);
     };
 
     worker.postMessage(command);

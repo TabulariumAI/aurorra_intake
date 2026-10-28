@@ -5,7 +5,6 @@ import type {
 } from "../type/indexing.types";
 import { ENRICHMENT_STEPS, PAGE_PROGRESS_STAGES } from "../config/indexing.config";
 import type { ProgressJob } from "../../progressview/type/progress.types";
-import { createIndexingPayload } from "../../choices/service/choicesData";
 
 type ErrorLike = {
   error?: unknown;
@@ -40,9 +39,16 @@ function resolveStatusResponse(value: unknown): IndexingStatusResponse {
   const candidate = value as {
     status?: unknown;
     data?: unknown;
+    etag?: unknown;
   };
   const status = typeof candidate.status === "string" ? candidate.status : "";
-  if (status === "pending" || status === "processing" || status === "completed" || status === "error") {
+  if (status === "completed") {
+    if (typeof candidate.etag !== "string" || !candidate.etag.trim()) {
+      throw new Error("Indexing completed without a metadata ETag.");
+    }
+    return { status, data: String(candidate.data ?? ""), etag: candidate.etag };
+  }
+  if (status === "pending" || status === "processing" || status === "error") {
     return { status, data: String(candidate.data ?? "") };
   }
 
@@ -62,14 +68,6 @@ async function* pollSteps(intervalMs: number, steps: number) {
     yield Math.floor(elapsedMs / stepMs);
     elapsedMs += waitMs;
   }
-}
-
-function normalizeChoices(value: unknown, runtime: IndexingRuntime): unknown[] {
-  const choices = runtime.choices.normalizeChoices(value, runtime.choiceStructure);
-  if (!Array.isArray(choices)) {
-    throw new Error("Index choices are not available.");
-  }
-  return choices;
 }
 
 class IndexingService implements IndexingServiceActions {
@@ -95,34 +93,20 @@ class IndexingService implements IndexingServiceActions {
         throw new Error(runtime.alert.format(runtime.messages.SESSION_REQ_INFO));
       }
 
-      const choices = normalizeChoices(runtime.store.get("indexChoices"), runtime);
-      runtime.store.set("indexChoices", choices);
-      const jurisdiction = runtime.store.get("jurisdiction");
-      const choicesBySession = runtime.store.get("choicesBySession");
-      runtime.store.set("choicesBySession", { ...choicesBySession, [String(session)]: { items: choices, jurisdiction } });
-      const levels = new Map<string, number>();
-      for (const choice of choices) {
-        if (typeof choice !== "object" || choice === null) continue;
-        const { level, service } = choice as { level?: unknown; service?: unknown };
-        if (typeof service === "string" && typeof level === "number") {
-          levels.set(service, level);
-        }
-      }
+      const { choices, jurisdiction, scope } = runtime.config;
+      const levels = new Map(choices.map(choice => [choice.service, choice.level]));
 
-      const pages = runtime.choices.getActualPages(
-        choices,
-        runtime.store.get("numOfPages"),
-      );
+      const pageCount = Number(runtime.store.get("numOfPages"));
+      const pages = !scope || "all" in scope ? pageCount : Math.min(pageCount, scope.first + scope.last);
       const sessionId = String(session);
-      let isComplete = await this.checkStatus(sessionId);
-      if (!isComplete) {
+      let status = await this.checkStatus(sessionId);
+      if (status.status !== "completed") {
         runtime.progress.receive(lastProgress);
-        const indexedChoices = createIndexingPayload(choices);
-        await this.start(sessionId, documentName, indexedChoices, jurisdiction);
+        await this.start(sessionId, documentName, choices, jurisdiction);
 
         let elapsedMs = 0;
         for (const stage of PAGE_PROGRESS_STAGES) {
-          if (isComplete) break;
+          if (status.status === "completed") break;
           const jobId = stage === lastProgress.message ? lastProgress.jobId : crypto.randomUUID();
           for (let page = 1; page <= pages; page++) {
             lastProgress = {
@@ -135,40 +119,40 @@ class IndexingService implements IndexingServiceActions {
             await delay(runtime.intervalPageMs);
             elapsedMs += runtime.intervalPageMs;
             if (elapsedMs >= runtime.baseIntervalMs) {
-              isComplete = await this.checkStatus(sessionId);
+              status = await this.checkStatus(sessionId);
               elapsedMs = 0;
             }
-            if (isComplete) break;
+            if (status.status === "completed") break;
           }
-          if (!isComplete && pages > 0) runtime.progress.receive({ ...lastProgress, phase: "completed" });
+          if (status.status !== "completed" && pages > 0) runtime.progress.receive({ ...lastProgress, phase: "completed" });
         }
 
         for (const [service, message] of ENRICHMENT_STEPS) {
-          if (isComplete || (levels.get(service) ?? 0) <= 0) continue;
+          if (status.status === "completed" || (levels.get(service) ?? 0) <= 0) continue;
           lastProgress = { jobId: crypto.randomUUID(), message, phase: "started" };
           runtime.progress.receive(lastProgress);
           for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
-            isComplete = await this.checkStatus(sessionId);
-            if (isComplete) break;
+            status = await this.checkStatus(sessionId);
+            if (status.status === "completed") break;
           }
-          if (!isComplete) {
+          if (status.status !== "completed") {
             runtime.progress.receive({ ...lastProgress, phase: "completed" });
           }
         }
 
-        if (!isComplete) {
+        if (status.status !== "completed") {
           lastProgress = { jobId: crypto.randomUUID(), message: "Analyzing Index Quality", phase: "started" };
           runtime.progress.receive(lastProgress);
           for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
-            isComplete = await this.checkStatus(sessionId);
-            if (isComplete) break;
+            status = await this.checkStatus(sessionId);
+            if (status.status === "completed") break;
           }
-          if (!isComplete) {
+          if (status.status !== "completed") {
             runtime.progress.receive({ ...lastProgress, phase: "completed" });
           }
         }
 
-        if (!isComplete) {
+        if (status.status !== "completed") {
           lastProgress = {
             jobId: crypto.randomUUID(),
             message: "Retrieving processed data...",
@@ -179,12 +163,12 @@ class IndexingService implements IndexingServiceActions {
           for await (const step of pollSteps(runtime.baseIntervalMs, 11)) {
             lastProgress = { ...lastProgress, progress: { completed: step + 1, total: 11, unit: "steps" } };
             runtime.progress.receive(lastProgress);
-            isComplete = await this.checkStatus(sessionId);
-            if (isComplete) break;
+            status = await this.checkStatus(sessionId);
+            if (status.status === "completed") break;
           }
         }
 
-        if (!isComplete) {
+        if (status.status !== "completed") {
           runtime.progress.receive({ ...lastProgress, phase: "info", progress: null });
           runtime.progress.receive({
             jobId: crypto.randomUUID(),
@@ -205,11 +189,19 @@ class IndexingService implements IndexingServiceActions {
         }
         runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
-      lastProgress = { jobId: crypto.randomUUID(), message: "Generating IQ report", phase: "started" };
-      runtime.progress.receive(lastProgress);
-      await runtime.iqWorkerClient.generateReport(runtime.getAuthToken(), sessionId);
-      runtime.progress.receive({ ...lastProgress, phase: "completed" });
-      runtime.onIndexed({ session: sessionId, document: String(documentName) });
+      if (runtime.config.iq) {
+        lastProgress = { jobId: crypto.randomUUID(), message: "Generating IQ report", phase: "started" };
+        runtime.progress.receive(lastProgress);
+        await runtime.iqWorkerClient.generateReport(runtime.getAuthToken(), sessionId);
+        runtime.progress.receive({ ...lastProgress, phase: "completed" });
+      }
+      if (runtime.config.document) {
+        lastProgress = { jobId: crypto.randomUUID(), message: "Generating the image package", phase: "started" };
+        runtime.progress.receive(lastProgress);
+        await runtime.imageWorkerClient.generatePackage(runtime.getAuthToken(), sessionId);
+        runtime.progress.receive({ ...lastProgress, phase: "completed" });
+      }
+      runtime.onIndexed({ session: sessionId, document: String(documentName), etag: status.etag });
       runtime.eventBus.emit(runtime.events.reRoute, {
         [runtime.events.reRoute.detail.stage]: "metadata",
       });
@@ -246,13 +238,10 @@ class IndexingService implements IndexingServiceActions {
     try {
       const response = await runtime.indexingWorkerClient.status(token, session);
       const data = resolveStatusResponse(response);
-      if (data.status === "completed") {
-        return true;
-      }
       if (data.status === "error") {
         throw new Error(data.data);
       }
-      return false;
+      return data;
     } catch (error) {
       console.error("[Intake:indexing]", error);
       const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {

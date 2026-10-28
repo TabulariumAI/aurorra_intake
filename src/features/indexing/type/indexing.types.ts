@@ -1,5 +1,7 @@
+import type { IntakeConfig } from "../../intake/type/intake.types";
 import type { StoreAdapter } from "../../../store/type/store.types";
 import type { ProgressActions } from "../../progressview/type/progress.types";
+import type { ImageWorkerClient } from "../../image/type/image.types";
 import type { IqWorkerClient } from "../../iq/type/iq.types";
 
 export type IndexingWorkerCommand =
@@ -45,19 +47,19 @@ export type IndexingWorkerConfig = {
 
 export type IndexingStatusValue = "pending" | "processing" | "completed" | "error";
 
-export type IndexingStatusResponse = {
-  status: IndexingStatusValue;
-  data: string;
-};
+export type IndexingStatusResponse =
+  | { status: "completed"; data: string; etag: string }
+  | { status: Exclude<IndexingStatusValue, "completed">; data: string };
 
 export type IndexingServiceActions = {
   process(): Promise<void>;
   start(session: string, name: unknown, choices: unknown, jurisdiction: string | null): Promise<void>;
-  checkStatus(session: string): Promise<boolean>;
+  checkStatus(session: string): Promise<IndexingStatusResponse>;
 };
 
 export type IndexingRuntime = {
-  onIndexed(result: { session: string; document: string }): void;
+  config: IntakeConfig;
+  onIndexed(result: { session: string; document: string; etag: string }): void;
   alert: {
     format(message: unknown, args?: Record<string, string>): string;
   };
@@ -72,15 +74,11 @@ export type IndexingRuntime = {
     reRoute: { detail: { stage: string } };
   };
   store: StoreAdapter;
-  choices: {
-    getActualPages(choices: unknown, pages: unknown): number;
-    normalizeChoices(choices: unknown, structure: unknown): unknown[];
-  };
-  choiceStructure: unknown;
   baseIntervalMs: number;
   intervalPageMs: number;
   indexingWorkerClient: IndexingWorkerClient;
   iqWorkerClient: IqWorkerClient;
+  imageWorkerClient: ImageWorkerClient;
   progress: ProgressActions;
   getAuthToken(): string;
 };

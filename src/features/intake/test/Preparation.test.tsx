@@ -1,3 +1,4 @@
+import { intakeConfig } from "../../../test/intakeConfig";
 import { pageSize } from "../../../test/pageSize";
 import { defaultViewerConfig } from "@tabulariumai/aurora-lens";
 import type { ViewerConfig } from "@tabulariumai/aurora-lens";
@@ -41,7 +42,6 @@ vi.mock("../../select/component/SelectViewer", () => ({
 }));
 vi.mock("../service/intakeOrchestrator", () => ({ createIntakeOrchestrator: () => ({ route: mocks.route }) }));
 vi.mock("../../session/worker/sessionWorkerClient", () => ({ createSessionWorkerClient: () => ({}) }));
-vi.mock("../../choices/worker/choicesWorkerClient", () => ({ createSessionDataWorkerClient: () => ({}) }));
 vi.mock("../../upload/worker/uploadWorkerClient", () => ({ createUploadWorkerClient: () => ({}) }));
 vi.mock("../../provision/worker/provisionWorkerClient", () => ({ createProvisionWorkerClient: () => ({}) }));
 vi.mock("../../indexing/worker/indexingWorkerClient", () => ({ createIndexingWorkerClient: () => ({}) }));
@@ -59,7 +59,7 @@ it.each(["success", "failure"])("renders preparation during export and handles %
   mocks.exportTiff.mockReturnValueOnce(new Promise<Blob>((ready, fail) => { resolve = ready; reject = fail; }));
   const onStarted = vi.fn();
   const onCanceled = vi.fn();
-  const { container } = render(<Container
+  const { container } = render(<Container config={{ ...intakeConfig, review: false, iq: true, document: true }}
     authToken="token"
     apiGatewayUrl="https://gateway.test"
     pageSize={pageSize}
@@ -76,7 +76,6 @@ it.each(["success", "failure"])("renders preparation during export and handles %
     renderSelect={renderItem}
     renderPreview={renderItem}
     renderProgress={renderItem}
-    renderChoices={renderItem}
   />);
   fireEvent.change(container.querySelector("input[type=file]")!, { target: { files: [new File(["pdf"], "source.pdf", { type: "application/pdf" })] } });
   const start = await screen.findByRole("button", { name: "Start" });

@@ -2,12 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createSelectService, getSelectErrorMessage } from "../service/selectService";
 import type { SelectRuntime } from "../type/selectRuntime.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
-import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    jurisdiction: null,
-    settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -21,9 +18,6 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     baseUrl: null,
     document: null,
     numOfPages: 1,
-    indexChoices: null,
-    choicesBySession: {},
-    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 
@@ -47,8 +41,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     },
     events: {
       reRoute: { detail: { stage: "stage", file: "file", jobId: "jobId" } },
-      showChoices: { name: "showChoices" },
-    },
+      },
     progress: { receive, reset: vi.fn() },
     store: createStore(seed),
   };
@@ -73,7 +66,6 @@ describe("selectService", () => {
 
     service.setDocumentSelected(true);
     await service.start(7, getDocument);
-    service.showSettings();
 
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", true);
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 7);
@@ -92,7 +84,6 @@ describe("selectService", () => {
       runtime.events.reRoute,
       { stage: "session", file, jobId },
     );
-    expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.showChoices);
   });
 
   it("fails only preparation when document preparation fails", async () => {

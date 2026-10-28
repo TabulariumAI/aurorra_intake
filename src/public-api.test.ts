@@ -1,15 +1,13 @@
+import * as intake from "./public-api";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AurorraIntake,
-  Choices,
-  createSessionDataWorkerClient,
   createSessionWorkerClient,
   getIntakeState,
   useIntakeState,
   intakeActions,
-  loadSessionData,
   loadSession,
 } from "./public-api";
 
@@ -41,13 +39,14 @@ describe("public-api", () => {
 
   it("exports the used intake surface", () => {
     expect(AurorraIntake).toBeTypeOf("function");
-    expect(Choices).toBeTypeOf("function");
-    expect(createSessionDataWorkerClient).toBeTypeOf("function");
     expect(createSessionWorkerClient).toBeTypeOf("function");
     expect(getIntakeState).toBeTypeOf("function");
     expect(useIntakeState).toBeTypeOf("function");
-    expect(intakeActions.openSettings).toBeTypeOf("function");
-    expect(loadSessionData).toBeTypeOf("function");
+    expect(intakeActions.requestSession).toBeTypeOf("function");
     expect(loadSession).toBeTypeOf("function");
   });
+});
+
+it("exposes no choices editor, backend loader, or choices persistence", () => {
+  for (const name of ["Choices", "ChoiceFields", "useChoices", "loadSessionData", "createSessionDataWorkerClient", "jurisdictionCode"]) expect(intake).not.toHaveProperty(name);
 });

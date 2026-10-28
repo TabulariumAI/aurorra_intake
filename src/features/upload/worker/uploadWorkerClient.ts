@@ -54,9 +54,7 @@ async function runWorker<T>(command: unknown): Promise<T> {
       if (settled) return;
       settled = true;
       cleanup();
-      reject(resolveError(event.message || "Upload worker failed", {
-        details: { filename: event.filename, lineno: event.lineno, colno: event.colno, error: event.error },
-      }));
+      reject(event);
     };
 
     worker.postMessage(command);

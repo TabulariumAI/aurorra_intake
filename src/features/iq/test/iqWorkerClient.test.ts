@@ -7,7 +7,7 @@ it.each(["success", "failure", "crash"])("terminates its standalone worker on %s
   let worker!: WorkerMock;
   class WorkerMock {
     onmessage: ((event: MessageEvent) => void) | null = null;
-    onerror: (() => void) | null = null;
+    onerror: ((event: ErrorEvent) => void) | null = null;
     postMessage = vi.fn();
     terminate = vi.fn();
     constructor(readonly url: URL) { worker = this; }
@@ -18,8 +18,9 @@ it.each(["success", "failure", "crash"])("terminates its standalone worker on %s
   expect(worker.postMessage).toHaveBeenCalledExactlyOnceWith({ apiBaseUrl: "https://gateway.test", token: "token", session: "session" });
   expect(worker.terminate).not.toHaveBeenCalled();
   if (outcome === "crash") {
-    const rejected = expect(result).rejects.toThrow("IQ worker failed");
-    worker.onerror!();
+    const event = new ErrorEvent("error", { message: "IQ startup failed" });
+    const rejected = expect(result).rejects.toBe(event);
+    worker.onerror!(event);
     await rejected;
   } else if (outcome === "failure") {
     const rejected = expect(result).rejects.toMatchObject({ message: "Denied", code: "denied", status: 403, details: { error: "Denied" } });
@@ -31,6 +32,6 @@ it.each(["success", "failure", "crash"])("terminates its standalone worker on %s
   }
   expect(worker.terminate).toHaveBeenCalledOnce();
   worker.onmessage!({ data: { ok: true, data: {} } } as MessageEvent);
-  worker.onerror!();
+  worker.onerror!(new ErrorEvent("error", { message: "Late failure" }));
   expect(worker.terminate).toHaveBeenCalledOnce();
 });

@@ -1,13 +1,11 @@
+import { intakeConfig } from "../../../test/intakeConfig";
 import { describe, expect, it, vi } from "vitest";
 import { createProvisionService } from "../service/ProvisionService";
 import type { ProvisionRuntime } from "../type/provision.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
-import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    jurisdiction: null,
-    settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -21,9 +19,6 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     baseUrl: null,
     document: "session-1.pdf",
     numOfPages: 1,
-    indexChoices: null,
-    choicesBySession: {},
-    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 
@@ -42,6 +37,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
   const receive = vi.fn();
   const restart = vi.fn();
   const runtime: ProvisionRuntime = {
+    config: { ...intakeConfig },
     alert: { format: vi.fn((message) => `formatted:${String(message)}`) },
     messages: {
       SESSION_MISSING: "session missing",
@@ -68,7 +64,8 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
 
 describe("ProvisionService", () => {
   it.each(["Texas, Harris County", null])("passes jurisdiction %s to the provision worker", async (jurisdiction) => {
-    const { runtime } = createRuntime({ jurisdiction });
+    const { runtime } = createRuntime();
+    runtime.config.jurisdiction = jurisdiction;
     await createProvisionService(runtime).process();
     expect(runtime.provisionWorkerClient.provision).toHaveBeenCalledWith("token-1", "session-1", "session-1.pdf", jurisdiction);
   });

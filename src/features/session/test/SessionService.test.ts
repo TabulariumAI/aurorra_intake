@@ -2,13 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createSessionService, loadSession, validateSessionDocument } from "../service/SessionService";
 import type { SessionRuntime } from "../type/session.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
-import { DEFAULT_WORKFLOW_SETTINGS } from "../../choices/service/choicesData";
 import { storeApi } from "../../../store/state/store";
 
 function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
   const values: StoreValues = {
-    jurisdiction: null,
-    settingsOpen: false,
     selectionResetVersion: 0,
     sessionRequest: null,
     isSessionInProcess: false,
@@ -22,9 +19,6 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
     baseUrl: null,
     document: null,
     numOfPages: 1,
-    indexChoices: null,
-    choicesBySession: {},
-    workflow: DEFAULT_WORKFLOW_SETTINGS,
     ...seed,
   };
 

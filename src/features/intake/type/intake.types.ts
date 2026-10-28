@@ -1,6 +1,7 @@
+import type { PageScope } from "aurora-core";
 import type { ReactNode, Ref } from "react";
 
-export type IntakeContainerName = "select" | "progress" | "settings";
+export type IntakeContainerName = "select" | "progress";
 
 export type IntakeContainerState = {
   panel: IntakeContainerName;
@@ -23,7 +24,6 @@ export type IntakeItemRenderer = (props: IntakeItemProps) => ReactNode;
 export type IntakeContainerProps = Pick<IntakeContainerState, "panel"> & {
   select: ReactNode;
   progress: ReactNode;
-  settings: ReactNode;
   selectPanelRef?: Ref<HTMLElement>;
 };
 
@@ -34,3 +34,12 @@ export type IntakeCalloutProps = {
 };
 
 export type IntakeCalloutRenderer = (props: IntakeCalloutProps) => ReactNode;
+
+export type IntakeConfig = {
+  review: boolean;
+  iq: boolean;
+  document: boolean;
+  choices: readonly { service: string; level: number }[];
+  jurisdiction: string | null;
+  scope: PageScope | null;
+};

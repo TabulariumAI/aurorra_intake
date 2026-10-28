@@ -21,11 +21,11 @@ export function createIqWorkerClient({ apiBaseUrl }: IqWorkerConfig): IqWorkerCl
           if (Object.prototype.hasOwnProperty.call(payload, "details")) error.details = payload.details;
           reject(error);
         };
-        worker.onerror = () => {
+        worker.onerror = (event) => {
           if (settled) return;
           settled = true;
           worker.terminate();
-          reject(new Error("IQ worker failed"));
+          reject(event);
         };
         worker.postMessage({ apiBaseUrl, session, token });
       });

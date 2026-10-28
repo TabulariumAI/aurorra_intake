@@ -11,8 +11,6 @@ import {
 
 function omitActions(state: StoreState): StoreValues {
   const {
-    closeSettings,
-    openSettings,
     setValue,
     resetValue,
     resetMemoryState,

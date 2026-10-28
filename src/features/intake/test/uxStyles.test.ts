@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { choiceFormStyles } from "../../choices/style/form.styles";
 import { progressMessageStyles, progressStyles } from "../../progressview/style/progress.styles";
 import { selectFormStyles, selectPanelStyles } from "../../select/style/select.styles";
 import { intakeContainerStyles } from "../style/intakeContainer.styles";
@@ -11,20 +10,6 @@ describe("intake styles", () => {
     expect(intakeContainerStyles).not.toHaveProperty("header");
     expect(intakeContainerStyles).not.toHaveProperty("title");
     expect(intakeContainerStyles).not.toHaveProperty("helper");
-    expect(choiceFormStyles.panelHeader).toMatchObject({
-      borderBottom: "1px solid var(--border-card)",
-      boxSizing: "border-box",
-      flex: "0 0 auto",
-      minHeight: "var(--panel-header-height)",
-      padding: "var(--panel-header-padding)",
-    });
-    expect(choiceFormStyles.panelTitle).toMatchObject({
-      fontSize: "var(--panel-title-size)",
-      fontWeight: "var(--panel-title-weight)",
-      letterSpacing: "var(--panel-title-tracking)",
-      lineHeight: "var(--panel-title-line-height)",
-    });
-    expect(choiceFormStyles.panel).toMatchObject({ color: "var(--title-ink)" });
     expect(selectPanelStyles.reviewPanel).toMatchObject({ borderTop: "1px solid var(--border-card)" });
   });
 

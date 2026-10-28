@@ -1,3 +1,4 @@
+import { intakeConfig } from "../../../test/intakeConfig";
 import { pageSize } from "../../../test/pageSize";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { IntakeContainerActions, IntakeItemProps, IntakeItemRenderer } from "../type/intake.types";
@@ -17,8 +18,8 @@ let capturedActions: IntakeContainerActions;
 let capturedProgress: ((event: { error?: string; jobId: string; message: string; phase: "started" | "completed" | "failed" }) => void) | null = null;
 const setSession = vi.fn();
 const workerMocks = vi.hoisted(() => ({
+  createImageWorkerClient: vi.fn(() => ({ generatePackage: vi.fn() })),
   createIqWorkerClient: vi.fn(() => ({ generateReport: vi.fn() })),
-  createSessionDataWorkerClient: vi.fn(() => ({ load: vi.fn() })),
   createSessionWorkerClient: vi.fn(() => ({
     newSession: vi.fn(),
     sessionData: vi.fn(),
@@ -26,6 +27,8 @@ const workerMocks = vi.hoisted(() => ({
     summary: vi.fn(),
   })),
 }));
+
+vi.mock("../../image/worker/imageWorkerClient", () => ({ createImageWorkerClient: workerMocks.createImageWorkerClient }));
 
 vi.mock("../../iq/worker/iqWorkerClient", () => ({ createIqWorkerClient: workerMocks.createIqWorkerClient }));
 
@@ -44,15 +47,15 @@ function wrap(name: string) {
   );
 }
 
-function hostProps(): Pick<ContainerProps, "pageSize" | "tiffPixelFormat" | "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderChoices" | "renderPreview" | "renderProgress" | "renderSelect" | "renderTolerance"> {
+function hostProps(): Pick<ContainerProps, "config" | "pageSize" | "tiffPixelFormat" | "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderPreview" | "renderProgress" | "renderSelect" | "renderTolerance"> {
   return {
+    config: { ...intakeConfig, review: false, iq: true, document: true },
     pageSize,
     tiffPixelFormat: "gray8",
     maxFileSizeBytes: 20 * 1024 * 1024,
     intervalMs: 13000,
     intervalPageMs: 500,
     onLoaderChange: vi.fn(),
-    renderChoices: wrap("choices"),
     renderPreview: wrap("preview"),
     renderProgress: wrap("progress"),
     renderSelect: wrap("select"),
@@ -81,21 +84,11 @@ vi.mock("../../select/service/selectService", () => ({
       setDocumentSelected: vi.fn(),
       start: vi.fn(),
       clear: vi.fn(),
-      emitChoices: vi.fn(),
     } as const;
   }),
 }));
 
-vi.mock("../../choices/service/ChoicesService", () => ({
-  createChoicesService: vi.fn((runtime: { eventBus: MockEventBus }) => {
-    captureEventBus(runtime);
-    return { load: vi.fn(), save: vi.fn() } as const;
-  }),
-}));
 
-vi.mock("../../choices/worker/choicesWorkerClient", () => ({
-  createSessionDataWorkerClient: workerMocks.createSessionDataWorkerClient,
-}));
 
 vi.mock("../../session/service/SessionService", () => ({
   createSessionService: vi.fn((runtime: { eventBus: MockEventBus }) => {
@@ -157,7 +150,6 @@ describe("Container", () => {
   beforeEach(() => {
     storeApi.getState().resetAllState();
     setSession.mockReset();
-    workerMocks.createSessionDataWorkerClient.mockClear();
     workerMocks.createSessionWorkerClient.mockClear();
     capturedEventBus = null;
     capturedProgress = null;
@@ -243,7 +235,6 @@ describe("Container", () => {
       expect(onReadyChange).toHaveBeenNthCalledWith(1, false);
       expect(onReadyChange).toHaveBeenLastCalledWith(true);
     });
-    expect(workerMocks.createSessionDataWorkerClient).not.toHaveBeenCalled();
     expect(workerMocks.createSessionWorkerClient).toHaveBeenCalledWith({
       apiBaseUrl: "https://user.example.com",
     });
@@ -366,51 +357,6 @@ describe("Container", () => {
     expect(screen.getByText("Screening complete")).toBeVisible();
   });
 
-  it("renders settings inside the intake container and closes to the prior panel", () => {
-    render(
-      <Container onIndexed={vi.fn()}
-        {...hostProps()}
-        authToken="token"
-        apiGatewayUrl="https://user.example.com"
-        onReadyChange={vi.fn()}
-      />,
-    );
-
-    expect(capturedEventBus).not.toBeNull();
-    act(() => {
-      capturedEventBus!.emit({ name: "showChoices" });
-    });
-
-    expect(screen.getByTestId("choices-host")).toBeVisible();
-    expect(screen.getByTestId("select-panel")).toHaveStyle({ display: "none" });
-    expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
-    expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-
-    act(() => storeApi.getState().closeSettings());
-
-    expect(screen.getByTestId("select-panel")).not.toHaveStyle({ display: "none" });
-    expect(screen.getByTestId("settings-panel")).toHaveStyle({ display: "none" });
-  });
-
-  it("opens settings from the intake store action", () => {
-    render(
-      <Container onIndexed={vi.fn()}
-        {...hostProps()}
-        authToken="token"
-        apiGatewayUrl="https://user.example.com"
-        onReadyChange={vi.fn()}
-      />,
-    );
-
-    act(() => {
-      storeApi.getState().openSettings();
-    });
-
-    expect(screen.getByTestId("settings-panel")).not.toHaveStyle({ display: "none" });
-    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-  });
-
   it("passes the intake selection reset version to the selection owner", () => {
     render(
       <Container onIndexed={vi.fn()}
@@ -431,47 +377,8 @@ describe("Container", () => {
   });
 });
 
-
-it("discards canceled settings and reopens accepted settings cleanly", () => {
-  storeApi.getState().resetAllState();
-  render(<Container onIndexed={vi.fn()} {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} />);
-  const original = storeApi.getState().indexChoices;
-  const workflow = storeApi.getState().workflow;
-  act(() => storeApi.getState().openSettings());
-  fireEvent.click(screen.getByRole("radio", { name: /Level3 -/ }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Review Before Index" }));
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
-  expect(storeApi.getState().indexChoices).toEqual(original);
-  expect(storeApi.getState().workflow).toEqual(workflow);
-  act(() => storeApi.getState().openSettings());
-  expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
-  expect(screen.getByRole("radio", { name: /Level3 -/ })).not.toBeChecked();
-});
-
-it("reports only the active renderer through settings, progress, and restart", () => {
-  storeApi.getState().resetAllState();
-  render(<Container onIndexed={vi.fn()} {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} />);
-  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
-  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
-  expect(screen.getByTestId("choices-host")).toHaveAttribute("data-active", "false");
-  act(() => storeApi.getState().openSettings());
-  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "false");
-  expect(screen.getByTestId("choices-host")).toHaveAttribute("data-active", "true");
-  act(() => storeApi.getState().closeSettings());
-  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
-  act(() => {
-    capturedActions.showProgress();
-    capturedEventBus!.emit({ name: "reRoute" }, { stage: "session", jobId: "session-1" });
-    capturedProgress!({ jobId: "session-1", message: "Creating a session", phase: "failed", error: "Failed" });
-  });
-  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "false");
-  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "true");
-  act(() => storeApi.getState().openSettings());
-  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
-  act(() => storeApi.getState().closeSettings());
-  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "true");
-  fireEvent.click(screen.getByRole("button", { name: "Cancel and Restart" }));
-  expect(screen.getByTestId("progress-host")).toHaveAttribute("data-active", "false");
-  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
+it("wires the intake-owned image client with the configured gateway", () => {
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+  expect(workerMocks.createImageWorkerClient).toHaveBeenCalledWith({ apiBaseUrl: "https://user.example.com" });
+  expect(vi.mocked(createIndexingService).mock.calls.at(-1)![0].imageWorkerClient).toBe(workerMocks.createImageWorkerClient.mock.results.at(-1)!.value);
 });

@@ -88,7 +88,7 @@ export class ProvisionService {
         token,
         String(session),
         String(documentName),
-        runtime.store.get("jurisdiction"),
+        runtime.config.jurisdiction,
       );
       const result = normalizeProvisionResponse(response);
 

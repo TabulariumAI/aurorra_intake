@@ -5,12 +5,10 @@ export function IntakeContainer({
   panel,
   select,
   progress,
-  settings,
   selectPanelRef,
 }: IntakeContainerProps) {
   const isSelectPanelVisible = panel === "select";
   const isProgressPanelVisible = panel === "progress";
-  const isSettingsPanelVisible = panel === "settings";
 
   return (
     <div id="intake-container" data-testid="intake-container" style={intakeContainerStyles.shell}>
@@ -28,13 +26,6 @@ export function IntakeContainer({
         style={getIntakeSlotStyle(isProgressPanelVisible)}
       >
         {progress}
-      </section>
-      <section
-        id="settings-panel"
-        data-testid="settings-panel"
-        style={{ ...getIntakeSlotStyle(isSettingsPanelVisible), overflow: "hidden" }}
-      >
-        {settings}
       </section>
     </div>
   );
