@@ -6,7 +6,7 @@ export const PAGE_PROGRESS_STAGES = [
 ] as const;
 
 export const ENRICHMENT_STEPS = [
+  ["ExecutionEnrichment", "Verifying signatures and seals"],
   ["LegalEnrichment", "Enriching legal descriptions"],
   ["PartyEnrichment", "Enriching party information"],
-  ["Validation", "Validating document data"],
 ] as const;

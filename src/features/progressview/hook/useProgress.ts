@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import type { ProgressJob, ProgressState } from "../type/progress.types";
+import type { ProgressJob } from "aurora-core";
+import type { ProgressState } from "../type/progress.types";
 
 function mergeJob(current: ProgressJob, event: ProgressJob): ProgressJob {
   const restarting = event.phase === "started" && (current.phase === "completed" || current.phase === "failed");

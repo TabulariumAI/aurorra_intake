@@ -1,5 +1,6 @@
 import { getIntakeSlotStyle, intakeContainerStyles } from "../style/intakeContainer.styles";
 import type { IntakeContainerProps } from "../type/intake.types";
+import { ErrorBoundary } from "aurora-core";
 
 export function IntakeContainer({
   panel,
@@ -18,14 +19,14 @@ export function IntakeContainer({
         data-testid="select-panel"
         style={getIntakeSlotStyle(isSelectPanelVisible)}
       >
-        {select}
+        <ErrorBoundary title="Select Document" resetKey={select}>{select}</ErrorBoundary>
       </section>
       <section
         id="progress-panel"
         data-testid="progress-panel"
         style={getIntakeSlotStyle(isProgressPanelVisible)}
       >
-        {progress}
+        <ErrorBoundary title="Indexing Agent" resetKey={progress}>{progress}</ErrorBoundary>
       </section>
     </div>
   );

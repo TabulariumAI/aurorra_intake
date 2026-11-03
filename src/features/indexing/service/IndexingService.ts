@@ -4,7 +4,7 @@ import type {
   IndexingStatusResponse,
 } from "../type/indexing.types";
 import { ENRICHMENT_STEPS, PAGE_PROGRESS_STAGES } from "../config/indexing.config";
-import type { ProgressJob } from "../../progressview/type/progress.types";
+import type { ProgressJob } from "aurora-core";
 
 type ErrorLike = {
   error?: unknown;
@@ -140,8 +140,9 @@ class IndexingService implements IndexingServiceActions {
           }
         }
 
-        if (status.status !== "completed") {
-          lastProgress = { jobId: crypto.randomUUID(), message: "Analyzing Index Quality", phase: "started" };
+        for (const message of ["Analyzing Index Quality", "Analyzing Index Compliance"]) {
+          if (status.status === "completed") break;
+          lastProgress = { jobId: crypto.randomUUID(), message, phase: "started" };
           runtime.progress.receive(lastProgress);
           for await (const _step of pollSteps(runtime.baseIntervalMs, 1)) {
             status = await this.checkStatus(sessionId);

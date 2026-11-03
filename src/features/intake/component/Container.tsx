@@ -24,7 +24,7 @@ import { intakeAlert, intakeMessages } from "../service/intakeMessages";
 import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
 import type { IntakeCompletePayload, IntakeRouteEvent, IntakeRoutePayload } from "../service/intakeOrchestrator";
 import type { IntakeConfig, IntakeCalloutRenderer, IntakeItemRenderer } from "../type/intake.types";
-import { ProgressView } from "../../progressview/component/ProgressView";
+import { ConfButton, ProgressView } from "aurora-core";
 import { useProgress } from "../../progressview/hook/useProgress";
 
 type EventConfig = {
@@ -259,7 +259,18 @@ export function Container({
       select={selectContent}
       progress={renderProgress({
         active: panel === "progress",
-        children: <ProgressView jobs={progress.jobs} onBack={restart} />,
+        children: (
+          <ProgressView
+            autoScroll={true}
+            highlightLast={false}
+            fillCompletion={false}
+            process="Document processing"
+            intro="I’ll keep you updated as I process your document."
+            errorColor="#B42318"
+            jobs={progress.jobs}
+            failureAction={<ConfButton label="Cancel and Restart" onConfirm={restart} requireConfirmation={false} variant="secondary" />}
+          />
+        ),
         helper: panel === "progress" ? state.container.helper : "",
       })}
     />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { progressMessageStyles, progressStyles } from "../../progressview/style/progress.styles";
+import { progressMessageStyles, progressStyles } from "aurora-core";
 import { selectFormStyles, selectPanelStyles } from "../../select/style/select.styles";
 import { intakeContainerStyles } from "../style/intakeContainer.styles";
 
