@@ -15,7 +15,7 @@ it.each(["success", "failure", "crash"])("terminates its standalone worker on %s
   vi.stubGlobal("Worker", WorkerMock);
   const result = createImageWorkerClient({ apiBaseUrl: "https://gateway.test" }).generatePackage("token", "session");
   expect(worker.url.pathname).toContain("/image/worker/ImageWorker.ts");
-  expect(worker.postMessage).toHaveBeenCalledExactlyOnceWith({ apiBaseUrl: "https://gateway.test", token: "token", session: "session" });
+  expect(worker.postMessage).toHaveBeenCalledExactlyOnceWith({  apiBaseUrl: "https://gateway.test", token: "token", session: "session" });
   expect(worker.terminate).not.toHaveBeenCalled();
   if (outcome === "crash") {
     const event = new ErrorEvent("error", { message: "Image startup failed" });

@@ -1,3 +1,5 @@
+export const INDEXING_COMPLETE_JOB = "indexing-complete";
+
 export const PAGE_PROGRESS_STAGES = [
   "Refining document",
   "Recognizing document",

@@ -41,10 +41,10 @@ vi.mock("../../select/component/SelectViewer", () => ({
   },
 }));
 vi.mock("../service/intakeOrchestrator", () => ({ createIntakeOrchestrator: () => ({ route: mocks.route }) }));
-vi.mock("../../session/worker/sessionWorkerClient", () => ({ createSessionWorkerClient: () => ({}) }));
-vi.mock("../../upload/worker/uploadWorkerClient", () => ({ createUploadWorkerClient: () => ({}) }));
-vi.mock("../../provision/worker/provisionWorkerClient", () => ({ createProvisionWorkerClient: () => ({}) }));
-vi.mock("../../indexing/worker/indexingWorkerClient", () => ({ createIndexingWorkerClient: () => ({}) }));
+vi.mock("../../session/worker/sessionWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../session/worker/sessionWorkerClient")>(), createSessionWorkerClient: () => ({}) }));
+vi.mock("../../upload/worker/uploadWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../upload/worker/uploadWorkerClient")>(), createUploadWorkerClient: () => ({}) }));
+vi.mock("../../provision/worker/provisionWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../provision/worker/provisionWorkerClient")>(), createProvisionWorkerClient: () => ({}) }));
+vi.mock("../../indexing/worker/indexingWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../indexing/worker/indexingWorkerClient")>(), createIndexingWorkerClient: () => ({}) }));
 
 const renderItem: IntakeItemRenderer = ({ active, children }) => <div data-active={active}>{children}</div>;
 

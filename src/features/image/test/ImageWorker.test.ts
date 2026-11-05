@@ -47,7 +47,7 @@ it("returns network failures", async () => {
 
 it.each([
   [{ ...command, token: "" }, "missing_auth_token"],
-  [{ ...command, apiBaseUrl: "" }, "missing_api_base_url"],
+  [{  ...command, apiBaseUrl: "" }, "missing_api_base_url"],
   [{ ...command, session: " " }, "invalid_session"],
 ])("validates required command data", async (input, code) => {
   const fetch = vi.fn();

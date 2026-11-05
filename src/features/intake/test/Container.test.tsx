@@ -28,9 +28,9 @@ const workerMocks = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("../../image/worker/imageWorkerClient", () => ({ createImageWorkerClient: workerMocks.createImageWorkerClient }));
+vi.mock("../../image/worker/imageWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../image/worker/imageWorkerClient")>(), createImageWorkerClient: workerMocks.createImageWorkerClient }));
 
-vi.mock("../../iq/worker/iqWorkerClient", () => ({ createIqWorkerClient: workerMocks.createIqWorkerClient }));
+vi.mock("../../iq/worker/iqWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../iq/worker/iqWorkerClient")>(), createIqWorkerClient: workerMocks.createIqWorkerClient }));
 
 it("wires the intake-owned IQ client with the configured gateway", () => {
   render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
@@ -101,7 +101,7 @@ vi.mock("../../session/service/SessionService", () => ({
   }),
 }));
 
-vi.mock("../../session/worker/sessionWorkerClient", () => ({
+vi.mock("../../session/worker/sessionWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../session/worker/sessionWorkerClient")>(),
   createSessionWorkerClient: workerMocks.createSessionWorkerClient,
 }));
 
@@ -157,20 +157,20 @@ describe("Container", () => {
 
   it("passes both intervals to indexing and refreshes the page interval", () => {
     const props = { ...hostProps(), authToken: "token", apiGatewayUrl: "https://user.example.com", onReadyChange: vi.fn(), onIndexed: vi.fn() };
-    const { rerender } = render(<Container {...props} />);
+    const { rerender } = render(<Container  {...props} />);
     expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 500 }));
-    rerender(<Container {...props} intervalPageMs={137} />);
+    rerender(<Container  {...props} intervalPageMs={137} />);
     expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 137 }));
   });
 
   it("passes the host error handler to session creation and refreshes it", () => {
     const props = { ...hostProps(), authToken: "token", apiGatewayUrl: "https://user.example.com", onReadyChange: vi.fn(), onIndexed: vi.fn() };
     const onError = vi.fn(() => true);
-    const { rerender } = render(<Container {...props} onError={onError} />);
+    const { rerender } = render(<Container  {...props} onError={onError} />);
     expect(createSessionService).toHaveBeenLastCalledWith(expect.objectContaining({ onError }));
 
     const updated = vi.fn(() => false);
-    rerender(<Container {...props} onError={updated} />);
+    rerender(<Container  {...props} onError={updated} />);
     expect(createSessionService).toHaveBeenLastCalledWith(expect.objectContaining({ onError: updated }));
   });
 
@@ -381,4 +381,30 @@ it("wires the intake-owned image client with the configured gateway", () => {
   render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
   expect(workerMocks.createImageWorkerClient).toHaveBeenCalledWith({ apiBaseUrl: "https://user.example.com" });
   expect(vi.mocked(createIndexingService).mock.calls.at(-1)![0].imageWorkerClient).toBe(workerMocks.createImageWorkerClient.mock.results.at(-1)!.value);
+});
+
+
+it("wires the next intake action through the existing restart and host cancellation", async () => {
+  const onCanceled = vi.fn();
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} onCanceled={onCanceled} />);
+  act(() => capturedActions.showProgress());
+  const runtime = vi.mocked(createIndexingService).mock.calls.at(-1)![0];
+  act(() => runtime.restart());
+  expect(onCanceled).toHaveBeenCalledOnce();
+  expect(screen.getByTestId("select-host")).toHaveAttribute("data-active", "true");
+});
+
+
+it("uses the completed job to show the compact summary and retain expandable processing details", () => {
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+  act(() => capturedActions.showProgress());
+  act(() => {
+    capturedProgress!({ jobId: "upload", message: "Uploading your document", phase: "completed" });
+    capturedProgress!({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed" });
+  });
+  expect(screen.getByText("Indexing complete")).toBeVisible();
+  expect(screen.getByText("Uploading your document")).not.toBeVisible();
+  expect(screen.queryByText("Follow each step as it completes.")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Processing details"));
+  expect(screen.getByText("Uploading your document")).toBeVisible();
 });

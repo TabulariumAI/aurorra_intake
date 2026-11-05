@@ -1,26 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createIntakeOrchestrator } from "../service/intakeOrchestrator";
-import type { StoreAdapter } from "../../../store/type/store.types";
-
-function createStore(seed: Record<string, unknown> = {}): StoreAdapter {
-  const values = {
-    baseUrl: "https://storage.test",
-    document: "session-1.pdf",
-    numOfPages: 3,
-    sasToken: "sas-1",
-    session: "session-1",
-    ...seed,
-  } as Record<string, unknown>;
-
-  return {
-    clearStorage: vi.fn(),
-    get: vi.fn((key: string) => values[key]),
-    getStoredInformation: vi.fn(),
-    reset: vi.fn(),
-    set: vi.fn(),
-  } as unknown as StoreAdapter;
-}
-
 describe("IntakeOrchestrator", () => {
   it("routes session, upload, provision, and indexing stages to matching services", async () => {
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
@@ -32,7 +11,6 @@ describe("IntakeOrchestrator", () => {
     };
     const orchestrator = createIntakeOrchestrator({
       getServices: () => services,
-      store: createStore(),
     });
 
     await orchestrator.route({ stage: "session", file, jobId: "job-1" });
@@ -49,7 +27,6 @@ describe("IntakeOrchestrator", () => {
   it("requires a document for session and upload stages", async () => {
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
-      store: createStore(),
     });
 
     await expect(orchestrator.route({ stage: "session" })).rejects.toThrow("Document is missing.");
@@ -59,7 +36,6 @@ describe("IntakeOrchestrator", () => {
   it("requires the session job id", async () => {
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
-      store: createStore(),
     });
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
 
@@ -69,7 +45,6 @@ describe("IntakeOrchestrator", () => {
   it("requires an explicit route stage", async () => {
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
-      store: createStore(),
     });
 
     await expect(orchestrator.route({} as never)).rejects.toThrow("Unknown intake route stage: undefined");
@@ -79,7 +54,6 @@ describe("IntakeOrchestrator", () => {
     const file = new File(["pdf"], "document.pdf", { type: "application/pdf" });
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
-      store: createStore(),
     });
 
     await expect(orchestrator.route({ stage: "session", file, jobId: "job-1" })).rejects.toThrow("Session service is not ready.");
@@ -88,46 +62,21 @@ describe("IntakeOrchestrator", () => {
     await expect(orchestrator.route({ stage: "indexing" })).rejects.toThrow("Indexing service is not ready.");
   });
 
-  it("emits metadata completion payload from persisted store values", async () => {
+  it("forwards the captured completion instead of reading the currently selected session", async () => {
     const onComplete = vi.fn();
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
       onComplete,
-      store: createStore(),
     });
 
-    await orchestrator.route({ stage: "metadata" });
+    await orchestrator.route({ stage: "metadata", completion: { batch: null, group: null, session: "indexed-session", etag: "indexed-etag", data: { baseUrl: "https://storage/indexed", document: "indexed.pdf", numOfPages: 4, sasToken: "indexed-sas" } } });
 
-    expect(onComplete).toHaveBeenCalledWith({
-      batch: null,
-      data: {
-        baseUrl: "https://storage.test",
-        document: "session-1.pdf",
-        numOfPages: 3,
-        sasToken: "sas-1",
-      },
-      group: null,
-      session: "session-1",
-    });
-  });
-
-  it("emits null when metadata completion has no session", async () => {
-    const onComplete = vi.fn();
-    const orchestrator = createIntakeOrchestrator({
-      getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
-      onComplete,
-      store: createStore({ session: null }),
-    });
-
-    await orchestrator.route({ stage: "metadata" });
-
-    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ session: null }));
+    expect(onComplete).toHaveBeenCalledExactlyOnceWith({ batch: null, group: null, session: "indexed-session", etag: "indexed-etag", data: { baseUrl: "https://storage/indexed", document: "indexed.pdf", numOfPages: 4, sasToken: "indexed-sas" } });
   });
 
   it("rejects unknown route stages", async () => {
     const orchestrator = createIntakeOrchestrator({
       getServices: () => ({ session: null, upload: null, provision: null, indexing: null }),
-      store: createStore(),
     });
 
     await expect(orchestrator.route({ stage: "bad" as never })).rejects.toThrow("Unknown intake route stage");

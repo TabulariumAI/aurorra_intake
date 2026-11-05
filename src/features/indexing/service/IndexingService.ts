@@ -3,8 +3,9 @@ import type {
   IndexingServiceActions,
   IndexingStatusResponse,
 } from "../type/indexing.types";
-import { ENRICHMENT_STEPS, PAGE_PROGRESS_STAGES } from "../config/indexing.config";
+import { ENRICHMENT_STEPS, INDEXING_COMPLETE_JOB, PAGE_PROGRESS_STAGES } from "../config/indexing.config";
 import type { ProgressJob } from "aurora-core";
+import type { IntakeCompletePayload } from "../../intake/service/intakeOrchestrator";
 
 type ErrorLike = {
   error?: unknown;
@@ -99,6 +100,21 @@ class IndexingService implements IndexingServiceActions {
       const pageCount = Number(runtime.store.get("numOfPages"));
       const pages = !scope || "all" in scope ? pageCount : Math.min(pageCount, scope.first + scope.last);
       const sessionId = String(session);
+      const completion: IntakeCompletePayload = {
+        batch: null,
+        group: null,
+        session: sessionId,
+        data: {
+          baseUrl: runtime.store.get("baseUrl"),
+          document: documentName,
+          numOfPages: runtime.store.get("numOfPages"),
+          sasToken: runtime.store.get("sasToken"),
+        },
+      };
+      const viewMetadata = () => runtime.eventBus.emit(runtime.events.reRoute, {
+        [runtime.events.reRoute.detail.stage]: "metadata",
+        completion,
+      });
       let status = await this.checkStatus(sessionId);
       if (status.status !== "completed") {
         runtime.progress.receive(lastProgress);
@@ -177,11 +193,7 @@ class IndexingService implements IndexingServiceActions {
             phase: "info",
             actions: [{
               label: "View metadata",
-              onConfirm: () => {
-                runtime.eventBus.emit(runtime.events.reRoute, {
-                  [runtime.events.reRoute.detail.stage]: "metadata",
-                });
-              },
+              onConfirm: viewMetadata,
               requireConfirmation: false,
               variant: "primary",
             }],
@@ -202,10 +214,18 @@ class IndexingService implements IndexingServiceActions {
         await runtime.imageWorkerClient.generatePackage(runtime.getAuthToken(), sessionId);
         runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
-      runtime.onIndexed({ session: sessionId, document: String(documentName), etag: status.etag });
-      runtime.eventBus.emit(runtime.events.reRoute, {
-        [runtime.events.reRoute.detail.stage]: "metadata",
+      completion.etag = status.etag;
+      runtime.progress.receive({
+        jobId: INDEXING_COMPLETE_JOB,
+        message: "Indexing complete",
+        detail: `Session ID: ${sessionId}`,
+        phase: "completed",
+        actions: [
+          { label: "View metadata", onConfirm: viewMetadata, requireConfirmation: false, variant: "primary" },
+          { label: "Start new session", onConfirm: runtime.restart, requireConfirmation: false, variant: "secondary" },
+        ],
       });
+      runtime.onIndexed({ session: sessionId, document: String(documentName), etag: status.etag });
     } catch (error) {
       console.error("[Intake:indexing]", error);
       const message = getErrorMessage(error, "document processing", runtime);

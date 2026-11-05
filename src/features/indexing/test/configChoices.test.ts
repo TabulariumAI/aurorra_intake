@@ -19,6 +19,7 @@ it("indexes the supplied config without storing or defaulting choices", async ()
     eventBus: { emit: vi.fn() },
     progress: { receive: vi.fn(), reset: vi.fn() },
     onIndexed: vi.fn(),
+    restart: vi.fn(),
     baseIntervalMs: 1,
     intervalPageMs: 1,
     indexingWorkerClient: { start: vi.fn().mockResolvedValue(undefined), status: vi.fn().mockResolvedValueOnce({ status: "pending", data: "" }).mockResolvedValue({ status: "completed", data: "", etag: "version" }) },

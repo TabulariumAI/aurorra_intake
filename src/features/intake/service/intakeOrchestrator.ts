@@ -2,7 +2,6 @@ import type { IndexingServiceActions } from "../../indexing/type/indexing.types"
 import type { ProvisionServiceActions } from "../../provision/type/provision.types";
 import type { SessionDocument, SessionServiceActions } from "../../session/type/session.types";
 import type { UploadDocument, UploadServiceActions } from "../../upload/type/upload.types";
-import type { StoreAdapter } from "../../../store/type/store.types";
 import type { DataExchange } from "aurora-core";
 
 export type IntakeRouteStage = "session" | "upload" | "provision" | "indexing" | "metadata";
@@ -17,10 +16,12 @@ export type IntakeRouteEvent = {
 };
 
 export type IntakeRoutePayload = {
-  stage: IntakeRouteStage;
   file?: unknown;
   jobId?: unknown;
-};
+} & (
+  | { stage: Exclude<IntakeRouteStage, "metadata"> }
+  | { stage: "metadata"; completion: IntakeCompletePayload }
+);
 
 export type IntakeSessionData = {
   baseUrl: unknown;
@@ -43,25 +44,9 @@ type IntakeOrchestratorServices = {
 type IntakeOrchestratorRuntime = {
   getServices(): IntakeOrchestratorServices;
   onComplete?: (payload: IntakeCompletePayload) => void;
-  store: StoreAdapter;
 };
 
 const ROUTE_STAGES = new Set<IntakeRouteStage>(["session", "upload", "provision", "indexing", "metadata"]);
-
-function getCompletePayload(store: StoreAdapter): IntakeCompletePayload {
-  const session = store.get("session");
-  return {
-    batch: null,
-    data: {
-      baseUrl: store.get("baseUrl"),
-      document: store.get("document"),
-      numOfPages: store.get("numOfPages"),
-      sasToken: store.get("sasToken"),
-    },
-    group: null,
-    session: typeof session === "string" ? session : null,
-  };
-}
 
 function getRouteFile(payload: IntakeRoutePayload): File | null {
   const file = payload.file;
@@ -84,11 +69,11 @@ export class IntakeOrchestrator {
   }
 
   async route(payload: IntakeRoutePayload) {
-    const stage = getRouteStage(payload);
+    getRouteStage(payload);
     const file = getRouteFile(payload);
     const services = this.#runtime.getServices();
 
-    if (stage === "session") {
+    if (payload.stage === "session") {
       if (!file) throw new Error("Document is missing.");
       if (typeof payload.jobId !== "string") throw new Error("Job id is missing.");
       if (!services.session) throw new Error("Session service is not ready.");
@@ -96,26 +81,26 @@ export class IntakeOrchestrator {
       return;
     }
 
-    if (stage === "upload") {
+    if (payload.stage === "upload") {
       if (!file) throw new Error("Document is missing.");
       if (!services.upload) throw new Error("Upload service is not ready.");
       await services.upload.process(file as UploadDocument);
       return;
     }
 
-    if (stage === "provision") {
+    if (payload.stage === "provision") {
       if (!services.provision) throw new Error("Provision service is not ready.");
       await services.provision.process();
       return;
     }
 
-    if (stage === "indexing") {
+    if (payload.stage === "indexing") {
       if (!services.indexing) throw new Error("Indexing service is not ready.");
       await services.indexing.process();
       return;
     }
 
-    this.#runtime.onComplete?.(getCompletePayload(this.#runtime.store));
+    if (payload.stage === "metadata") this.#runtime.onComplete?.(payload.completion);
   }
 }
 

@@ -46,7 +46,7 @@ function createStore(seed: Partial<StoreValues> = {}): StoreAdapter {
 function createRuntime(seed: Partial<StoreValues> = {}, config = { review: false, iq: true, document: false }) {
   const defaultChoices = structuredClone(intakeConfig.choices);
   const receive = vi.fn();
-  const runtime: IndexingRuntime = { config: { ...intakeConfig, choices: defaultChoices, ...config }, onIndexed: vi.fn(),
+  const runtime: IndexingRuntime = { config: { ...intakeConfig, choices: defaultChoices, ...config }, onIndexed: vi.fn(), restart: vi.fn(),
     alert: { format: vi.fn((message, args) => `formatted:${String((message as { args?: unknown })?.args ? args?.action : message)}`) },
     messages: {
       ERR_ACT: { args: { action: "action" } },
@@ -95,10 +95,7 @@ describe("IndexingService", () => {
       defaultChoices,
       null,
     );
-    expect(runtime.eventBus.emit).toHaveBeenCalledWith(
-      runtime.events.reRoute,
-      { stage: "metadata" },
-    );
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     expect(receive.mock.calls.map(([event]) => [event.message, event.phase])).toEqual([
       ["Refining document", "started"],
       ["Refining document", "started"],
@@ -126,6 +123,7 @@ describe("IndexingService", () => {
       ["Retrieving processed data...", "completed"],
       ["Generating IQ report", "started"],
       ["Generating IQ report", "completed"],
+      ["Indexing complete", "completed"],
     ]);
     expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual(Array(69).fill(500));
     setTimeoutSpy.mockRestore();
@@ -138,7 +136,7 @@ describe("IndexingService", () => {
       ]);
       expect(jobs.at(-1)).toMatchObject({ phase: "completed", progress: { completed: 2, total: 2, unit: "pages" } });
     }
-    expect(new Set(events.map((event) => event.jobId)).size).toBe(10);
+    expect(new Set(events.map((event) => event.jobId)).size).toBe(11);
   });
 
   const stages = ["Refining document", "Recognizing document", "Identifying document", "Indexing document"];
@@ -214,7 +212,7 @@ describe("IndexingService", () => {
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
     if (status === "completed") {
       expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf", etag: "metadata-etag" });
-      expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+      expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     } else {
       expect(receive.mock.calls.at(-1)?.[0].error).toBe("formatted:document processing worker failed");
       expect(runtime.onIndexed).not.toHaveBeenCalled();
@@ -297,7 +295,7 @@ describe("IndexingService", () => {
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
     if (status === "completed") {
       expect(runtime.onIndexed).toHaveBeenCalledOnce();
-      expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+      expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     } else {
       expect(events.at(-1).error).toBe("formatted:document processing worker failed");
       expect(runtime.onIndexed).not.toHaveBeenCalled();
@@ -352,7 +350,7 @@ describe("IndexingService", () => {
     for (const stage of stages) {
       const events = receive.mock.calls.map(([event]) => event).filter(event => event.message === stage && event.phase === "started" && event.progress);
       expect(events).toHaveLength(total);
-      expect(events.at(-1).progress).toEqual({ completed: total, total, unit: "pages" });
+      expect(events.filter(event => event.progress).at(-1).progress).toEqual({ completed: total, total, unit: "pages" });
     }
   });
 
@@ -448,7 +446,7 @@ describe("IndexingService", () => {
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await processing;
-    expect(receive.mock.calls.map(([event]) => [event.message, event.phase])).toEqual([["Generating IQ report", "started"], ["Generating IQ report", "completed"]]);
+    expect(receive.mock.calls.map(([event]) => [event.message, event.phase])).toEqual([["Generating IQ report", "started"], ["Generating IQ report", "completed"], ["Indexing complete", "completed"]]);
     expect(runtime.indexingWorkerClient.start).not.toHaveBeenCalled();
   });
 
@@ -501,6 +499,7 @@ describe("IndexingService", () => {
       "Retrieving processed data...",
       "Generating IQ report",
       "Generating IQ report",
+      "Indexing complete",
     ]);
     expect(setTimeoutSpy.mock.calls.map(([, ms]) => ms)).toEqual(Array(65).fill(500));
     expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(66);
@@ -567,7 +566,7 @@ describe("IndexingService", () => {
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     await receive.mock.calls.at(-1)?.[0].actions[0].onConfirm();
     expect(runtime.onIndexed).not.toHaveBeenCalled();
-    expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
+    expect(runtime.eventBus.emit).toHaveBeenCalledWith(runtime.events.reRoute, expect.objectContaining({ stage: "metadata", completion: expect.objectContaining({ session: "session-1" }) }));
   });
 
   it.each(["pending", "processing", "completed", "error"] as const)("handles %s on the final retrieval attempt", async status => {
@@ -591,7 +590,7 @@ describe("IndexingService", () => {
     }
     if (status === "completed") {
       expect(runtime.onIndexed).toHaveBeenCalledOnce();
-      expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+      expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     } else {
       expect(runtime.onIndexed).not.toHaveBeenCalled();
       expect(runtime.eventBus.emit).not.toHaveBeenCalled();
@@ -636,7 +635,7 @@ describe("IndexingService", () => {
     await vi.runAllTimersAsync();
     await expect(processing).resolves.toBeUndefined();
 
-    expect(runtime.eventBus.emit).not.toHaveBeenCalledWith(runtime.events.reRoute, { stage: "metadata" });
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     const retrieve = receive.mock.calls.find(([event]) => event.message === "Retrieving processed data..." && event.phase === "started")?.[0];
     expect(receive).toHaveBeenLastCalledWith({
       error: "formatted:document processing worker failed",
@@ -682,11 +681,11 @@ describe("IQ completion", () => {
     expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledOnce();
     finish({ iq_doc: 98 });
     await processing;
-    expect(receive).toHaveBeenLastCalledWith({ ...job, phase: "completed" });
+    expect(receive).toHaveBeenCalledWith({ ...job, phase: "completed" });
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Indexing complete", phase: "completed" }));
     expect(receive.mock.invocationCallOrder.at(-1)).toBeLessThan(vi.mocked(runtime.onIndexed).mock.invocationCallOrder[0]);
-    expect(vi.mocked(runtime.onIndexed).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(runtime.eventBus.emit).mock.invocationCallOrder[0]);
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf", etag: "metadata-etag" });
-    expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
   });
 
@@ -812,7 +811,7 @@ describe("post-index workflow", () => {
       ...(document ? [["Generating the image package", "started"], ["Generating the image package", "completed"]] : []),
     ]);
     expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf", etag: "metadata-etag" });
-    expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, { stage: "metadata" });
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
   });
 
   it("waits for image generation, keeps the captured session and blocks duplicate processing", async () => {
@@ -832,7 +831,8 @@ describe("post-index workflow", () => {
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
     finish({ status: "completed", data: { tiff: "https://storage.test/image.tiff", data: "https://storage.test/image.json" } });
     await processing;
-    expect(receive).toHaveBeenLastCalledWith({ ...job, phase: "completed" });
+    expect(receive).toHaveBeenCalledWith({ ...job, phase: "completed" });
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Indexing complete", phase: "completed" }));
     expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf", etag: "metadata-etag" });
     expect(runtime.store.get("indexingStepStatus")).toBe(false);
   });
@@ -880,4 +880,64 @@ it.each([undefined, ""])("rejects completed indexing without its metadata ETag: 
   expect(runtime.imageWorkerClient.generatePackage).not.toHaveBeenCalled();
   expect(runtime.onIndexed).not.toHaveBeenCalled();
   expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+});
+
+
+describe("completion choices", () => {
+  it.each([true, false])("waits for the metadata choice and retains the intake snapshot after selection changes; IQ=%s", async iq => {
+    const { runtime, receive } = createRuntime({ baseUrl: "https://storage/session-1", sasToken: "sas-1", numOfPages: 4 }, { review: false, iq, document: false });
+    let finish!: (value: unknown) => void;
+    runtime.indexingWorkerClient.status = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const processing = createIndexingService(runtime).process();
+    runtime.store.set("session", "session-2");
+    runtime.store.set("document", "session-2.pdf");
+    runtime.store.set("baseUrl", "https://storage/session-2");
+    runtime.store.set("sasToken", "sas-2");
+    runtime.store.set("numOfPages", 9);
+    finish({ status: "completed", data: "", etag: "metadata-etag" });
+    await processing;
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    expect(runtime.restart).not.toHaveBeenCalled();
+    expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf", etag: "metadata-etag" });
+    const completion = receive.mock.calls.at(-1)![0];
+    expect(completion).toMatchObject({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed", detail: "Session ID: session-1", actions: [
+      { label: "View metadata", requireConfirmation: false, variant: "primary" },
+      { label: "Start new session", requireConfirmation: false, variant: "secondary" },
+    ] });
+    await completion.actions[0].onConfirm();
+    expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, {
+      stage: "metadata", completion: { batch: null, group: null, session: "session-1", etag: "metadata-etag", data: {
+        baseUrl: "https://storage/session-1", document: "session-1.pdf", numOfPages: 4, sasToken: "sas-1",
+      } },
+    });
+    expect(runtime.store.get("session")).toBe("session-2");
+    expect(runtime.restart).not.toHaveBeenCalled();
+  });
+
+  it("reuses restart for the next intake without opening metadata or repeating indexing", async () => {
+    const { runtime, receive } = createRuntime();
+    await createIndexingService(runtime).process();
+    await receive.mock.calls.at(-1)![0].actions[1].onConfirm();
+    expect(runtime.restart).toHaveBeenCalledExactlyOnceWith();
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    expect(runtime.onIndexed).toHaveBeenCalledOnce();
+  });
+});
+
+
+it("retains the original intake for the existing delayed-processing metadata action", async () => {
+  const { runtime, receive } = createRuntime({ baseUrl: "https://storage/session-1", sasToken: "sas-1" });
+  runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "pending", data: "" }));
+  const processing = createIndexingService(runtime).process();
+  await vi.advanceTimersByTimeAsync(0);
+  runtime.store.set("session", "session-2");
+  runtime.store.set("document", "session-2.pdf");
+  await vi.runAllTimersAsync();
+  await processing;
+  expect(runtime.onIndexed).not.toHaveBeenCalled();
+  expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+  await receive.mock.calls.at(-1)![0].actions[0].onConfirm();
+  expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, expect.objectContaining({
+    stage: "metadata", completion: expect.objectContaining({ session: "session-1", data: expect.objectContaining({ document: "session-1.pdf" }) }),
+  }));
 });

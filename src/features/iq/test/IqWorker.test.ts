@@ -65,7 +65,7 @@ it("waits for generation and the downloaded report with an encoded session and n
 
 it.each([
   { input: { ...command, token: "" }, code: "missing_auth_token" },
-  { input: { ...command, apiBaseUrl: "" }, code: "missing_api_base_url" },
+  { input: {  ...command, apiBaseUrl: "" }, code: "missing_api_base_url" },
   { input: { ...command, session: " " }, code: "invalid_session" },
 ])("rejects $code without a request", async ({ input, code }) => {
   const fetch = vi.fn();

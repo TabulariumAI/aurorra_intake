@@ -1,5 +1,6 @@
 import type { PageSizeConfig, TiffPixelFormat } from "@tabulariumai/aurora-lens";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { INDEXING_COMPLETE_JOB } from "../../indexing/config/indexing.config";
 import { createIndexingService } from "../../indexing/service/IndexingService";
 import type { IndexingRuntime, IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
@@ -125,8 +126,7 @@ export function Container({
       };
     },
     onComplete,
-    store,
-  }), [onComplete, store]);
+  }), [onComplete]);
 
   const eventBus = useMemo(() => ({
     emit(eventConfig: unknown, payload?: Record<string, unknown>) {
@@ -198,6 +198,7 @@ export function Container({
 
   const indexingService = useMemo(() => createIndexingService({
     onIndexed,
+    restart,
     config,
     ...commonRuntime,
     events: {
@@ -211,7 +212,7 @@ export function Container({
     getAuthToken() {
       return authToken ?? "";
     },
-  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onIndexed]);
+  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onIndexed, restart]);
 
   useEffect(() => {
     sessionRef.current = sessionService;
@@ -233,6 +234,7 @@ export function Container({
   }, [authToken, onAlert, onFailure, onSessionLoaded, sessionRequest, sessionService, setStoreValue]);
 
   const panel = state.container.panel;
+  const complete = progress.jobs.some(job => job.jobId === INDEXING_COMPLETE_JOB && job.phase === "completed");
   const selectContent = selectHost ? (
     <SelectPanel
       pageSize={pageSize}
@@ -268,10 +270,12 @@ export function Container({
             intro="I’ll keep you updated as I process your document."
             errorColor="#B42318"
             jobs={progress.jobs}
+            completionJobId={INDEXING_COMPLETE_JOB}
+            historyLabel="Processing details"
             failureAction={<ConfButton label="Cancel and Restart" onConfirm={restart} requireConfirmation={false} variant="secondary" />}
           />
         ),
-        helper: panel === "progress" ? state.container.helper : "",
+        helper: panel === "progress" && !complete ? state.container.helper : "",
       })}
     />
   );
