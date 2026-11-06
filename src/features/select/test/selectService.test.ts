@@ -70,6 +70,7 @@ describe("selectService", () => {
     expect(runtime.store.set).toHaveBeenCalledWith("documentSelected", true);
     expect(runtime.store.set).toHaveBeenCalledWith("numOfPages", 7);
     const prepareId = receive.mock.calls[0][0].jobId;
+    expect(prepareId).toBe("document-preparation");
     const jobId = receive.mock.calls[2][0].jobId;
     expect(jobId).not.toBe(prepareId);
     expect(receive.mock.calls.map(([event]) => event)).toEqual([

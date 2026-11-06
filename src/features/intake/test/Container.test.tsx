@@ -395,16 +395,31 @@ it("wires the next intake action through the existing restart and host cancellat
 });
 
 
-it("uses the completed job to show the compact summary and retain expandable processing details", () => {
+it("uses the completed job to show the summary and always-visible processing details", () => {
   render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
   act(() => capturedActions.showProgress());
   act(() => {
+    capturedProgress!({ jobId: "document-preparation", message: "Preparing your document…", phase: "completed" });
     capturedProgress!({ jobId: "upload", message: "Uploading your document", phase: "completed" });
+    capturedProgress!({ jobId: "generation", message: "Generating IQ report and the image package", phase: "completed" });
     capturedProgress!({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed" });
   });
   expect(screen.getByText("Indexing complete")).toBeVisible();
-  expect(screen.getByText("Uploading your document")).not.toBeVisible();
+  expect(screen.getByRole("table", { name: "Processing details" })).toBeVisible();
   expect(screen.queryByText("Follow each step as it completes.")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText("Processing details"));
   expect(screen.getByText("Uploading your document")).toBeVisible();
+  expect(screen.queryByText("Preparing your document…")).not.toBeInTheDocument();
+  expect(screen.getByText("Generating IQ report and the image package")).toBeVisible();
+  expect(within(screen.getByRole("table", { name: "Processing details" })).getAllByRole("row")).toHaveLength(2);
+});
+
+it.each(["started", "completed", "failed"] as const)("preserves preparation progress before overall completion: %s", phase => {
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+  act(() => {
+    capturedActions.showProgress();
+    capturedProgress!({ jobId: "document-preparation", message: "Preparing your document…", phase, ...(phase === "failed" ? { error: "TIFF export failed." } : {}) });
+  });
+  expect(screen.getByText("Preparing your document…").closest("li")).toHaveAttribute("data-phase", phase);
+  expect(screen.queryByRole("table", { name: "Processing details" })).not.toBeInTheDocument();
+  if (phase === "failed") expect(screen.getByRole("alert")).toHaveTextContent("TIFF export failed.");
 });

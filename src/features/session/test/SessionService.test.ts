@@ -54,6 +54,7 @@ function createRuntime(seed: Partial<StoreValues> = {}) {
     store,
     progress: { receive, reset: vi.fn() },
     sessionWorkerClient: {
+      downloadSource: vi.fn(),
       newSession: vi.fn(async () => ({
         session: "session-1",
         sas_token: "sas-1",

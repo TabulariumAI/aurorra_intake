@@ -1,4 +1,6 @@
 export { Container as AurorraIntake } from "./features/intake/component/Container";
+export { FailedSessionPanel } from "./features/failure/component/FailedSessionPanel";
+export type { FailedSessionProps } from "./features/failure/type/failure.types";
 export type { ContainerProps as AurorraIntakeProps } from "./features/intake/component/Container";
 export type { IntakeCalloutProps, IntakeCalloutRenderer, IntakeItemProps, IntakeItemRenderer } from "./features/intake/type/intake.types";
 export type { IntakeCompletePayload, IntakeSessionData } from "./features/intake/service/intakeOrchestrator";
@@ -13,4 +15,4 @@ export { clearStorage } from "./store/adapter/storeAdapter";
 
 
 export type { IntakeConfig } from "./features/intake/type/intake.types";
-    
+

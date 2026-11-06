@@ -1,4 +1,4 @@
-import type { SessionWorkerClient, SessionWorkerConfig } from "../type/session.types";
+import type { SessionWorkerClient, SessionWorkerCommand, SessionWorkerConfig, SessionWorkerResult } from "../type/session.types";
 
 type SessionWorkerError = Error & {
   code?: string;
@@ -6,45 +6,42 @@ type SessionWorkerError = Error & {
   details?: unknown;
 };
 
-function resolveError(message: string, error: unknown): SessionWorkerError {
-  const err = new Error(message) as SessionWorkerError;
-  if (typeof error === "object" && error !== null) {
-    const candidate = error as { code?: unknown; status?: unknown; details?: unknown };
-    if (typeof candidate.code === "string") {
-      err.code = candidate.code;
-    }
-    if (typeof candidate.status === "number") {
-      err.status = candidate.status;
-    }
-    if (Object.prototype.hasOwnProperty.call(candidate, "details")) {
-      err.details = candidate.details;
-    }
-  }
-  return err;
-}
-
-async function runWorker<T>(command: unknown): Promise<T> {
+function runWorker<T>(command: SessionWorkerCommand, signal?: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Source download canceled.", "AbortError"));
+      return;
+    }
     const worker = new Worker(new URL("./SessionWorker.ts", import.meta.url), { type: "module" });
     let settled = false;
     const cleanup = () => {
+      signal?.removeEventListener("abort", abort);
       worker.terminate();
     };
+    const abort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new DOMException("Source download canceled.", "AbortError"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
 
     worker.onmessage = (event) => {
       if (settled) return;
       settled = true;
       cleanup();
 
-      const payload = event?.data as { ok?: boolean; error?: string; code?: string; status?: number; details?: unknown; data?: T };
-      if (payload && payload.ok === true) {
-        resolve(payload.data as T);
+      const payload = event.data as SessionWorkerResult<T>;
+      if (payload.ok) {
+        resolve(payload.data);
         return;
       }
 
-      const message = typeof payload?.error === "string" ? payload.error : "Session worker request failed";
-      const err = resolveError(message, payload);
-      reject(err);
+      const error = new Error(payload.error) as SessionWorkerError;
+      if (payload.code !== undefined) error.code = payload.code;
+      if (payload.status !== undefined) error.status = payload.status;
+      if ("details" in payload) error.details = payload.details;
+      reject(error);
     };
 
     worker.onerror = (event) => {
@@ -63,16 +60,19 @@ export type { SessionWorkerClient };
 export function createSessionWorkerClient(config: SessionWorkerConfig): SessionWorkerClient {
   const { apiBaseUrl } = config;
   return {
-    async newSession(token) {
+    downloadSource(source, sasToken, signal) {
+      return runWorker({ type: "downloadSource", source, sasToken }, signal);
+    },
+    newSession(token) {
       return runWorker({ type: "newSession", token, apiBaseUrl });
     },
-    async summary(token, session, document) {
+    summary(token, session, document) {
       return runWorker({ type: "summary", token, apiBaseUrl, session, document });
     },
-    async setTags(token, session, tags) {
+    setTags(token, session, tags) {
       return runWorker({ type: "setTags", token, apiBaseUrl, session, tags });
     },
-    async sessionData(token, session) {
+    sessionData(token, session) {
       return runWorker({ type: "sessionData", token, apiBaseUrl, session });
     },
   };

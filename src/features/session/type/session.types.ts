@@ -12,6 +12,7 @@ export type SessionStartData = {
 };
 
 export type SessionWorkerCommand =
+  | { type: "downloadSource"; source: string; sasToken: string }
   | { type: "newSession"; token: string; apiBaseUrl: string }
   | { type: "summary"; token: string; apiBaseUrl: string; session: string; document: string }
   | { type: "setTags"; token: string; apiBaseUrl: string; session: string; tags: string[] | null }
@@ -33,11 +34,14 @@ export type SessionWorkerFailure = {
 export type SessionWorkerResult<T> = SessionWorkerSuccess<T> | SessionWorkerFailure;
 
 export type SessionWorkerClient = {
+  downloadSource(source: string, sasToken: string, signal?: AbortSignal): Promise<SourceFile>;
   newSession(token: string): Promise<SessionStartData>;
   summary(token: string, session: string, document: string): Promise<unknown>;
   setTags(token: string, session: string, tags: string[] | null): Promise<unknown>;
   sessionData(token: string, session: string): Promise<SessionStartData>;
 };
+
+export type SourceFile = { blob: Blob; name: string };
 
 export type SessionWorkerConfig = {
   apiBaseUrl: string;

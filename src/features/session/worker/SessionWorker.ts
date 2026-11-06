@@ -8,14 +8,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export class SessionWorker {
   async run<T>(command: SessionWorkerCommand): Promise<SessionWorkerResult<T>> {
-    if (!command?.token) {
+    if (command.type !== "downloadSource" && !command.token) {
       return {
         ok: false,
         error: "Missing auth token",
         code: "missing_auth_token",
       };
     }
-    if (!command.apiBaseUrl) {
+    if (command.type !== "downloadSource" && !command.apiBaseUrl) {
       return {
         ok: false,
         error: "Missing API base URL",
@@ -23,21 +23,28 @@ export class SessionWorker {
       };
     }
 
-    const method = command.type === "newSession" || command.type === "summary" || command.type === "setTags" ? "POST" : "GET";
-    const { url, body } = this.buildRequest(command);
-
-    const headers: HeadersInit = {
-      Authorization: `Bearer ${command.token}`,
-      ...(body !== null ? jsonHeaders : {}),
-    };
-
     let response: Response;
+    let responseText: string;
     try {
+      const method = command.type === "newSession" || command.type === "summary" || command.type === "setTags" ? "POST" : "GET";
+      const { url, body } = this.buildRequest(command);
+
+      const headers: HeadersInit = command.type === "downloadSource" ? {} : {
+        Authorization: `Bearer ${command.token}`,
+        ...(body !== null ? jsonHeaders : {}),
+      };
       response = await fetch(url, {
         method,
         headers,
         body,
       });
+      if (response.ok && command.type === "downloadSource") {
+        return { ok: true, data: {
+          blob: await response.blob(),
+          name: decodeURIComponent(new URL(command.source).pathname.split("/").at(-1)!),
+        } as T };
+      }
+      responseText = await response.text();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -47,7 +54,6 @@ export class SessionWorker {
     }
 
     const contentType = response.headers.get("content-type")?.toLowerCase() || "";
-    const responseText = await response.text();
     let payload: unknown = null;
 
     if (responseText && contentType.includes("application/json")) {
@@ -95,6 +101,11 @@ export class SessionWorker {
   }
 
   buildRequest(command: SessionWorkerCommand): { url: string; body: string | null } {
+    if (command.type === "downloadSource") {
+      const url = new URL(command.source);
+      url.search = command.sasToken;
+      return { url: url.toString(), body: null };
+    }
     const API_BASE_URL = command.apiBaseUrl.replace(/\/+$/, "");
     const sessionApiBaseUrl = `${API_BASE_URL}/v1/session`;
     switch (command.type) {

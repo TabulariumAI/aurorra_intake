@@ -202,16 +202,20 @@ class IndexingService implements IndexingServiceActions {
         }
         runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
-      if (runtime.config.iq) {
-        lastProgress = { jobId: crypto.randomUUID(), message: "Generating IQ report", phase: "started" };
+      if (runtime.config.iq || runtime.config.document) {
+        lastProgress = {
+          jobId: crypto.randomUUID(),
+          message: runtime.config.iq && runtime.config.document ? "Generating IQ report and the image package"
+            : runtime.config.iq ? "Generating IQ report" : "Generating the image package",
+          phase: "started",
+        };
         runtime.progress.receive(lastProgress);
-        await runtime.iqWorkerClient.generateReport(runtime.getAuthToken(), sessionId);
-        runtime.progress.receive({ ...lastProgress, phase: "completed" });
-      }
-      if (runtime.config.document) {
-        lastProgress = { jobId: crypto.randomUUID(), message: "Generating the image package", phase: "started" };
-        runtime.progress.receive(lastProgress);
-        await runtime.imageWorkerClient.generatePackage(runtime.getAuthToken(), sessionId);
+        const requests: Promise<unknown>[] = [];
+        if (runtime.config.iq) requests.push(runtime.iqWorkerClient.generateReport(runtime.getAuthToken(), sessionId));
+        if (runtime.config.document) requests.push(runtime.imageWorkerClient.generatePackage(runtime.getAuthToken(), sessionId));
+        for (const result of await Promise.allSettled(requests)) {
+          if (result.status === "rejected") throw result.reason;
+        }
         runtime.progress.receive({ ...lastProgress, phase: "completed" });
       }
       completion.etag = status.etag;
@@ -221,7 +225,7 @@ class IndexingService implements IndexingServiceActions {
         detail: `Session ID: ${sessionId}`,
         phase: "completed",
         actions: [
-          { label: "View metadata", onConfirm: viewMetadata, requireConfirmation: false, variant: "primary" },
+          { label: "View Indexes", onConfirm: viewMetadata, requireConfirmation: false, variant: "primary" },
           { label: "Start new session", onConfirm: runtime.restart, requireConfirmation: false, variant: "secondary" },
         ],
       });

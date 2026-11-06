@@ -20,6 +20,8 @@ npm install
 
 The package exports `AurorraIntake`, its props type, session-loading helpers and read-only session state with domain actions.
 
+`FailedSessionPanel` displays failure details, nonzero saved choices in two service/value pairs per row, and a source download action inside a host-owned dialog. Values of 1 display as Yes; other nonzero values stay numeric. Service names use readable word spacing, and the four-column table scrolls horizontally on narrow screens. The host displays the status and session number in the dialog header and supplies `onDownload` from `createSessionWorkerClient(...).downloadSource` and its shared `formatError` function. SessionWorker downloads the saved source URL with the current storage token; the panel's action hook cancels the worker on dismissal and releases the temporary download URL. The panel does not fetch data or edit choices.
+
 ```tsx
 import { AurorraIntake } from "aurorra-intake";
 
@@ -52,14 +54,19 @@ The host is responsible for supplying valid credentials and a gateway that imple
 
 `onCreated(session)` runs after the backend allocates the session ID and before
 upload starts. Intake awaits this callback so the host can persist the session
-and its queued batch membership. After indexing completes, Intake conditionally
-shows “Generating IQ report” and awaits generation and download through
-`GET /v1/iq/{session}/data`, then “Generating the image package” through
+and its queued batch membership. After indexing completes, Intake runs the enabled
+IQ and image-package requests concurrently in one progress job. When both are
+enabled, the label is “Generating IQ report and the image package”; otherwise it
+retains the selected operation's label. IQ generation and download use
+`GET /v1/iq/{session}/data`; image generation uses
 `POST /v1/image/{session}/generate` with `{}`. Both first requests omit the ETag;
-`user_svc` owns generation and waiting. Intake calls `onIndexed` and opens
-metadata after selected stages complete. Its workers do not depend on
+`user_svc` owns generation and waiting. Intake waits for every enabled request to
+settle before completing or reporting failure. It calls `onIndexed` only after
+success and waits for View Indexes or Start new session. Its workers do not depend on
 `aurorra-index` or a host generation callback. Stage failures keep progress open
-without emitting completion; indexing timeout skips both stages.
+without emitting completion; indexing timeout skips both operations. Preparation
+progress remains visible during processing and on failure; the completed
+Processing details report excludes the preparation job.
 
 `document_web/shell/settings` owns the Settings dialog and persisted config.
 `wf_settings` contains host-owned workflow config, choices, and jurisdiction.

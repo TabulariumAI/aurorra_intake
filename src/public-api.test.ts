@@ -39,6 +39,7 @@ describe("public-api", () => {
 
   it("exports the used intake surface", () => {
     expect(AurorraIntake).toBeTypeOf("function");
+    expect(intake.FailedSessionPanel).toBeTypeOf("function");
     expect(createSessionWorkerClient).toBeTypeOf("function");
     expect(getIntakeState).toBeTypeOf("function");
     expect(useIntakeState).toBeTypeOf("function");

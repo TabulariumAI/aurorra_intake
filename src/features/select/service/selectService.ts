@@ -1,5 +1,6 @@
 import type { ErrorLike, SelectService } from "../type/select.types";
 import type { SelectRuntime } from "../type/selectRuntime.types";
+import { PREPARATION_JOB } from "../config/select.config";
 
 export function getSelectErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as ErrorLike | null | undefined;
@@ -19,7 +20,7 @@ export function createSelectService(runtime: SelectRuntime): SelectService {
       runtime.store.set("documentSelected", selected);
     },
     async start(pageCount, getDocument) {
-      let jobId = crypto.randomUUID();
+      let jobId: string = PREPARATION_JOB;
       let message = "Preparing your document…";
       runtime.progress.reset();
       runtime.progress.receive({ jobId, message, phase: "started" });

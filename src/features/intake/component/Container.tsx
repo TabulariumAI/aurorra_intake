@@ -11,6 +11,7 @@ import type { ProvisionServiceActions } from "../../provision/type/provision.typ
 import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
 import { SelectPanel } from "../../select/component/SelectPanel";
 import { createSelectService } from "../../select/service/selectService";
+import { PREPARATION_JOB } from "../../select/config/select.config";
 import { createSessionService } from "../../session/service/SessionService";
 import type { SessionLoaded, SessionServiceActions } from "../../session/type/session.types";
 import { createSessionWorkerClient } from "../../session/worker/sessionWorkerClient";
@@ -269,7 +270,7 @@ export function Container({
             process="Document processing"
             intro="I’ll keep you updated as I process your document."
             errorColor="#B42318"
-            jobs={progress.jobs}
+            jobs={complete ? progress.jobs.filter(job => job.jobId !== PREPARATION_JOB) : progress.jobs}
             completionJobId={INDEXING_COMPLETE_JOB}
             historyLabel="Processing details"
             failureAction={<ConfButton label="Cancel and Restart" onConfirm={restart} requireConfirmation={false} variant="secondary" />}
