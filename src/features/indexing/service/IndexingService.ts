@@ -94,12 +94,13 @@ class IndexingService implements IndexingServiceActions {
         throw new Error(runtime.alert.format(runtime.messages.SESSION_REQ_INFO));
       }
 
+      const sessionId = String(session);
+      const requestId = runtime.results.begin(sessionId);
       const { choices, jurisdiction, scope } = runtime.config;
       const levels = new Map(choices.map(choice => [choice.service, choice.level]));
 
       const pageCount = Number(runtime.store.get("numOfPages"));
       const pages = !scope || "all" in scope ? pageCount : Math.min(pageCount, scope.first + scope.last);
-      const sessionId = String(session);
       const completion: IntakeCompletePayload = {
         batch: null,
         group: null,
@@ -211,7 +212,7 @@ class IndexingService implements IndexingServiceActions {
         };
         runtime.progress.receive(lastProgress);
         const requests: Promise<unknown>[] = [];
-        if (runtime.config.iq) requests.push(runtime.iqWorkerClient.generateReport(runtime.getAuthToken(), sessionId));
+        if (runtime.config.iq) requests.push(runtime.results.load(requestId, "iq", runtime.resultClient, runtime.getAuthToken()));
         if (runtime.config.document) requests.push(runtime.imageWorkerClient.generatePackage(runtime.getAuthToken(), sessionId));
         for (const result of await Promise.allSettled(requests)) {
           if (result.status === "rejected") throw result.reason;

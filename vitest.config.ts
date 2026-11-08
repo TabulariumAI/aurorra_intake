@@ -18,6 +18,7 @@ export default defineConfig({
   },
   plugins: [react()],
   test: {
+    server: { deps: { inline: [/@radix-ui\//] } },
     environment: "jsdom",
     globals: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],

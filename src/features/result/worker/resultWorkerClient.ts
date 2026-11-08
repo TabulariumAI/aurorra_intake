@@ -1,16 +1,16 @@
-import type { IqReport, IqWorkerClient, IqWorkerConfig, IqWorkerResult } from "../type/iq.types";
+import type { ResultData, ResultClient, ResultConfig, ResultResponse } from "../type/result.types";
 
-export function createIqWorkerClient({ apiBaseUrl }: IqWorkerConfig): IqWorkerClient {
+export function createResultClient({ apiBaseUrl }: ResultConfig): ResultClient {
   return {
-    generateReport(token, session) {
+    load(token, session, resource) {
       return new Promise((resolve, reject) => {
-        const worker = new Worker(new URL("./IqWorker.ts", import.meta.url), { type: "module" });
+        const worker = new Worker(new URL("./ResultWorker.ts", import.meta.url), { type: "module" });
         let settled = false;
         worker.onmessage = event => {
           if (settled) return;
           settled = true;
           worker.terminate();
-          const payload = event.data as IqWorkerResult<IqReport>;
+          const payload = event.data as ResultResponse<ResultData>;
           if (payload.ok) {
             resolve(payload.data);
             return;
@@ -27,7 +27,7 @@ export function createIqWorkerClient({ apiBaseUrl }: IqWorkerConfig): IqWorkerCl
           worker.terminate();
           reject(event);
         };
-        worker.postMessage({ apiBaseUrl, session, token });
+        worker.postMessage({ apiBaseUrl, session, token, resource });
       });
     },
   };

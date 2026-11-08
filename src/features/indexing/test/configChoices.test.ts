@@ -1,3 +1,4 @@
+import { resultStoreApi } from "../../result/store/resultStore";
 import { expect, it, vi } from "vitest";
 import { createIndexingService } from "../service/IndexingService";
 import type { IndexingRuntime } from "../type/indexing.types";
@@ -12,6 +13,7 @@ it("indexes the supplied config without storing or defaulting choices", async ()
   const runtime: IndexingRuntime = {
     config: { review: false, iq: false, document: false, choices, jurisdiction: "Texas, Harris County", scope: { first: 2, last: 1 } },
     store: createStoreAdapter(),
+    results: resultStoreApi.getState(),
     getAuthToken: () => "token",
     alert: { format: () => "failed" },
     messages: { ERR_ACT: { args: { action: "action" } }, SESSION_REQ_INFO: "missing" },
@@ -23,7 +25,7 @@ it("indexes the supplied config without storing or defaulting choices", async ()
     baseIntervalMs: 1,
     intervalPageMs: 1,
     indexingWorkerClient: { start: vi.fn().mockResolvedValue(undefined), status: vi.fn().mockResolvedValueOnce({ status: "pending", data: "" }).mockResolvedValue({ status: "completed", data: "", etag: "version" }) },
-    iqWorkerClient: { generateReport: vi.fn() },
+    resultClient: { load: vi.fn() },
     imageWorkerClient: { generatePackage: vi.fn() },
   };
   await createIndexingService(runtime).process();

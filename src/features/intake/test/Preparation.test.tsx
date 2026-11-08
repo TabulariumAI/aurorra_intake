@@ -76,6 +76,7 @@ it.each(["success", "failure"])("renders preparation during export and handles %
     renderSelect={renderItem}
     renderPreview={renderItem}
     renderProgress={renderItem}
+    renderResult={() => null}
   />);
   fireEvent.change(container.querySelector("input[type=file]")!, { target: { files: [new File(["pdf"], "source.pdf", { type: "application/pdf" })] } });
   const start = await screen.findByRole("button", { name: "Start" });

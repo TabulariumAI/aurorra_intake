@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { createSessionWorkerClient } from "../worker/sessionWorkerClient";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
-import { createIqWorkerClient } from "../../iq/worker/iqWorkerClient";
+import { createResultClient } from "../../result/worker/resultWorkerClient";
 import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
 import { createUploadWorkerClient } from "../../upload/worker/uploadWorkerClient";
 
@@ -10,7 +10,7 @@ afterEach(() => vi.unstubAllGlobals());
 it.each([
   ["Session", () => createSessionWorkerClient({ apiBaseUrl: "https://gateway" }).newSession("token")],
   ["Indexing", () => createIndexingWorkerClient({ apiBaseUrl: "https://gateway" }).status("token", "session")],
-  ["IQ", () => createIqWorkerClient({ apiBaseUrl: "https://gateway" }).generateReport("token", "session")],
+  ["IQ", () => createResultClient({ apiBaseUrl: "https://gateway" }).load("token", "session", "iq")],
   ["Provision", () => createProvisionWorkerClient({ apiBaseUrl: "https://gateway" }).provision("token", "session", "document.pdf", "county")],
   ["Upload", () => createUploadWorkerClient(1024).upload({ baseUrl: "https://storage", sasToken: "sas", path: "document.pdf", file: new File(["pdf"], "document.pdf") })],
 ] as const)("%s bubbles the original runtime event and cause", async (_name, request) => {

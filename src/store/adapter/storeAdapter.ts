@@ -1,3 +1,4 @@
+import { resultStoreApi } from "../../features/result/store/resultStore";
 import { clearMemoryStorage } from "./storageAdapters";
 import { storeApi, type StoreState } from "../state/store";
 import {
@@ -39,6 +40,7 @@ export function getStoredInformation(): StoredInformation {
 }
 
 export function clearStorage(): void {
+  resultStoreApi.getState().reset();
   storeApi.getState().resetAllState();
   clearMemoryStorage();
 }

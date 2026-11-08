@@ -68,6 +68,17 @@ without emitting completion; indexing timeout skips both operations. Preparation
 progress remains visible during processing and on failure; the completed
 Processing details report excludes the preparation job.
 
+After completion, Intake independently downloads metadata and Audit for the result
+summary, retaining the IQ download from finalization. If IQ was not enabled for
+finalization, the summary downloads it independently. Downloads use Intake's
+`ResultWorker`; blob fetches keep the browser's normal HTTP cache behavior and
+respect the service's 14-day blob cache policy. Each resource resolves separately
+and failures stay local to its metrics. Restart and sign-out invalidate the result request before another download can
+start or a pending response can update the summary. Indexing receives these
+actions through its existing runtime injection boundary. The required `renderResult` callback passes these Intake-owned
+resources through the host to Aurora Index's `IndexSummary`; Intake does not
+import Aurora Index or change the selected metadata session.
+
 `document_web/shell/settings` owns the Settings dialog and persisted config.
 `wf_settings` contains host-owned workflow config, choices, and jurisdiction.
 Intake receives execution flags, choices, jurisdiction, and recognition page scope through `config`;

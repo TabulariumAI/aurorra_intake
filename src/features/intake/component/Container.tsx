@@ -5,7 +5,10 @@ import { createIndexingService } from "../../indexing/service/IndexingService";
 import type { IndexingRuntime, IndexingServiceActions } from "../../indexing/type/indexing.types";
 import { createIndexingWorkerClient } from "../../indexing/worker/indexingWorkerClient";
 import { createImageWorkerClient } from "../../image/worker/imageWorkerClient";
-import { createIqWorkerClient } from "../../iq/worker/iqWorkerClient";
+import { createResultClient } from "../../result/worker/resultWorkerClient";
+import { resultStoreApi, useResultStore } from "../../result/store/resultStore";
+import type { IntakeResult } from "../../result/type/result.types";
+import type { ReactNode } from "react";
 import { createProvisionService } from "../../provision/service/ProvisionService";
 import type { ProvisionServiceActions } from "../../provision/type/provision.types";
 import { createProvisionWorkerClient } from "../../provision/worker/provisionWorkerClient";
@@ -54,6 +57,7 @@ export type ContainerProps = {
   onReadyChange(ready: boolean): void;
   renderPreview: IntakeItemRenderer;
   renderProgress: IntakeItemRenderer;
+  renderResult(result: IntakeResult): ReactNode;
   renderSelect: IntakeItemRenderer;
   renderTolerance: IntakeCalloutRenderer;
   onSessionLoaded?: (session: SessionLoaded) => void;
@@ -84,6 +88,7 @@ export function Container({
   onReadyChange,
   renderPreview,
   renderProgress,
+  renderResult,
   renderSelect,
   renderTolerance,
   onSessionLoaded,
@@ -91,6 +96,8 @@ export function Container({
 }: ContainerProps) {
   const { actions, state } = useIntakeShell();
   const progress = useProgress();
+  const results = useResultStore();
+  const resultClient = useMemo(() => createResultClient({ apiBaseUrl: apiGatewayUrl }), [apiGatewayUrl]);
   const progressActions = useMemo(() => ({ receive: progress.receive, reset: progress.reset }), [progress.receive, progress.reset]);
   const [selectHost, setSelectHost] = useState<HTMLElement | null>(null);
   const [selectReady, setSelectReady] = useState(true);
@@ -104,6 +111,7 @@ export function Container({
   const setStoreValue = useStore((state) => state.setValue);
   const store = useMemo(() => createStoreAdapter(), []);
   const restart = useCallback(() => {
+    resultStoreApi.getState().reset();
     progress.reset();
     actions.showSelect("");
     onCanceled?.();
@@ -208,12 +216,13 @@ export function Container({
     baseIntervalMs: intervalMs,
     intervalPageMs,
     indexingWorkerClient: createIndexingWorkerClient({ apiBaseUrl: apiGatewayUrl }),
-    iqWorkerClient: createIqWorkerClient({ apiBaseUrl: apiGatewayUrl }),
+    resultClient,
+    results: resultStoreApi.getState(),
     imageWorkerClient: createImageWorkerClient({ apiBaseUrl: apiGatewayUrl }),
     getAuthToken() {
       return authToken ?? "";
     },
-  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onIndexed, restart]);
+  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onIndexed, restart, resultClient]);
 
   useEffect(() => {
     sessionRef.current = sessionService;
@@ -236,6 +245,12 @@ export function Container({
 
   const panel = state.container.panel;
   const complete = progress.jobs.some(job => job.jobId === INDEXING_COMPLETE_JOB && job.phase === "completed");
+  const requestId = results.requestId;
+  useEffect(() => {
+    if (!complete || requestId === null || !authToken) return;
+    void Promise.allSettled((["metadata", "audit", "iq"] as const).map(resource => resultStoreApi.getState().load(requestId, resource, resultClient, authToken)));
+  }, [authToken, complete, requestId, resultClient]);
+
   const selectContent = selectHost ? (
     <SelectPanel
       pageSize={pageSize}
@@ -271,6 +286,7 @@ export function Container({
             intro="I’ll keep you updated as I process your document."
             errorColor="#B42318"
             jobs={complete ? progress.jobs.filter(job => job.jobId !== PREPARATION_JOB) : progress.jobs}
+            completion={complete ? renderResult({ metadata: results.metadata, audit: results.audit, iq: results.iq }) : undefined}
             completionJobId={INDEXING_COMPLETE_JOB}
             historyLabel="Processing details"
             failureAction={<ConfButton label="Cancel and Restart" onConfirm={restart} requireConfirmation={false} variant="secondary" />}

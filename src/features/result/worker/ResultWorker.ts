@@ -1,10 +1,10 @@
-import type { IqReport, IqWorkerCommand, IqWorkerResult } from "../type/iq.types";
+import type { ResultData, ResultCommand, ResultResponse } from "../type/result.types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-async function parseResponse(response: Response): Promise<IqWorkerResult<unknown>> {
+async function parseResponse(response: Response): Promise<ResultResponse<unknown>> {
   const contentType = response.headers.get("content-type")?.toLowerCase() || "";
   let responseText: string;
   try {
@@ -31,7 +31,7 @@ async function parseResponse(response: Response): Promise<IqWorkerResult<unknown
   return { ok: true, data: payload };
 }
 
-function httpError(response: Response, payload: unknown): IqWorkerResult<never> {
+function httpError(response: Response, payload: unknown): ResultResponse<never> {
   let error = `HTTP ${response.status}`;
   let code: string | undefined;
   let details: unknown;
@@ -46,7 +46,7 @@ function httpError(response: Response, payload: unknown): IqWorkerResult<never> 
   return { ok: false, code, details, error, status: response.status };
 }
 
-async function fetchJson(url: string): Promise<IqWorkerResult<unknown>> {
+async function fetchJson(url: string): Promise<ResultResponse<unknown>> {
   let response: Response;
   try {
     response = await fetch(url);
@@ -64,8 +64,8 @@ async function fetchJson(url: string): Promise<IqWorkerResult<unknown>> {
   }
 }
 
-export class IqWorker {
-  async run(command: IqWorkerCommand): Promise<IqWorkerResult<IqReport>> {
+export class ResultWorker {
+  async run(command: ResultCommand): Promise<ResultResponse<ResultData>> {
     if (!command?.token) {
       return { ok: false, code: "missing_auth_token", error: "Missing auth token" };
     }
@@ -75,9 +75,11 @@ export class IqWorker {
     if (typeof command.session !== "string" || !command.session.trim()) {
       return { ok: false, code: "invalid_session", error: "Session is missing or invalid." };
     }
+    const session = encodeURIComponent(command.session);
+    const path = command.resource === "audit" ? `metadata/${session}/audit` : `${command.resource}/${session}/data`;
     let response: Response;
     try {
-      response = await fetch(`${command.apiBaseUrl.replace(/\/+$/, "")}/v1/iq/${encodeURIComponent(command.session)}/data`, {
+      response = await fetch(`${command.apiBaseUrl.replace(/\/+$/, "")}/v1/${path}`, {
         cache: "no-store",
         headers: {
           Authorization: `Bearer ${command.token}`,
@@ -94,7 +96,7 @@ export class IqWorker {
     const payload = parsed.data;
     if (isObject(payload) && typeof payload.data === "string") {
       if (payload.status === "error") {
-        return { ok: false, code: "iq_error", details: payload, error: payload.data };
+        return { ok: false, code: `${command.resource}_error`, details: payload, error: payload.data };
       }
       if (payload.status === "completed") {
         const report = await fetchJson(payload.data);
@@ -102,12 +104,12 @@ export class IqWorker {
         if (isObject(report.data)) return { ok: true, data: report.data };
       }
     }
-    return { ok: false, code: "validation_error", error: "Response is not a valid IQ report." };
+    return { ok: false, code: "validation_error", error: `Response is not a valid ${command.resource === "iq" ? "IQ report" : command.resource + " result"}.` };
   }
 }
 
-self.onmessage = async (event: MessageEvent<IqWorkerCommand>) => {
-  const worker = new IqWorker();
+self.onmessage = async (event: MessageEvent<ResultCommand>) => {
+  const worker = new ResultWorker();
   const result = await worker.run(event.data);
   self.postMessage(result);
 };

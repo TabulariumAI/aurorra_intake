@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createIqWorkerClient } from "../worker/iqWorkerClient";
+import { createResultClient } from "../worker/resultWorkerClient";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -13,9 +13,9 @@ it.each(["success", "failure", "crash"])("terminates its standalone worker on %s
     constructor(readonly url: URL) { worker = this; }
   }
   vi.stubGlobal("Worker", WorkerMock);
-  const result = createIqWorkerClient({ apiBaseUrl: "https://gateway.test" }).generateReport("token", "session");
-  expect(worker.url.pathname).toContain("/iq/worker/IqWorker.ts");
-  expect(worker.postMessage).toHaveBeenCalledExactlyOnceWith({  apiBaseUrl: "https://gateway.test", token: "token", session: "session" });
+  const result = createResultClient({ apiBaseUrl: "https://gateway.test" }).load("token", "session", "iq");
+  expect(worker.url.pathname).toContain("/result/worker/ResultWorker.ts");
+  expect(worker.postMessage).toHaveBeenCalledExactlyOnceWith({ apiBaseUrl: "https://gateway.test", token: "token", session: "session", resource: "iq" });
   expect(worker.terminate).not.toHaveBeenCalled();
   if (outcome === "crash") {
     const event = new ErrorEvent("error", { message: "IQ startup failed" });

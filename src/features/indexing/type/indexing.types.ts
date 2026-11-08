@@ -2,7 +2,7 @@ import type { IntakeConfig } from "../../intake/type/intake.types";
 import type { StoreAdapter } from "../../../store/type/store.types";
 import type { ProgressActions } from "../../progressview/type/progress.types";
 import type { ImageWorkerClient } from "../../image/type/image.types";
-import type { IqWorkerClient } from "../../iq/type/iq.types";
+import type { ResultActions, ResultClient } from "../../result/type/result.types";
 
 export type IndexingWorkerCommand =
   | {
@@ -78,7 +78,8 @@ export type IndexingRuntime = {
   baseIntervalMs: number;
   intervalPageMs: number;
   indexingWorkerClient: IndexingWorkerClient;
-  iqWorkerClient: IqWorkerClient;
+  resultClient: ResultClient;
+  results: Pick<ResultActions, "begin" | "load">;
   imageWorkerClient: ImageWorkerClient;
   progress: ProgressActions;
   getAuthToken(): string;

@@ -2,14 +2,16 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createIndexingService } from "../service/IndexingService";
 import { useProgress } from "../../progressview/hook/useProgress";
+import { resultStoreApi } from "../../result/store/resultStore";
 import { intakeConfig } from "../../../test/intakeConfig";
 import type { IndexingRuntime } from "../type/indexing.types";
-import type { IqReport } from "../../iq/type/iq.types";
+import type { ResultData } from "../../result/type/result.types";
 import type { ImagePackage } from "../../image/type/image.types";
 import type { StateKey, StoreAdapter, StoreValues } from "../../../store/type/store.types";
 
 beforeEach(() => {
   vi.useFakeTimers();
+  resultStoreApi.getState().reset();
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -59,6 +61,7 @@ function createRuntime(seed: Partial<StoreValues> = {}, config = { review: false
       reRoute: { detail: { stage: "stage" } },
     },
     store: createStore(seed),
+    results: resultStoreApi.getState(),
     baseIntervalMs: 500,
     intervalPageMs: 500,
     indexingWorkerClient: {
@@ -66,7 +69,7 @@ function createRuntime(seed: Partial<StoreValues> = {}, config = { review: false
       status: vi.fn(async () => ({ status: "completed", data: "", etag: "metadata-etag" })),
     },
     imageWorkerClient: { generatePackage: vi.fn(async () => ({ status: "completed" as const, data: { tiff: "https://storage.test/image.tiff", data: "https://storage.test/image.json" } })) },
-    iqWorkerClient: { generateReport: vi.fn(async () => ({ iq_doc: 98 })) },
+    resultClient: { load: vi.fn(async () => ({ iq_doc: 98 })) },
     progress: { receive, reset: vi.fn() },
     getAuthToken: vi.fn(() => "token-1"),
   };
@@ -669,18 +672,18 @@ describe("IQ completion", () => {
       .mockResolvedValueOnce({ status: "pending", data: "", etag: "metadata-etag" })
       .mockResolvedValue({ status: "completed", data: "", etag: "metadata-etag" });
     let finish!: (report: Record<string, unknown>) => void;
-    runtime.iqWorkerClient.generateReport = vi.fn(() => new Promise<Record<string, unknown>>(resolve => { finish = resolve; }));
+    runtime.resultClient.load = vi.fn(() => new Promise<Record<string, unknown>>(resolve => { finish = resolve; }));
     const service = createIndexingService(runtime);
     const processing = service.process();
     await vi.runAllTimersAsync();
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
+    expect(runtime.resultClient.load).toHaveBeenCalledExactlyOnceWith("token-1", "session-1", "iq");
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Generating IQ report", phase: "started" }));
     const job = receive.mock.calls.at(-1)![0];
     expect(runtime.onIndexed).not.toHaveBeenCalled();
     expect(runtime.eventBus.emit).not.toHaveBeenCalled();
     expect(runtime.store.get("indexingStepStatus")).toBe(true);
     await service.process();
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledOnce();
+    expect(runtime.resultClient.load).toHaveBeenCalledOnce();
     finish({ iq_doc: 98 });
     await processing;
     expect(receive).toHaveBeenCalledWith({ ...job, phase: "completed" });
@@ -696,7 +699,7 @@ describe("IQ completion", () => {
     if (!alreadyComplete) runtime.indexingWorkerClient.status = vi.fn()
       .mockResolvedValueOnce({ status: "pending", data: "", etag: "metadata-etag" })
       .mockResolvedValue({ status: "completed", data: "", etag: "metadata-etag" });
-    runtime.iqWorkerClient.generateReport = vi.fn().mockRejectedValue(new Error("IQ report unavailable"));
+    runtime.resultClient.load = vi.fn().mockRejectedValue(new Error("IQ report unavailable"));
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await processing;
@@ -715,12 +718,12 @@ describe("IQ completion", () => {
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await processing;
-    expect(runtime.iqWorkerClient.generateReport).not.toHaveBeenCalled();
+    expect(runtime.resultClient.load).not.toHaveBeenCalled();
     expect(receive.mock.calls.some(([event]) => event.message === "Generating IQ report")).toBe(false);
     expect(runtime.onIndexed).not.toHaveBeenCalled();
     if (status !== "error") {
       await receive.mock.calls.at(-1)![0].actions[0].onConfirm();
-      expect(runtime.iqWorkerClient.generateReport).not.toHaveBeenCalled();
+      expect(runtime.resultClient.load).not.toHaveBeenCalled();
       expect(runtime.onIndexed).not.toHaveBeenCalled();
     }
   });
@@ -733,7 +736,7 @@ describe("IQ completion", () => {
     runtime.store.set("session", "session-2");
     finish({ status: "completed", data: "", etag: "metadata-etag" });
     await processing;
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
+    expect(runtime.resultClient.load).toHaveBeenCalledExactlyOnceWith("token-1", "session-1", "iq");
   });
 });
 
@@ -804,7 +807,7 @@ describe("post-index workflow", () => {
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
     await processing;
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledTimes(Number(iq));
+    expect(runtime.resultClient.load).toHaveBeenCalledTimes(Number(iq));
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledTimes(Number(document));
     if (document) expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledWith("token-1", "session-1");
     const message = iq && document ? "Generating IQ report and the image package" : iq ? "Generating IQ report" : "Generating the image package";
@@ -865,7 +868,7 @@ describe("post-index workflow", () => {
 
   it("starts image generation even when IQ fails", async () => {
     const { runtime, receive } = createRuntime({}, { review: false, iq: true, document: true });
-    runtime.iqWorkerClient.generateReport = vi.fn().mockRejectedValue(new Error("IQ unavailable"));
+    runtime.resultClient.load = vi.fn().mockRejectedValue(new Error("IQ unavailable"));
     await createIndexingService(runtime).process();
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
     expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Generating IQ report and the image package", phase: "failed", error: "formatted:document processing IQ unavailable" }));
@@ -874,15 +877,15 @@ describe("post-index workflow", () => {
 
   it.each(["iq", "image"] as const)("starts both requests together and waits for both; first completed=%s", async first => {
     const { runtime, receive } = createRuntime({}, { review: false, iq: true, document: true });
-    let finishIq!: (value: IqReport) => void;
+    let finishIq!: (value: ResultData) => void;
     let finishImage!: (value: ImagePackage) => void;
-    runtime.iqWorkerClient.generateReport = vi.fn(() => new Promise<IqReport>(resolve => { finishIq = resolve; }));
+    runtime.resultClient.load = vi.fn(() => new Promise<ResultData>(resolve => { finishIq = resolve; }));
     runtime.imageWorkerClient.generatePackage = vi.fn(() => new Promise<ImagePackage>(resolve => { finishImage = resolve; }));
     const service = createIndexingService(runtime);
     const processing = service.process();
     await vi.runAllTimersAsync();
 
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
+    expect(runtime.resultClient.load).toHaveBeenCalledExactlyOnceWith("token-1", "session-1", "iq");
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledExactlyOnceWith("token-1", "session-1");
     const job = receive.mock.calls.at(-1)![0];
     expect(job).toMatchObject({ message: "Generating IQ report and the image package", phase: "started" });
@@ -896,7 +899,7 @@ describe("post-index workflow", () => {
     expect(runtime.store.get("indexingStepStatus")).toBe(true);
     runtime.store.set("session", "session-2");
     await service.process();
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledOnce();
+    expect(runtime.resultClient.load).toHaveBeenCalledOnce();
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledOnce();
 
     if (first === "image") finishIq({ iq_doc: 98 });
@@ -912,16 +915,16 @@ describe("post-index workflow", () => {
 
   it.each(["iq", "image"] as const)("keeps the process locked until both requests settle after %s fails", async failed => {
     const { runtime, receive } = createRuntime({}, { review: false, iq: true, document: true });
-    let finishIq!: (value: IqReport) => void;
+    let finishIq!: (value: ResultData) => void;
     let failIq!: (error: Error) => void;
     let finishImage!: (value: ImagePackage) => void;
     let failImage!: (error: Error) => void;
-    runtime.iqWorkerClient.generateReport = vi.fn(() => new Promise<IqReport>((resolve, reject) => { finishIq = resolve; failIq = reject; }));
+    runtime.resultClient.load = vi.fn(() => new Promise<ResultData>((resolve, reject) => { finishIq = resolve; failIq = reject; }));
     runtime.imageWorkerClient.generatePackage = vi.fn(() => new Promise<ImagePackage>((resolve, reject) => { finishImage = resolve; failImage = reject; }));
     const service = createIndexingService(runtime);
     const processing = service.process();
     await vi.runAllTimersAsync();
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledOnce();
+    expect(runtime.resultClient.load).toHaveBeenCalledOnce();
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledOnce();
     const job = receive.mock.calls.at(-1)![0];
 
@@ -932,7 +935,7 @@ describe("post-index workflow", () => {
     expect(runtime.store.get("indexingStepStatus")).toBe(true);
     expect(runtime.onIndexed).not.toHaveBeenCalled();
     await service.process();
-    expect(runtime.iqWorkerClient.generateReport).toHaveBeenCalledOnce();
+    expect(runtime.resultClient.load).toHaveBeenCalledOnce();
     expect(runtime.imageWorkerClient.generatePackage).toHaveBeenCalledOnce();
 
     if (failed === "image") finishIq({ iq_doc: 98 });
@@ -950,7 +953,7 @@ describe("post-index workflow", () => {
     const { runtime, receive } = createRuntime({}, { review: false, iq: true, document: true });
     let failIq!: (error: Error) => void;
     let failImage!: (error: Error) => void;
-    runtime.iqWorkerClient.generateReport = vi.fn(() => new Promise<IqReport>((_resolve, reject) => { failIq = reject; }));
+    runtime.resultClient.load = vi.fn(() => new Promise<ResultData>((_resolve, reject) => { failIq = reject; }));
     runtime.imageWorkerClient.generatePackage = vi.fn(() => new Promise<ImagePackage>((_resolve, reject) => { failImage = reject; }));
     const processing = createIndexingService(runtime).process();
     await vi.runAllTimersAsync();
@@ -975,7 +978,7 @@ it.each([undefined, ""])("rejects completed indexing without its metadata ETag: 
   runtime.indexingWorkerClient.status = vi.fn(async () => ({ status: "completed", data: "", etag }));
   await createIndexingService(runtime).process();
   expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "failed", error: expect.stringContaining("metadata ETag") }));
-  expect(runtime.iqWorkerClient.generateReport).not.toHaveBeenCalled();
+  expect(runtime.resultClient.load).not.toHaveBeenCalled();
   expect(runtime.imageWorkerClient.generatePackage).not.toHaveBeenCalled();
   expect(runtime.onIndexed).not.toHaveBeenCalled();
   expect(runtime.eventBus.emit).not.toHaveBeenCalled();
@@ -1039,4 +1042,22 @@ it("retains the original intake for the existing delayed-processing metadata act
   expect(runtime.eventBus.emit).toHaveBeenCalledExactlyOnceWith(runtime.events.reRoute, expect.objectContaining({
     stage: "metadata", completion: expect.objectContaining({ session: "session-1", data: expect.objectContaining({ document: "session-1.pdf" }) }),
   }));
+});
+
+it("retains the already downloaded IQ report for the completion summary", async () => {
+  const { runtime } = createRuntime();
+  await createIndexingService(runtime).process();
+  expect(resultStoreApi.getState()).toMatchObject({ session: "session-1", iq: { status: "success", data: { iq_doc: 98 } } });
+  await resultStoreApi.getState().load(resultStoreApi.getState().requestId!, "iq", runtime.resultClient, "token-1");
+  expect(runtime.resultClient.load).toHaveBeenCalledOnce();
+});
+
+it("uses the injected result owner without touching another result store", async () => {
+  const { runtime } = createRuntime();
+  const current = resultStoreApi.getState();
+  runtime.results = { begin: vi.fn(() => "owned-request"), load: vi.fn(async () => undefined) };
+  await createIndexingService(runtime).process();
+  expect(runtime.results.begin).toHaveBeenCalledExactlyOnceWith("session-1");
+  expect(runtime.results.load).toHaveBeenCalledExactlyOnceWith("owned-request", "iq", runtime.resultClient, "token-1");
+  expect(resultStoreApi.getState()).toBe(current);
 });

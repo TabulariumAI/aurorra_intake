@@ -16,3 +16,4 @@ export { clearStorage } from "./store/adapter/storeAdapter";
 
 export type { IntakeConfig } from "./features/intake/type/intake.types";
 
+export type { IntakeResult } from "./features/result/type/result.types";

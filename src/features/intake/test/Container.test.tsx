@@ -7,6 +7,7 @@ import { createIndexingService } from "../../indexing/service/IndexingService";
 import { createSessionService } from "../../session/service/SessionService";
 import { Container } from "../component/Container";
 import type { ContainerProps } from "../component/Container";
+import { resultStoreApi } from "../../result/store/resultStore";
 import { storeApi } from "../../../store/state/store";
 
 type MockEventBus = {
@@ -19,7 +20,7 @@ let capturedProgress: ((event: { error?: string; jobId: string; message: string;
 const setSession = vi.fn();
 const workerMocks = vi.hoisted(() => ({
   createImageWorkerClient: vi.fn(() => ({ generatePackage: vi.fn() })),
-  createIqWorkerClient: vi.fn(() => ({ generateReport: vi.fn() })),
+  createResultClient: vi.fn(() => ({ load: vi.fn() })),
   createSessionWorkerClient: vi.fn(() => ({
     newSession: vi.fn(),
     sessionData: vi.fn(),
@@ -30,12 +31,12 @@ const workerMocks = vi.hoisted(() => ({
 
 vi.mock("../../image/worker/imageWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../image/worker/imageWorkerClient")>(), createImageWorkerClient: workerMocks.createImageWorkerClient }));
 
-vi.mock("../../iq/worker/iqWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../iq/worker/iqWorkerClient")>(), createIqWorkerClient: workerMocks.createIqWorkerClient }));
+vi.mock("../../result/worker/resultWorkerClient", async importOriginal => ({ ...await importOriginal<typeof import("../../result/worker/resultWorkerClient")>(), createResultClient: workerMocks.createResultClient }));
 
 it("wires the intake-owned IQ client with the configured gateway", () => {
   render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
-  expect(workerMocks.createIqWorkerClient).toHaveBeenCalledWith({ apiBaseUrl: "https://user.example.com" });
-  expect(vi.mocked(createIndexingService).mock.calls.at(-1)![0].iqWorkerClient).toBe(workerMocks.createIqWorkerClient.mock.results.at(-1)!.value);
+  expect(workerMocks.createResultClient).toHaveBeenCalledWith({ apiBaseUrl: "https://user.example.com" });
+  expect(vi.mocked(createIndexingService).mock.calls.at(-1)![0].resultClient).toBe(workerMocks.createResultClient.mock.results.at(-1)!.value);
 });
 
 function wrap(name: string) {
@@ -47,7 +48,7 @@ function wrap(name: string) {
   );
 }
 
-function hostProps(): Pick<ContainerProps, "config" | "pageSize" | "tiffPixelFormat" | "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderPreview" | "renderProgress" | "renderSelect" | "renderTolerance"> {
+function hostProps(): Pick<ContainerProps, "config" | "pageSize" | "tiffPixelFormat" | "maxFileSizeBytes" | "intervalMs" | "intervalPageMs" | "onLoaderChange" | "renderPreview" | "renderProgress" | "renderResult" | "renderSelect" | "renderTolerance"> {
   return {
     config: { ...intakeConfig, review: false, iq: true, document: true },
     pageSize,
@@ -58,6 +59,7 @@ function hostProps(): Pick<ContainerProps, "config" | "pageSize" | "tiffPixelFor
     onLoaderChange: vi.fn(),
     renderPreview: wrap("preview"),
     renderProgress: wrap("progress"),
+    renderResult: () => null,
     renderSelect: wrap("select"),
     renderTolerance: ({ children }) => <div role="dialog">{children}</div>,
   };
@@ -395,7 +397,7 @@ it("wires the next intake action through the existing restart and host cancellat
 });
 
 
-it("uses the completed job to show the summary and always-visible processing details", () => {
+it("uses the completed job to show the summary and collapsed processing details", () => {
   render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
   act(() => capturedActions.showProgress());
   act(() => {
@@ -405,6 +407,10 @@ it("uses the completed job to show the summary and always-visible processing det
     capturedProgress!({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed" });
   });
   expect(screen.getByText("Indexing complete")).toBeVisible();
+  const toggle = screen.getByRole("button", { name: "Processing details" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("table", { name: "Processing details" })).not.toBeInTheDocument();
+  fireEvent.click(toggle);
   expect(screen.getByRole("table", { name: "Processing details" })).toBeVisible();
   expect(screen.queryByText("Follow each step as it completes.")).not.toBeInTheDocument();
   expect(screen.getByText("Uploading your document")).toBeVisible();
@@ -422,4 +428,32 @@ it.each(["started", "completed", "failed"] as const)("preserves preparation prog
   expect(screen.getByText("Preparing your document…").closest("li")).toHaveAttribute("data-phase", phase);
   expect(screen.queryByRole("table", { name: "Processing details" })).not.toBeInTheDocument();
   if (phase === "failed") expect(screen.getByRole("alert")).toHaveTextContent("TIFF export failed.");
+});
+
+it("renders result resources only after completion and resets them on restart", () => {
+  const renderResult = vi.fn(() => <section aria-label="Indexing results">Result metrics</section>);
+  render(<Container {...hostProps()} renderResult={renderResult} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+  act(() => capturedActions.showProgress());
+  expect(screen.queryByRole("region", { name: "Indexing results" })).not.toBeInTheDocument();
+  act(() => capturedProgress!({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed" }));
+  expect(screen.getByRole("region", { name: "Indexing results" })).toBeVisible();
+  act(() => vi.mocked(createIndexingService).mock.calls.at(-1)![0].restart());
+  expect(screen.queryByRole("region", { name: "Indexing results" })).not.toBeInTheDocument();
+});
+
+it("loads summary resources after completion without repeating an already loaded IQ", async () => {
+  resultStoreApi.getState().reset();
+  const requestId = resultStoreApi.getState().begin("session");
+  const client = { load: vi.fn(async () => ({ iq_doc: 90 })) };
+  await resultStoreApi.getState().load(requestId, "iq", client, "token");
+  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+  const worker = workerMocks.createResultClient.mock.results.at(-1)!.value;
+  expect(worker.load).not.toHaveBeenCalled();
+  act(() => capturedProgress!({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed" }));
+  await waitFor(() => expect(worker.load).toHaveBeenCalledTimes(2));
+  expect(worker.load).toHaveBeenCalledWith("token", "session", "metadata");
+  expect(worker.load).toHaveBeenCalledWith("token", "session", "audit");
+  expect(worker.load).not.toHaveBeenCalledWith("token", "session", "iq");
+  act(() => vi.mocked(createIndexingService).mock.calls.at(-1)![0].restart());
+  expect(resultStoreApi.getState().session).toBeNull();
 });
