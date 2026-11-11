@@ -20,7 +20,7 @@ npm install
 
 The package exports `AurorraIntake`, its props type, session-loading helpers and read-only session state with domain actions.
 
-`FailedSessionPanel` displays failure details, nonzero saved choices in two service/value pairs per row, and a source download action inside a host-owned dialog. Values of 1 display as Yes; other nonzero values stay numeric. Service names use readable word spacing, and the four-column table scrolls horizontally on narrow screens. The host displays the status and session number in the dialog header and supplies `onDownload` from `createSessionWorkerClient(...).downloadSource` and its shared `formatError` function. SessionWorker downloads the saved source URL with the current storage token; the panel's action hook cancels the worker on dismissal and releases the temporary download URL. The panel does not fetch data or edit choices.
+`createSessionWorkerClient(...).downloadSource` downloads the saved input URL with the supplied storage token. Batch owns the failed-session content panel and its download action; the host supplies this worker API and error formatting.
 
 ```tsx
 import { AurorraIntake } from "aurorra-intake";
