@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createIndexingService } from "../service/IndexingService";
+import { isSessionExpired } from "aurora-core/session-error";
 import { useProgress } from "../../progressview/hook/useProgress";
 import { resultStoreApi } from "../../result/store/resultStore";
 import { intakeConfig } from "../../../test/intakeConfig";
@@ -78,6 +79,100 @@ function createRuntime(seed: Partial<StoreValues> = {}, config = { review: false
 }
 
 describe("IndexingService", () => {
+  it.each([
+    "session_token_expired", "session_token_invalid", "session_token_missing",
+    "session_token_signature", "session_token_issuer", "session_token_audience",
+    "session_token_subject", "session_token_early", "session_token_algorithm",
+    "session_token_claim", "session_token_encoding", "session_token_json", "session_token_text",
+  ])("preserves the original %s status rejection for host recovery", async code => {
+    const { runtime } = createRuntime();
+    const error = Object.assign(new Error("Sign-in required"), { code, status: 401, details: { code } });
+    vi.mocked(runtime.indexingWorkerClient.status).mockRejectedValueOnce(error);
+
+    await expect(createIndexingService(runtime).checkStatus("session-1")).rejects.toBe(error);
+  });
+
+  it.each([
+    "initial", "start", "Refining document", "Recognizing document", "Identifying document", "Indexing document",
+    "Verifying signatures and seals", "Enriching legal descriptions", "Enriching party information",
+    "Analyzing Index Quality", "Analyzing Index Compliance", "Retrieving processed data...",
+    "iq", "image",
+  ])("delegates expired authentication during %s without marking processing failed", async stage => {
+    const { runtime, receive } = createRuntime({}, { review: false, iq: true, document: true });
+    runtime.config.choices = [...runtime.config.choices, { service: "ExecutionEnrichment", level: 1 }];
+    const error = Object.assign(new Error("The sign-in token has expired."), { code: "session_token_expired", status: 401 });
+    runtime.onError = vi.fn(isSessionExpired);
+    runtime.indexingWorkerClient.status = vi.fn(async () => {
+      if (stage === "initial" || receive.mock.calls.at(-1)?.[0].message === stage) throw error;
+      return { status: stage === "iq" || stage === "image" ? "completed" : "processing", data: "", etag: "metadata-etag" };
+    });
+    if (stage === "start") vi.mocked(runtime.indexingWorkerClient.start).mockRejectedValueOnce(error);
+    if (stage === "iq") vi.mocked(runtime.resultClient.load).mockRejectedValueOnce(error);
+    if (stage === "image") vi.mocked(runtime.imageWorkerClient.generatePackage).mockRejectedValueOnce(error);
+
+    const run = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await run;
+
+    expect(runtime.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(receive.mock.calls.some(([job]) => job.phase === "failed")).toBe(false);
+    expect(receive.mock.calls.some(([job]) => job.message === "Indexing complete")).toBe(false);
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+    expect(runtime.eventBus.emit).not.toHaveBeenCalled();
+    expect(runtime.restart).not.toHaveBeenCalled();
+    expect(runtime.store.get("session")).toBe("session-1");
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+    const checks = vi.mocked(runtime.indexingWorkerClient.status).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(checks);
+  });
+
+  it("handles expiration at page 9 of 20 and completes the same session after recovery without restarting indexing", async () => {
+    const { runtime, receive } = createRuntime({ numOfPages: 20 });
+    const error = Object.assign(new Error("The sign-in token has expired."), { code: "session_token_expired", status: 401 });
+    runtime.onError = vi.fn(isSessionExpired);
+    let checks = 0;
+    runtime.indexingWorkerClient.status = vi.fn(async () => {
+      if (++checks === 70) throw error;
+      return { status: "processing", data: "" };
+    });
+    const service = createIndexingService(runtime);
+    const run = service.process();
+    await vi.runAllTimersAsync();
+    await run;
+
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Indexing document", phase: "started", progress: { completed: 9, total: 20, unit: "pages" } }));
+    expect(runtime.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(runtime.indexingWorkerClient.status).toHaveBeenCalledTimes(70);
+    vi.mocked(runtime.getAuthToken).mockReturnValue("renewed-token");
+    vi.mocked(runtime.indexingWorkerClient.status).mockResolvedValue({ status: "completed", data: "", etag: "recovered-etag" });
+    await service.process();
+
+    expect(runtime.indexingWorkerClient.status).toHaveBeenLastCalledWith("renewed-token", "session-1");
+    expect(runtime.indexingWorkerClient.start).toHaveBeenCalledTimes(1);
+    expect(runtime.onIndexed).toHaveBeenCalledExactlyOnceWith({ session: "session-1", document: "session-1.pdf", etag: "recovered-etag" });
+    expect(receive.mock.calls.some(([job]) => job.phase === "failed")).toBe(false);
+  });
+
+  it.each(["processing", "request"])("keeps an unhandled %s failure on the active progress job", async failure => {
+    const { runtime, receive } = createRuntime();
+    runtime.onError = vi.fn(isSessionExpired);
+    vi.mocked(runtime.indexingWorkerClient.status).mockResolvedValueOnce({ status: "processing", data: "" });
+    if (failure === "processing") {
+      vi.mocked(runtime.indexingWorkerClient.status).mockResolvedValueOnce({ status: "error", data: "Indexing failed" });
+    } else {
+      vi.mocked(runtime.indexingWorkerClient.status).mockRejectedValueOnce(Object.assign(new Error("Status unavailable"), { code: "session_verification_unavailable", status: 401 }));
+    }
+    const run = createIndexingService(runtime).process();
+    await vi.runAllTimersAsync();
+    await run;
+
+    expect(runtime.onError).toHaveBeenCalledTimes(1);
+    expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: "Refining document", phase: "failed", error: `formatted:document processing ${failure === "processing" ? "Indexing failed" : "Status unavailable"}` }));
+    expect(runtime.onIndexed).not.toHaveBeenCalled();
+    expect(runtime.store.get("indexingStepStatus")).toBe(false);
+  });
+
   it("shows the required indexing and enabled enrichment sequence", async () => {
     const { defaultChoices, receive, runtime } = createRuntime();
     runtime.store.set("numOfPages", 2);

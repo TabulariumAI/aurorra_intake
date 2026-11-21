@@ -59,6 +59,7 @@ export type IndexingServiceActions = {
 
 export type IndexingRuntime = {
   config: IntakeConfig;
+  onError?: (error: unknown) => boolean;
   restart(): void;
   onIndexed(result: { session: string; document: string; etag: string }): void;
   alert: {

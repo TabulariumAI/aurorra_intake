@@ -165,15 +165,17 @@ describe("Container", () => {
     expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ baseIntervalMs: 13000, intervalPageMs: 137 }));
   });
 
-  it("passes the host error handler to session creation and refreshes it", () => {
+  it("passes the host error handler to session creation and indexing and refreshes it", () => {
     const props = { ...hostProps(), authToken: "token", apiGatewayUrl: "https://user.example.com", onReadyChange: vi.fn(), onIndexed: vi.fn() };
     const onError = vi.fn(() => true);
     const { rerender } = render(<Container  {...props} onError={onError} />);
     expect(createSessionService).toHaveBeenLastCalledWith(expect.objectContaining({ onError }));
+    expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ onError }));
 
     const updated = vi.fn(() => false);
     rerender(<Container  {...props} onError={updated} />);
     expect(createSessionService).toHaveBeenLastCalledWith(expect.objectContaining({ onError: updated }));
+    expect(createIndexingService).toHaveBeenLastCalledWith(expect.objectContaining({ onError: updated }));
   });
 
   it.each([401, 503])("reports the original session-loading failure once through onFailure: status=%s", async status => {
@@ -397,8 +399,15 @@ it("wires the next intake action through the existing restart and host cancellat
 });
 
 
-it("uses the completed job to show the summary and collapsed processing details", () => {
-  render(<Container {...hostProps()} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
+it("shows only segmented IQ notes in their separate viewer after completion", () => {
+  resultStoreApi.getState().reset();
+  resultStoreApi.getState().begin("session");
+  resultStoreApi.setState({ iq: { status: "success", error: null, data: { notes: [
+    { segment: "Sides", message: "Review the recorded address." },
+    { segment: null, message: "Unclassified indexes: Satisfied (0/25)" },
+    { segment: "   ", message: "Blank segment" },
+  ] } } });
+  render(<Container {...hostProps()} renderResult={() => <section aria-label="Indexing results">Summary metrics</section>} authToken="token" apiGatewayUrl="https://user.example.com" onReadyChange={vi.fn()} onIndexed={vi.fn()} />);
   act(() => capturedActions.showProgress());
   act(() => {
     capturedProgress!({ jobId: "document-preparation", message: "Preparing your document…", phase: "completed" });
@@ -407,16 +416,18 @@ it("uses the completed job to show the summary and collapsed processing details"
     capturedProgress!({ jobId: "indexing-complete", message: "Indexing complete", phase: "completed" });
   });
   expect(screen.getByText("Indexing complete")).toBeVisible();
-  const toggle = screen.getByRole("button", { name: "Processing details" });
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("region", { name: "Indexing results" })).toBeVisible();
+  const notes = screen.getByRole("region", { name: "Review notes" });
+  expect(within(notes).getByText("Sides", { exact: true })).toBeVisible();
+  expect(screen.getByText("Review the recorded address.")).toBeVisible();
+  expect(within(notes).queryByText("Unclassified indexes: Satisfied (0/25)")).not.toBeInTheDocument();
+  expect(within(notes).queryByText("Blank segment")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Processing details" })).not.toBeInTheDocument();
   expect(screen.queryByRole("table", { name: "Processing details" })).not.toBeInTheDocument();
-  fireEvent.click(toggle);
-  expect(screen.getByRole("table", { name: "Processing details" })).toBeVisible();
   expect(screen.queryByText("Follow each step as it completes.")).not.toBeInTheDocument();
-  expect(screen.getByText("Uploading your document")).toBeVisible();
+  expect(screen.queryByText("Uploading your document")).not.toBeInTheDocument();
   expect(screen.queryByText("Preparing your document…")).not.toBeInTheDocument();
-  expect(screen.getByText("Generating IQ report and the image package")).toBeVisible();
-  expect(within(screen.getByRole("table", { name: "Processing details" })).getAllByRole("row")).toHaveLength(2);
+  expect(screen.queryByText("Generating IQ report and the image package")).not.toBeInTheDocument();
 });
 
 it.each(["started", "completed", "failed"] as const)("preserves preparation progress before overall completion: %s", phase => {

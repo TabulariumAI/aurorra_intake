@@ -8,6 +8,7 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      "aurora-core/session-error": path.resolve(rootDir, "../aurora_core/src/sessionError.ts"),
       "aurora-core": path.resolve(rootDir, "../aurora_core/src/public-api.ts"),
       react: path.resolve(rootDir, "node_modules/react"),
       "react-dom": path.resolve(rootDir, "node_modules/react-dom"),
@@ -23,7 +24,7 @@ export default defineConfig({
       formats: ["es"],
     },
     rollupOptions: {
-      external: ["aurora-core", "react", "react-dom", "react-dom/client", "react-dom/server"],
+      external: ["aurora-core", "aurora-core/session-error", "react", "react-dom", "react-dom/client", "react-dom/server"],
     },
   },
 });

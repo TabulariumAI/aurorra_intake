@@ -5,6 +5,7 @@ import type {
 } from "../type/indexing.types";
 import { ENRICHMENT_STEPS, INDEXING_COMPLETE_JOB, PAGE_PROGRESS_STAGES } from "../config/indexing.config";
 import type { ProgressJob } from "aurora-core";
+import { isSessionExpired } from "aurora-core/session-error";
 import type { IntakeCompletePayload } from "../../intake/service/intakeOrchestrator";
 
 type ErrorLike = {
@@ -233,6 +234,7 @@ class IndexingService implements IndexingServiceActions {
       runtime.onIndexed({ session: sessionId, document: String(documentName), etag: status.etag });
     } catch (error) {
       console.error("[Intake:indexing]", error);
+      if (runtime.onError?.(error)) return;
       const message = getErrorMessage(error, "document processing", runtime);
       runtime.progress.receive({ ...lastProgress, error: message, phase: "failed" });
     } finally {
@@ -270,6 +272,7 @@ class IndexingService implements IndexingServiceActions {
       return data;
     } catch (error) {
       console.error("[Intake:indexing]", error);
+      if (isSessionExpired(error)) throw error;
       const fallback = runtime.alert.format(runtime.messages.ERR_ACT, {
         [runtime.messages.ERR_ACT.args.action]: "document processing",
       });

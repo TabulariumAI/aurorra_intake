@@ -8,6 +8,7 @@ import { createImageWorkerClient } from "../../image/worker/imageWorkerClient";
 import { createResultClient } from "../../result/worker/resultWorkerClient";
 import { resultStoreApi, useResultStore } from "../../result/store/resultStore";
 import type { IntakeResult } from "../../result/type/result.types";
+import { NotesViewer } from "../../result/component/NotesViewer";
 import type { ReactNode } from "react";
 import { createProvisionService } from "../../provision/service/ProvisionService";
 import type { ProvisionServiceActions } from "../../provision/type/provision.types";
@@ -207,6 +208,7 @@ export function Container({
 
   const indexingService = useMemo(() => createIndexingService({
     onIndexed,
+    onError,
     restart,
     config,
     ...commonRuntime,
@@ -222,7 +224,7 @@ export function Container({
     getAuthToken() {
       return authToken ?? "";
     },
-  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onIndexed, restart, resultClient]);
+  }), [apiGatewayUrl, authToken, commonRuntime, config, intervalMs, intervalPageMs, onError, onIndexed, restart, resultClient]);
 
   useEffect(() => {
     sessionRef.current = sessionService;
@@ -286,9 +288,12 @@ export function Container({
             intro="I’ll keep you updated as I process your document."
             errorColor="#B42318"
             jobs={complete ? progress.jobs.filter(job => job.jobId !== PREPARATION_JOB) : progress.jobs}
-            completion={complete ? renderResult({ metadata: results.metadata, audit: results.audit, iq: results.iq }) : undefined}
+            completion={complete ? <>
+              {renderResult({ metadata: results.metadata, audit: results.audit, iq: results.iq })}
+              <NotesViewer iq={results.iq} />
+            </> : undefined}
             completionJobId={INDEXING_COMPLETE_JOB}
-            historyLabel="Processing details"
+            completionBanner
             failureAction={<ConfButton label="Cancel and Restart" onConfirm={restart} requireConfirmation={false} variant="secondary" />}
           />
         ),
