@@ -19,7 +19,7 @@ export const intakeConfig: IntakeConfig = {
     { service: "ChainEnrichment", level: 0 },
     { service: "HistoryEnrichment", level: 0 },
     { service: "FeeComputation", level: 0 },
-    { service: "Validation", level: 1 },
+    { service: "Validation", level: 0 },
     { service: "Redact", level: 0 },
     { service: "Manifest", level: 0 },
     { service: "Record", level: 0 },
