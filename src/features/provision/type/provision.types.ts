@@ -27,6 +27,8 @@ export type ProvisionWorkerFailure = {
   error: string;
   code?: string;
   status?: number;
+  retryAfter?: string;
+  retryAt?: number;
   details?: unknown;
 };
 

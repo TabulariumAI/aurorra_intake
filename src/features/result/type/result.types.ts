@@ -18,7 +18,7 @@ export type ResultCommand = {
 
 export type ResultResponse<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; code?: string; status?: number; details?: unknown };
+  | { ok: false; error: string; code?: string; status?: number; retryAfter?: string; retryAt?: number; details?: unknown };
 
 export type ResultConfig = { apiBaseUrl: string };
 

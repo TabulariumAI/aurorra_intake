@@ -28,3 +28,20 @@ it.each([
   expect(event.error.cause).toBe(cause);
   expect(terminate).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+  ["Session", () => createSessionWorkerClient({ apiBaseUrl: "https://gateway" }).newSession("token")],
+  ["Indexing", () => createIndexingWorkerClient({ apiBaseUrl: "https://gateway" }).status("token", "session")],
+  ["IQ", () => createResultClient({ apiBaseUrl: "https://gateway" }).load("token", "session", "iq")],
+  ["Provision", () => createProvisionWorkerClient({ apiBaseUrl: "https://gateway" }).provision("token", "session", "document.pdf", "county")],
+] as const)("%s retains retry metadata across its worker boundary without replay", async (_name, request) => {
+  const post = vi.fn();
+  class WorkerMock {
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    postMessage() { post(); this.onmessage?.({ data: { ok: false, status: 429, error: "Unavailable. Retry after 12:00.", retryAfter: "30", retryAt: 123456 } }); }
+    terminate() {}
+  }
+  vi.stubGlobal("Worker", WorkerMock);
+  await expect(request()).rejects.toMatchObject({ status: 429, retryAfter: "30", retryAt: 123456, message: "Unavailable. Retry after 12:00." });
+  expect(post).toHaveBeenCalledOnce();
+});

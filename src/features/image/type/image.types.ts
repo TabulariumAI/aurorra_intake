@@ -11,7 +11,7 @@ export type ImageWorkerCommand = {
 
 export type ImageWorkerResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; code?: string; status?: number; details?: unknown };
+  | { ok: false; error: string; code?: string; status?: number; retryAfter?: string; retryAt?: number; details?: unknown };
 
 export type ImageWorkerConfig = { apiBaseUrl: string };
 

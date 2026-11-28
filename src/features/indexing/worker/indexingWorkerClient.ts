@@ -3,19 +3,23 @@ import type { IndexingWorkerClient, IndexingWorkerConfig } from "../type/indexin
 type IndexingWorkerError = Error & {
   code?: string;
   status?: number;
+  retryAfter?: string;
+  retryAt?: number;
   details?: unknown;
 };
 
 function resolveError(message: string, error: unknown): IndexingWorkerError {
   const err = new Error(message) as IndexingWorkerError;
   if (typeof error === "object" && error !== null) {
-    const candidate = error as { code?: unknown; status?: unknown; details?: unknown };
+    const candidate = error as { code?: unknown; retryAfter?: unknown; retryAt?: unknown; status?: unknown; details?: unknown };
     if (typeof candidate.code === "string") {
       err.code = candidate.code;
     }
     if (typeof candidate.status === "number") {
       err.status = candidate.status;
     }
+    if (typeof candidate.retryAfter === "string") err.retryAfter = candidate.retryAfter;
+    if (typeof candidate.retryAt === "number") err.retryAt = candidate.retryAt;
     if (Object.prototype.hasOwnProperty.call(candidate, "details")) {
       err.details = candidate.details;
     }
@@ -40,7 +44,7 @@ async function runWorker<T>(command: unknown): Promise<T> {
       settled = true;
       cleanup();
 
-      const payload = event?.data as { ok?: boolean; error?: string; code?: string; status?: number; details?: unknown; data?: T };
+      const payload = event?.data as { ok?: boolean; error?: string; code?: string; status?: number; retryAfter?: string; retryAt?: number; details?: unknown; data?: T };
       if (payload && payload.ok === true) {
         resolve(payload.data as T);
         return;

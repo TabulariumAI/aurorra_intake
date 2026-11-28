@@ -290,7 +290,7 @@ export function Container({
             jobs={complete ? progress.jobs.filter(job => job.jobId !== PREPARATION_JOB) : progress.jobs}
             completion={complete ? <>
               {renderResult({ metadata: results.metadata, audit: results.audit, iq: results.iq })}
-              <NotesViewer iq={results.iq} />
+              <NotesViewer metadata={results.metadata} iq={results.iq} />
             </> : undefined}
             completionJobId={INDEXING_COMPLETE_JOB}
             completionBanner

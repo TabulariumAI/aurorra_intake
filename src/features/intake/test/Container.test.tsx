@@ -418,6 +418,9 @@ it("shows only segmented IQ notes in their separate viewer after completion", ()
   expect(screen.getByText("Indexing complete")).toBeVisible();
   expect(screen.getByRole("region", { name: "Indexing results" })).toBeVisible();
   const notes = screen.getByRole("region", { name: "Review notes" });
+  expect(within(notes).queryByRole("heading")).not.toBeInTheDocument();
+  act(() => resultStoreApi.setState({ metadata: { status: "success", error: null, data: { heading: { title: "Statutory Warranty Deed" } } } }));
+  expect(within(notes).getByRole("heading", { name: "Statutory Warranty Deed" })).toBeVisible();
   expect(within(notes).getByText("Sides", { exact: true })).toBeVisible();
   expect(screen.getByText("Review the recorded address.")).toBeVisible();
   expect(within(notes).queryByText("Unclassified indexes: Satisfied (0/25)")).not.toBeInTheDocument();

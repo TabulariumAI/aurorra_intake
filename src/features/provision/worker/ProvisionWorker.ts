@@ -1,3 +1,4 @@
+import { retryInfo } from "aurora-core/retry-info";
 import type { ProvisionWorkerCommand, ProvisionWorkerResult } from "../type/provision.types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -84,7 +85,7 @@ export class ProvisionWorker {
     return {
       ok: false,
       status: response.status,
-      error,
+      ...retryInfo(response, error),
       code,
       details,
     };

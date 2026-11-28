@@ -15,9 +15,11 @@ export function createImageWorkerClient({ apiBaseUrl }: ImageWorkerConfig): Imag
             resolve(payload.data);
             return;
           }
-          const error = new Error(payload.error) as Error & { code?: string; status?: number; details?: unknown };
+          const error = new Error(payload.error) as Error & { code?: string; status?: number; retryAfter?: string; retryAt?: number; details?: unknown };
           if (typeof payload.code === "string") error.code = payload.code;
           if (typeof payload.status === "number") error.status = payload.status;
+          if (typeof payload.retryAfter === "string") error.retryAfter = payload.retryAfter;
+          if (typeof payload.retryAt === "number") error.retryAt = payload.retryAt;
           if (Object.prototype.hasOwnProperty.call(payload, "details")) error.details = payload.details;
           reject(error);
         };

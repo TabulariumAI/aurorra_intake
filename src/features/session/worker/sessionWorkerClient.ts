@@ -3,6 +3,8 @@ import type { SessionWorkerClient, SessionWorkerCommand, SessionWorkerConfig, Se
 type SessionWorkerError = Error & {
   code?: string;
   status?: number;
+  retryAfter?: string;
+  retryAt?: number;
   details?: unknown;
 };
 
@@ -40,6 +42,8 @@ function runWorker<T>(command: SessionWorkerCommand, signal?: AbortSignal): Prom
       const error = new Error(payload.error) as SessionWorkerError;
       if (payload.code !== undefined) error.code = payload.code;
       if (payload.status !== undefined) error.status = payload.status;
+      if (payload.retryAfter !== undefined) error.retryAfter = payload.retryAfter;
+      if (payload.retryAt !== undefined) error.retryAt = payload.retryAt;
       if ("details" in payload) error.details = payload.details;
       reject(error);
     };

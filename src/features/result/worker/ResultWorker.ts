@@ -1,3 +1,4 @@
+import { retryInfo } from "aurora-core/retry-info";
 import type { ResultData, ResultCommand, ResultResponse } from "../type/result.types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -18,7 +19,7 @@ async function parseResponse(response: Response): Promise<ResultResponse<unknown
     try {
       payload = JSON.parse(responseText);
     } catch {
-      return { ok: false, code: "invalid_json", error: "Response JSON could not be parsed.", status: response.status };
+      return { ok: false, code: "invalid_json", ...retryInfo(response, "Response JSON could not be parsed."), status: response.status };
     }
   } else if (responseText) {
     payload = responseText;
@@ -43,7 +44,7 @@ function httpError(response: Response, payload: unknown): ResultResponse<never> 
   } else if (typeof payload === "string" && payload.trim()) {
     error = payload.trim();
   }
-  return { ok: false, code, details, error, status: response.status };
+  return { ok: false, code, details, ...retryInfo(response, error), status: response.status };
 }
 
 async function fetchJson(url: string): Promise<ResultResponse<unknown>> {
@@ -60,7 +61,7 @@ async function fetchJson(url: string): Promise<ResultResponse<unknown>> {
   try {
     return { ok: true, data: await response.json() };
   } catch {
-    return { ok: false, code: "invalid_json", error: "Response JSON could not be parsed.", status: response.status };
+    return { ok: false, code: "invalid_json", ...retryInfo(response, "Response JSON could not be parsed."), status: response.status };
   }
 }
 

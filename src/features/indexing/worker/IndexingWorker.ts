@@ -1,3 +1,4 @@
+import { retryInfo } from "aurora-core/retry-info";
 import type { IndexingWorkerCommand, IndexingWorkerResult } from "../type/indexing.types";
 
 type JsonValue = Record<string, unknown>;
@@ -87,7 +88,7 @@ export class IndexingWorker {
     return {
       ok: false,
       status: response.status,
-      error,
+      ...retryInfo(response, error),
       code,
       details,
     };

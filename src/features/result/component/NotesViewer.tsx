@@ -1,3 +1,4 @@
+import type { MetadataPayload } from "aurora-core";
 import type { IntakeResult } from "../type/result.types";
 
 type Note = { segment: string; message: string };
@@ -18,13 +19,14 @@ function notesWithSegments(value: IntakeResult["iq"]): Note[] {
   ).map(note => ({ segment: note.segment.trim(), message: note.message.trim() })).reverse();
 }
 
-export function NotesViewer({ iq }: { iq: IntakeResult["iq"] }) {
+export function NotesViewer({ metadata, iq }: Pick<IntakeResult, "metadata" | "iq">) {
   const notes = notesWithSegments(iq);
+  const title = (metadata.data as MetadataPayload | null)?.heading?.title?.trim();
   if (notes.length === 0) return null;
 
   return (
     <section aria-label="Review notes" style={{ borderTop: "1px solid var(--border-subtle)", minWidth: 0, paddingTop: "1rem" }}>
-      <h3 style={{ color: "var(--title-ink)", fontSize: "0.95rem", fontWeight: 600, margin: "0 0 0.35rem" }}>Review notes</h3>
+      {title ? <h3 style={{ color: "var(--title-ink)", fontSize: "0.95rem", fontWeight: 600, margin: "0 0 0.35rem" }}>{title}</h3> : null}
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {notes.map((note, index) => (
           <li key={`${note.segment}-${index}`} style={{ margin: "0.75rem 0" }}>

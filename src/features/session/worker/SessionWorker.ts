@@ -1,3 +1,4 @@
+import { retryInfo } from "aurora-core/retry-info";
 import type { SessionWorkerCommand, SessionWorkerResult } from "../type/session.types";
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -94,7 +95,7 @@ export class SessionWorker {
     return {
       ok: false,
       status: response.status,
-      error,
+      ...retryInfo(response, error),
       code,
       details,
     };

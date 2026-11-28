@@ -2,6 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import { NotesViewer } from "./NotesViewer";
 import type { IntakeResult } from "../type/result.types";
 
+const metadata: IntakeResult["metadata"] = { status: "success", data: { heading: { title: "Warranty Deed" } }, error: null };
+
 const iq = (data: IntakeResult["iq"]["data"], status: IntakeResult["iq"]["status"] = "success"): IntakeResult["iq"] => ({ status, data, error: null });
 
 it("shows valid notes in reverse order with each segment above its message", () => {
@@ -12,9 +14,11 @@ it("shows valid notes in reverse order with each segment above its message", () 
     { segment: "legal", message: " " },
     { segment: "sides", message: "Second message." },
   ] };
-  render(<NotesViewer iq={iq(data)} />);
+  render(<NotesViewer metadata={metadata} iq={iq(data)} />);
 
   const notes = screen.getByRole("region", { name: "Review notes" });
+  expect(within(notes).getByRole("heading", { name: "Warranty Deed" })).toBeVisible();
+  expect(within(notes).queryByText("Review notes")).not.toBeInTheDocument();
   const rows = within(notes).getAllByRole("listitem");
   expect(rows).toHaveLength(2);
   expect(rows[0].children[0]).toHaveTextContent("sides");
@@ -38,6 +42,25 @@ it.each([
   iq({ notes: [{ segment: " ", message: "No segment" }] }),
   iq({ notes: [{ segment: "title", message: "Message" }] }, "loading"),
 ])("hides the section when there are no displayable notes", value => {
-  render(<NotesViewer iq={value} />);
+  render(<NotesViewer metadata={metadata} iq={value} />);
   expect(screen.queryByRole("region", { name: "Review notes" })).not.toBeInTheDocument();
+});
+
+it.each([
+  { status: "loading", data: null, error: null },
+  { status: "error", data: null, error: "Metadata unavailable" },
+  { status: "success", data: {}, error: null },
+  { status: "success", data: { heading: { title: "   " } }, error: null },
+] satisfies IntakeResult["metadata"][])("keeps notes visible without a heading until the metadata title arrives", pending => {
+  const report = iq({ notes: [{ segment: "title", message: "Recorded deed." }] });
+  const view = render(<NotesViewer metadata={pending} iq={report} />);
+  const notes = screen.getByRole("region", { name: "Review notes" });
+  expect(within(notes).getByText("Recorded deed.")).toBeVisible();
+  expect(within(notes).queryByRole("heading")).not.toBeInTheDocument();
+  view.rerender(<NotesViewer metadata={metadata} iq={report} />);
+  expect(within(notes).getByRole("heading", { name: "Warranty Deed" })).toBeVisible();
+  expect(within(notes).getAllByRole("listitem")).toHaveLength(1);
+  view.rerender(<NotesViewer metadata={{ ...metadata, data: { heading: { title: "Mortgage" } } }} iq={report} />);
+  expect(within(notes).getByRole("heading", { name: "Mortgage" })).toBeVisible();
+  expect(within(notes).queryByText("Warranty Deed")).not.toBeInTheDocument();
 });
